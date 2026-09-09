@@ -1,0 +1,436 @@
+// Backdrop — schéma applicatif (spec section 8).
+//
+// ATTENTION: les modèles générés en fin de fichier (User, Organization) portent
+// des champs de relation inverse ajoutés à la main, indispensables pour que
+// Prisma pose les clés étrangères vers les modèles applicatifs. Ils sont
+// balisés « ajouté à la main ». Après un `better-auth generate`, les remettre.
+//
+// Les modèles d'authentification (User, Session, Account, Verification,
+// Organization, Member, Invitation) sont générés par Better Auth et son plugin
+// organization. Ils sont ajoutés en fin de fichier par `better-auth generate`
+// et ne doivent pas être écrits à la main.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  INSTAGRAM
+  TELEGRAM
+  FANVUE
+}
+
+enum Rating {
+  SFW
+  SUGGESTIVE
+  NSFW
+}
+
+/// MISSED: échéance dépassée au-delà de la tolérance de retard (7.6).
+/// Ce n'est pas un échec, c'est une décision en attente.
+
+enum PubStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  MISSED
+}
+
+enum PubKind {
+  SINGLE
+  CAROUSEL
+  REEL
+  TG_PAID
+  FV_POST
+  FV_MASS_DM
+}
+
+enum SubStatus {
+  ACTIVE
+  BLOCKED
+  DEACTIVATED
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Persona {
+  id               String   @id @default(cuid())
+  organizationId   String
+  name             String
+  handle           String
+  timezone         String
+  audienceTimezone String?
+  /// Ton de voix, niches, vocabulaire interdit.
+  bible            Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channels            ChannelAccount[]
+  assets              Asset[]
+  telegramSubscribers TelegramSubscriber[]
+  dmCampaigns         DmCampaign[]
+  metricSnapshots     MetricSnapshot[]
+  fanvueEarnings      FanvueEarning[]
+
+  @@index([organizationId])
+}
+
+model ChannelAccount {
+  id                       String    @id @default(cuid())
+  personaId                String
+  platform                 Platform
+  /// ig_user_id | chat_id | fanvue account
+  externalId               String
+  /// Chiffré au repos (AES-256-GCM). Ne sort jamais vers le client (9.7).
+  credentials              Bytes
+  /// INSTAGRAM => SFW, non modifiable via l'UI.
+  maxRating                Rating
+  /// Surcharge de la tolérance de retard (7.6). Défaut applicatif: 45 minutes.
+  scheduleToleranceMinutes Int?
+  tokenExpiresAt           DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  persona      Persona       @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  publications Publication[]
+
+  @@unique([personaId, platform, externalId])
+  @@index([personaId])
+}
+
+model Asset {
+  id              String   @id @default(cuid())
+  personaId       String
+  createdByUserId String
+  /// Immuable après création (9.4).
+  rating          Rating
+  localPath       String
+  sha256          String
+  mimeType        String?
+  createdAt       DateTime @default(now())
+
+  persona   Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("AssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  variants  Variant[]
+
+  @@unique([personaId, sha256])
+  @@index([personaId])
+}
+
+model Variant {
+  id                String   @id @default(cuid())
+  assetId           String
+  /// "4:5" | "9:16" | "1:1"
+  ratio             String
+  localPath         String
+  /// Seulement si SFW et destiné à Instagram (section 5).
+  r2Key             String?
+  /// Pointeur Saved Messages Telegram, jamais le file_reference (4.2.8).
+  tgSourceMessageId BigInt?
+  /// Media Fanvue après upload multipart, une fois le statut `ready` (4.3.5).
+  fvMediaUuid       String?
+  createdAt         DateTime @default(now())
+
+  asset            Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  publicationItems PublicationItem[]
+  dmCampaignItems  DmCampaignItem[]
+
+  @@index([assetId])
+}
+
+model Publication {
+  id               String    @id @default(cuid())
+  channelAccountId String
+  createdByUserId  String
+  /// Verrou optimiste, édition concurrente (7.4).
+  version          Int       @default(0)
+  kind             PubKind
+  copy             String    @default("")
+  scheduledAt      DateTime
+  status           PubStatus @default(DRAFT)
+  /// Telegram paid media, en Stars.
+  starPrice        Int?
+  /// Fanvue, cents USD, minimum 300. Jamais additionné avec starPrice.
+  priceCents       Int?
+  /// Fanvue: subscribers | followers-and-subscribers
+  audience         String?
+  /// Fanvue: mediaPreviewUuid, teaser gratuit d'un post payant.
+  previewVariantId String?
+  /// Fanvue: expiration du post.
+  expiresAt        DateTime?
+  /// Instagram Audio API, Reels uniquement (4.1.5).
+  audioId          String?
+  remoteId         String?
+  failureReason    String?
+  publishedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  channelAccount  ChannelAccount    @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  createdBy       User              @relation("PublicationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items           PublicationItem[]
+  metricSnapshots MetricSnapshot[]
+
+  @@unique([channelAccountId, remoteId])
+  @@index([channelAccountId, status])
+  @@index([scheduledAt])
+}
+
+model PublicationItem {
+  id               String  @id @default(cuid())
+  publicationId    String
+  variantId        String
+  position         Int
+  /// Container enfant Instagram, transitoire (4.1.4).
+  childContainerId String?
+
+  publication Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  variant     Variant     @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([publicationId, position])
+  @@index([variantId])
+}
+
+model TelegramSubscriber {
+  id        String    @id @default(cuid())
+  personaId String
+  tgUserId  BigInt
+  /// Origine de l'acquisition.
+  source    String?
+  status    SubStatus @default(ACTIVE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  persona    Persona      @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  deliveries DmDelivery[]
+
+  @@unique([personaId, tgUserId])
+  @@index([personaId, status])
+}
+
+model DmCampaign {
+  id              String    @id @default(cuid())
+  personaId       String
+  createdByUserId String
+  version         Int       @default(0)
+  caption         String    @default("")
+  starPrice       Int?
+  scheduledAt     DateTime
+  status          PubStatus @default(DRAFT)
+  failureReason   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  persona    Persona          @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  createdBy  User             @relation("DmCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  items      DmCampaignItem[]
+  deliveries DmDelivery[]
+
+  @@index([personaId, status])
+  @@index([scheduledAt])
+}
+
+model DmCampaignItem {
+  id         String @id @default(cuid())
+  campaignId String
+  variantId  String
+  position   Int
+
+  campaign DmCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  variant  Variant    @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([campaignId, position])
+  @@index([variantId])
+}
+
+model DmDelivery {
+  id           String         @id @default(cuid())
+  campaignId   String
+  subscriberId String
+  status       DeliveryStatus @default(PENDING)
+  messageId    BigInt?
+  failReason   String?
+  sentAt       DateTime?
+
+  campaign   DmCampaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  subscriber TelegramSubscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, subscriberId])
+  @@index([campaignId, status])
+}
+
+model MetricSnapshot {
+  id            String   @id @default(cuid())
+  personaId     String
+  publicationId String?
+  capturedAt    DateTime
+  /// Métriques brutes par plateforme.
+  payload       Json
+
+  persona     Persona      @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  publication Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+
+  @@index([personaId, capturedAt])
+  @@index([publicationId])
+}
+
+/// Lignes de revenu Fanvue (4.3.11). Transactionnelles et mutables
+/// (pendingBalance -> availableForPayout), donc hors MetricSnapshot.
+
+model FanvueEarning {
+  id                         String   @id @default(cuid())
+  personaId                  String
+  transactionOrderId         String
+  /// pendingBalance | availableForPayout
+  status                     String
+  date                       DateTime
+  /// Cents USD, négatif sur refund et chargeback.
+  grossCents                 Int
+  netCents                   Int
+  /// post | message | tip | subscription | renewal | refund | chargeback | ...
+  source                     String
+  /// Attribution au média, absente sur Telegram (4.2.5).
+  postUuid                   String?
+  messageUuid                String?
+  /// Rapproché via Publication.remoteId.
+  publicationId              String?
+  reversedTransactionOrderId String?
+  fetchedAt                  DateTime @default(now())
+
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
+
+  @@unique([personaId, transactionOrderId])
+  @@index([personaId, date])
+  @@index([postUuid])
+}
+
+model User {
+  id            String       @id
+  name          String
+  email         String
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  members       Member[]
+  invitations   Invitation[]
+
+  // Ajouté à la main: attribution des entités à effet externe (7.4).
+  assetsCreated       Asset[]       @relation("AssetCreatedBy")
+  publicationsCreated Publication[] @relation("PublicationCreatedBy")
+  dmCampaignsCreated  DmCampaign[]  @relation("DmCampaignCreatedBy")
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Organization {
+  id          String       @id
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  // Ajouté à la main: l'Organization est le tenant, frontière d'isolation (7.4).
+  personas Persona[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}

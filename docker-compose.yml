@@ -1,0 +1,80 @@
+# Backdrop — stack de développement.
+# Phase 0: base applicative, base Temporal, serveur Temporal, console.
+# Les workers (worker-node, worker-telegram) et le service web arrivent en phase 1 et 2.
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-backdrop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-backdrop}
+      POSTGRES_DB: ${POSTGRES_DB:-backdrop}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-backdrop} -d ${POSTGRES_DB:-backdrop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Base Temporal, strictement séparée du schéma applicatif (7.1).
+  postgres-temporal:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal}
+      POSTGRES_DB: temporal
+    volumes:
+      - postgres-temporal-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # auto-setup applique les migrations de schéma Temporal au démarrage.
+  # Acceptable en développement uniquement (7.1). Pour un déploiement durable,
+  # basculer sur temporalio/server + temporalio/admin-tools et piloter
+  # `temporal-sql-tool` explicitement.
+  temporal:
+    image: temporalio/auto-setup:1.29.7
+    restart: unless-stopped
+    depends_on:
+      postgres-temporal:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal}
+      POSTGRES_SEEDS: postgres-temporal
+    ports:
+      - "${TEMPORAL_PORT:-7233}:7233"
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "namespace", "list", "--address", "temporal:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  temporal-ui:
+    image: temporalio/ui:2.53.3
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:${TEMPORAL_UI_PORT:-8233}
+    ports:
+      - "${TEMPORAL_UI_PORT:-8233}:8080"
+
+volumes:
+  postgres-data:
+  postgres-temporal-data:
+  # Volume média: source de vérité des Assets et Variants (section 5).
+  # Monté par worker-node, worker-telegram et web à partir de la phase 1.
+  media:
