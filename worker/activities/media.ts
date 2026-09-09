@@ -5,8 +5,9 @@ import { createReadStream } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { ApplicationFailure } from "@temporalio/activity";
 import { Rating } from "@prisma/client";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "../../src/lib/db";
+import { objectStorageClient } from "../../src/lib/storage";
 
 const run = promisify(execFile);
 
@@ -211,30 +212,6 @@ export async function createVariantRecord(input: {
   return { variantId: variant.id };
 }
 
-function r2Client(): S3Client | null {
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  if (!accessKeyId || !secretAccessKey) return null;
-
-  // R2_ENDPOINT permet de pointer un stockage S3 local en développement.
-  // L'interface étant identique, c'est aussi le chemin de sortie vers
-  // Backblaze B2 si les CGU de Cloudflare changeaient (docs/findings).
-  const endpoint =
-    process.env.R2_ENDPOINT ??
-    (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : null);
-  if (!endpoint) return null;
-
-  return new S3Client({
-    region: "auto",
-    endpoint,
-    credentials: { accessKeyId, secretAccessKey },
-    // Indispensable hors Cloudflare: MinIO et consorts servent le bucket en
-    // préfixe de chemin, pas en sous-domaine.
-    forcePathStyle: Boolean(process.env.R2_ENDPOINT),
-  });
-}
-
 const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -275,7 +252,7 @@ export async function uploadVariantToR2(
     return { r2Key: null, skipped: "not_sfw" };
   }
 
-  const client = r2Client();
+  const client = objectStorageClient();
   const bucket = process.env.R2_BUCKET;
   if (!client || !bucket) {
     return { r2Key: null, skipped: "no_r2_config" };
@@ -381,7 +358,7 @@ export async function renderStillAsReel(
     });
   }
 
-  const client = r2Client();
+  const client = objectStorageClient();
   const bucket = process.env.R2_BUCKET;
   if (!client || !bucket) return { publicUrl: null, skipped: "no_r2_config" };
 

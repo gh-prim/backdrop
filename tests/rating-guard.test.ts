@@ -121,6 +121,67 @@ describe("garde-fou de rating en base", () => {
     ).rejects.toThrow(/rating_violation/);
   });
 
+  // Le rating devient modifiable (9.4): la garantie doit rester à la base.
+  it("rejette le reclassement d'un Asset utilisé par une publication Instagram", async () => {
+    const channel = await createChannel(personaId, Platform.INSTAGRAM, Rating.SFW);
+    const publication = await createPublication(channel.id, userId);
+    const variant = await createVariant(personaId, userId, Rating.SFW);
+
+    await prisma.publicationItem.create({
+      data: { publicationId: publication.id, variantId: variant.id, position: 0 },
+    });
+
+    const asset = await prisma.variant.findUniqueOrThrow({
+      where: { id: variant.id },
+      select: { assetId: true },
+    });
+
+    // Le trigger sur PublicationItem ne se déclenche pas ici: c'est celui sur
+    // Asset qui doit refuser, sinon reclasser après coup contournerait tout.
+    await expect(
+      prisma.asset.update({
+        where: { id: asset.assetId },
+        data: { rating: Rating.NSFW },
+      }),
+    ).rejects.toThrow(/rating_violation/);
+
+    const after = await prisma.asset.findUniqueOrThrow({ where: { id: asset.assetId } });
+    expect(after.rating).toBe(Rating.SFW);
+  });
+
+  it("accepte le reclassement d'un Asset qu'aucune publication n'utilise", async () => {
+    const variant = await createVariant(personaId, userId, Rating.SFW);
+    const asset = await prisma.variant.findUniqueOrThrow({
+      where: { id: variant.id },
+      select: { assetId: true },
+    });
+
+    const updated = await prisma.asset.update({
+      where: { id: asset.assetId },
+      data: { rating: Rating.NSFW },
+    });
+    expect(updated.rating).toBe(Rating.NSFW);
+  });
+
+  it("accepte le reclassement vers un rating que le canal autorise", async () => {
+    const channel = await createChannel(personaId, Platform.TELEGRAM, Rating.NSFW);
+    const publication = await createPublication(channel.id, userId);
+    const variant = await createVariant(personaId, userId, Rating.SFW);
+    await prisma.publicationItem.create({
+      data: { publicationId: publication.id, variantId: variant.id, position: 0 },
+    });
+    const asset = await prisma.variant.findUniqueOrThrow({
+      where: { id: variant.id },
+      select: { assetId: true },
+    });
+
+    const updated = await prisma.asset.update({
+      where: { id: asset.assetId },
+      data: { rating: Rating.NSFW },
+    });
+    expect(updated.rating).toBe(Rating.NSFW);
+  });
+
   // Contournement évident: créer sur Telegram, puis déplacer vers Instagram.
   it("rejette le déplacement d'une publication NSFW vers un canal Instagram", async () => {
     const telegram = await createChannel(personaId, Platform.TELEGRAM, Rating.NSFW);

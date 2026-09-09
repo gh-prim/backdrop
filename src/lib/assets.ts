@@ -2,8 +2,10 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
+import { unlink } from "node:fs/promises";
 import { Rating } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { deleteObjects } from "@/lib/storage";
 import type { OrgContext } from "@/lib/session";
 
 /**
@@ -85,6 +87,7 @@ export async function getAssetDetail(ctx: OrgContext, assetId: string) {
     where: { id: assetId, persona: { organizationId: ctx.organizationId } },
     select: {
       id: true,
+      name: true,
       rating: true,
       localPath: true,
       sha256: true,
@@ -138,17 +141,115 @@ export async function getAssetDetail(ctx: OrgContext, assetId: string) {
   return { ...asset, usages };
 }
 
-export async function updateAssetDescription(
+export class AssetInUseError extends Error {
+  constructor(count: number) {
+    super(
+      `Ce média est utilisé par ${count} publication${count > 1 ? "s" : ""}. Supprimez-les d'abord, ou gardez le média: son historique disparaîtrait avec lui.`,
+    );
+    this.name = "AssetInUseError";
+  }
+}
+
+export type UpdateAssetInput = {
+  name?: string;
+  description?: string;
+  rating?: Rating;
+};
+
+/**
+ * Modifie les propriétés éditables d'un Asset.
+ *
+ * Le rating est modifiable (9.4), mais sous deux contraintes qui ne se
+ * négocient pas:
+ *
+ *  - la **base** revalide toutes les publications qui référencent ce média;
+ *    reclasser en NSFW un média programmé sur Instagram est refusé par le
+ *    trigger, pas par une vérification applicative qu'on pourrait oublier;
+ *  - un média qui cesse d'être SFW est **retiré de R2**. Le laisser en ligne
+ *    après reclassement viderait de son sens la séparation de la section 5:
+ *    l'URL publique resterait téléchargeable par n'importe qui.
+ */
+export async function updateAsset(
   ctx: OrgContext,
   assetId: string,
-  description: string,
-) {
-  // Scope: on ne modifie que ce qui appartient à l'organisation de la session.
-  const updated = await prisma.asset.updateMany({
+  input: UpdateAssetInput,
+): Promise<{ removedFromR2: number }> {
+  const asset = await prisma.asset.findFirst({
     where: { id: assetId, persona: { organizationId: ctx.organizationId } },
-    data: { description: description.trim() || null },
+    select: {
+      id: true,
+      rating: true,
+      variants: { select: { id: true, r2Key: true } },
+    },
   });
-  if (updated.count === 0) throw new Error("Asset introuvable.");
+  if (!asset) throw new Error("Asset introuvable.");
+
+  await prisma.asset.update({
+    where: { id: assetId },
+    data: {
+      ...(input.name !== undefined ? { name: input.name.trim() || null } : {}),
+      ...(input.description !== undefined
+        ? { description: input.description.trim() || null }
+        : {}),
+      ...(input.rating !== undefined ? { rating: input.rating } : {}),
+    },
+  });
+
+  const becameSensitive =
+    input.rating !== undefined &&
+    input.rating !== Rating.SFW &&
+    asset.rating === Rating.SFW;
+
+  if (!becameSensitive) return { removedFromR2: 0 };
+
+  const keys = asset.variants.map((v) => v.r2Key).filter((key): key is string => Boolean(key));
+  const removed = await deleteObjects(keys);
+  await prisma.variant.updateMany({
+    where: { assetId },
+    data: { r2Key: null },
+  });
+
+  return { removedFromR2: removed };
+}
+
+/**
+ * Supprime un Asset, ses Variants, ses fichiers locaux et ses objets R2.
+ *
+ * Refusé si une publication le référence: son historique disparaîtrait avec
+ * lui, et une publication sans média est une ligne qu'on ne sait plus lire.
+ */
+export async function deleteAsset(
+  ctx: OrgContext,
+  assetId: string,
+): Promise<{ removedFromR2: number }> {
+  const asset = await prisma.asset.findFirst({
+    where: { id: assetId, persona: { organizationId: ctx.organizationId } },
+    select: {
+      id: true,
+      localPath: true,
+      variants: { select: { id: true, localPath: true, r2Key: true } },
+    },
+  });
+  if (!asset) throw new Error("Asset introuvable.");
+
+  const usage = await prisma.publicationItem.count({
+    where: { variant: { assetId } },
+  });
+  if (usage > 0) throw new AssetInUseError(usage);
+
+  const removed = await deleteObjects(
+    asset.variants.map((v) => v.r2Key).filter((key): key is string => Boolean(key)),
+  );
+
+  await prisma.asset.delete({ where: { id: assetId } });
+
+  // Les fichiers en dernier: une base propre avec un fichier orphelin se
+  // rattrape, l'inverse laisse une ligne qui pointe dans le vide.
+  for (const path of [asset.localPath, ...asset.variants.map((v) => v.localPath)]) {
+    await unlink(join(MEDIA_ROOT, path)).catch(() => {});
+  }
+
+  return { removedFromR2: removed };
 }
 
 export async function listAssets(ctx: OrgContext, personaId?: string) {
@@ -163,6 +264,7 @@ export async function listAssets(ctx: OrgContext, personaId?: string) {
       localPath: true,
       createdAt: true,
       personaId: true,
+      name: true,
       description: true,
       createdBy: { select: { name: true } },
       variants: {

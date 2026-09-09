@@ -631,7 +631,11 @@ model FanvueEarning {
 1. **Anti-NSFW sur Instagram, trois couches:** contrainte en base (8), séparation physique des buckets (5), désactivation explicite du canal dans le Composer (6.1). La couche UI n'est pas un garde-fou en soi, mais elle évite que l'opérateur découvre le blocage au moment de la publication.
 2. **Credentials chiffrés au repos.** Clé maître en variable d'environnement, jamais en base, jamais dans le repo.
 3. **`.env` hors versionnement.** Un `.env.example` complet et à jour est livré à la place.
-4. **Le rating d'un Asset est immuable.** Pas d'édition après création. Pour changer, on crée un nouvel Asset.
+4. **Le rating d'un Asset est modifiable, mais sous contrainte de la base.** Ce point a été rouvert après la phase 1: l'immuabilité obligeait à réuploader un fichier pour corriger une erreur de saisie, ce qui produisait des doublons dans la Library. La garantie n'est pas relâchée pour autant, elle est déplacée:
+   - un **trigger sur `Asset`** revalide, à chaque changement de rating, toutes les publications qui référencent l'un de ses Variants. Reclasser en NSFW un média programmé sur Instagram est refusé par la base, pas par une vérification applicative;
+   - un média qui **cesse d'être SFW est retiré de R2**, et ses `r2Key` effacés. Le laisser en ligne après reclassement laisserait une URL publique téléchargeable, ce qui viderait de son sens la séparation de la section 5.
+
+   La suppression d'un Asset est refusée tant qu'une publication le référence: son historique disparaîtrait avec lui.
 5. **Alerting sur trois événements:** échec de refresh de token Meta, `PEER_FLOOD` sur une persona, échec de publication après épuisement des retries.
 6. **Scope serveur uniquement.** L'`organizationId` provient toujours de la session, jamais du corps de requête ni de l'URL. Un test doit prouver qu'une requête forgeant un `organizationId` étranger est rejetée.
 7. **Credentials plateforme opaques côté client.** Aucune route ne les renvoie, ni en clair ni tronqués. Le rôle `owner` ne change rien à cette règle.

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssetOriginal } from "./asset-original";
-import { DescriptionForm } from "./description-form";
+import { PropertiesForm } from "./properties-form";
 import { VariantList } from "./variant-list";
 import { UsageList } from "./usage-list";
 
@@ -66,7 +66,7 @@ export default async function AssetPage({
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <h1 className="text-sm font-bold">
-          {asset.description?.slice(0, 60) || "Média sans description"}
+          {asset.name || asset.description?.slice(0, 60) || "Média sans nom"}
         </h1>
         <Badge
           variant={asset.rating === "SFW" ? "secondary" : "destructive"}
@@ -80,7 +80,7 @@ export default async function AssetPage({
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <Tabs defaultValue="general" className="flex min-h-0 flex-col gap-3">
           {/* Onglets pleine largeur en style souligné: ils tiennent lieu de
               navigation de la fiche, pas de petit sélecteur secondaire. */}
@@ -131,10 +131,16 @@ export default async function AssetPage({
         <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Description</CardTitle>
+              <CardTitle className="text-sm">Propriétés</CardTitle>
             </CardHeader>
             <CardContent>
-              <DescriptionForm assetId={asset.id} description={asset.description ?? ""} />
+              <PropertiesForm
+                assetId={asset.id}
+                name={asset.name ?? ""}
+                description={asset.description ?? ""}
+                rating={asset.rating}
+                usageCount={asset.usages.length}
+              />
             </CardContent>
           </Card>
 
@@ -154,21 +160,7 @@ export default async function AssetPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Classification</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Immuable (9.4): dire pourquoi et donner le chemin de
-                  correction vaut mieux qu'un champ grisé. */}
-              <p className="text-xs text-muted-foreground">
-                Le rating <span className="font-medium text-foreground">{asset.rating}</span>{" "}
-                est définitif. Il commande les canaux autorisés et le passage par R2, et
-                le modifier après coup rendrait publiable ailleurs un média déjà classé.
-                Pour le corriger, réuploadez le fichier avec le bon rating.
-              </p>
-            </CardContent>
-          </Card>
+
         </aside>
       </div>
     </div>

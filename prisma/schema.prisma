@@ -114,7 +114,11 @@ model Asset {
   id              String   @id @default(cuid())
   personaId       String
   createdByUserId String
-  /// Immuable après création (9.4).
+  /// Libellé court, interne. Ne part jamais sur une plateforme.
+  name            String?
+  /// Modifiable, mais sous contrainte: un trigger revalide toutes les
+  /// publications qui référencent ce média, et le passage au-dessus de SFW
+  /// retire ses Variants de R2 (9.4).
   rating          Rating
   /// Fichier tel qu'uploadé, jamais réécrit: les Variants sont des dérivés.
   localPath       String
