@@ -72,6 +72,35 @@ services:
     ports:
       - "${TEMPORAL_UI_PORT:-8233}:8080"
 
+  worker-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
+      MEDIA_ROOT: /media
+      SCHEDULE_TOLERANCE_MINUTES: ${SCHEDULE_TOLERANCE_MINUTES:-45}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v25.0}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
+    volumes:
+      # Source de vérité des Assets et Variants (section 5).
+      - media:/media
+
 volumes:
   postgres-data:
   postgres-temporal-data:

@@ -47,10 +47,22 @@ describe("opacité des credentials plateforme", () => {
     expect(serialized.toLowerCase()).not.toContain("credential");
   });
 
-  // Garde structurel: seule la couche autorisée peut lire la colonne.
-  it("aucun composant ni route ne sélectionne la colonne credentials", () => {
+  /**
+   * Garde structurel: la colonne `credentials` n'est lisible que dans la
+   * couche qui parle aux plateformes. Trois fichiers y ont droit, et la liste
+   * est volontairement courte: elle est le périmètre à relire quand on touche
+   * à la sécurité.
+   */
+  it("seule la couche adapter lit la colonne credentials", () => {
     const allowed = new Set([
-      join("src", "lib", "channels.ts"), // ne fait que documenter son absence
+      // Résout les credentials pour construire l'adapter, côté worker.
+      join("worker", "activities", "instagram.ts"),
+      // Les détient en mémoire le temps d'un appel Graph.
+      join("src", "lib", "channels", "instagram.ts"),
+      // N'écrit qu'un blob déjà chiffré, ne relit jamais.
+      join("src", "app", "actions", "channels.ts"),
+      // Documente leur absence de la projection.
+      join("src", "lib", "channels.ts"),
     ]);
     const offenders: string[] = [];
 
@@ -72,6 +84,7 @@ describe("opacité des credentials plateforme", () => {
       }
     }
     walk("src");
+    walk("worker");
 
     expect(offenders).toEqual([]);
   });

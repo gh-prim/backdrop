@@ -1,11 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { EyeOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "cn";
 
 const BLUR_PREFERENCE_KEY = "backdrop.blur";
+
+/**
+ * Préférence de flou, partagée entre toutes les vignettes de la page.
+ *
+ * `useSyncExternalStore` plutôt qu'un effet: la valeur vit dans localStorage,
+ * qui est exactement le genre de source externe pour lequel ce hook existe.
+ * Bénéfice concret: basculer la préférence met à jour toutes les vignettes
+ * sans recharger la page.
+ */
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function blurDisabledSnapshot() {
+  return localStorage.getItem(BLUR_PREFERENCE_KEY) === "off";
+}
+
+/** Côté serveur, on floute: c'est le défaut sûr. */
+function serverSnapshot() {
+  return false;
+}
+
+function setBlurDisabled(value: boolean) {
+  localStorage.setItem(BLUR_PREFERENCE_KEY, value ? "off" : "on");
+  for (const listener of listeners) listener();
+}
 
 /**
  * Vignette d'un média (spec 6.1).
@@ -27,11 +60,11 @@ export function MediaThumb({
 }) {
   const sensitive = rating !== "SFW";
   const [revealed, setRevealed] = useState(false);
-  const [blurDisabled, setBlurDisabled] = useState(false);
-
-  useEffect(() => {
-    setBlurDisabled(localStorage.getItem(BLUR_PREFERENCE_KEY) === "off");
-  }, []);
+  const blurDisabled = useSyncExternalStore(
+    subscribe,
+    blurDisabledSnapshot,
+    serverSnapshot,
+  );
 
   const hidden = sensitive && !revealed && !blurDisabled;
 
@@ -83,23 +116,18 @@ export function MediaThumb({
 
 /** Bascule de préférence, persistée localement par opérateur. */
 export function BlurPreferenceToggle() {
-  const [off, setOff] = useState(false);
-
-  useEffect(() => {
-    setOff(localStorage.getItem(BLUR_PREFERENCE_KEY) === "off");
-  }, []);
+  const blurDisabled = useSyncExternalStore(
+    subscribe,
+    blurDisabledSnapshot,
+    serverSnapshot,
+  );
 
   return (
     <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
       <input
         type="checkbox"
-        checked={!off}
-        onChange={(event) => {
-          const next = !event.target.checked;
-          setOff(next);
-          localStorage.setItem(BLUR_PREFERENCE_KEY, next ? "off" : "on");
-          location.reload();
-        }}
+        checked={!blurDisabled}
+        onChange={(event) => setBlurDisabled(!event.target.checked)}
       />
       Flouter les médias sensibles
     </label>

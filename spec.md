@@ -104,7 +104,9 @@ Le catalogue exposé par l'API est plus restreint que celui de l'app mobile. Auc
 
 **4.1.7 Specs vidéo.** MP4 ou MOV, H264 ou HEVC, audio AAC 48 kHz, `moov` atom en début de fichier (`ffmpeg -movflags +faststart`). Un fichier non conforme échoue au stade container, souvent sans message clair.
 
-**4.1.8 Quotas.** 100 publications par fenêtre glissante de 24 h. Interroger `GET /{ig-user-id}/content_publishing_limit` avant chaque publication plutôt que d'encaisser l'erreur 9.
+**4.1.8 Quotas.** Interroger `GET /{ig-user-id}/content_publishing_limit` avant chaque publication plutôt que d'encaisser l'erreur 9.
+
+Le plafond lui-même **ne se code pas en dur**: ce spec annonçait 100 par fenêtre glissante de 24 h, la documentation Meta en annonce 50 depuis le passage à l'Instagram Platform. Le nombre a déjà changé une fois, il changera encore. L'adapter lit `quota_total` dans la réponse et ne garde 50 que comme valeur de repli si le champ manque. Un carrousel compte toujours pour une seule publication.
 
 **4.1.9 Tokens.** Le long-lived token expire à 60 jours. Un job de refresh est obligatoire, sinon la pipeline meurt silencieusement.
 
@@ -355,7 +357,11 @@ Volume nommé `media` monté sur `worker-node`, `worker-telegram` et `web` (lect
 
 **Idempotence:** `workflowId = publication.id` pour toute publication. Temporal refuse alors nativement le doublon. Un double post Instagram est signalé comme spam.
 
+**Aucun credential ne traverse un workflow.** Les entrées et sorties d'activité sont écrites dans l'historique Temporal, donc persistées dans la base de Temporal. Un token Meta qui transite par un workflow est un token stocké en clair dans un second système, hors du périmètre chiffré de la section 9.2. Conséquence sur le découpage: **le workflow ne manipule que des identifiants**, et chaque activité qui a besoin d'un secret va le chercher elle-même en base. C'est ce qui explique la forme des activités, qui prennent un `channelAccountId` là où une signature naïve prendrait un token.
+
 **Programmation:** le workflow est démarré à la programmation et dort jusqu'à l'échéance, aucune horloge n'est déléguée à une plateforme. Règle complète et tolérance de retard en 7.6.
+
+**Contrainte de sandbox:** le code de workflow s'exécute dans un contexte déterministe sans `process` ni accès au système. Tout module qu'il importe doit donc être exempt de lecture d'environnement, d'où la séparation entre les constantes (`src/temporal/config.ts`, importable depuis un workflow) et la configuration (`src/temporal/env.ts`, qui ne l'est pas). Un `process.env` qui remonte par un import transitif ne casse pas la compilation, il casse l'activation du workflow à l'exécution.
 
 ### 7.3 Contrainte de session Telegram
 
