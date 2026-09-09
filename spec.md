@@ -145,6 +145,19 @@ Le plafond lui-même **ne se code pas en dur**. Ce spec annonçait 100 par fenê
 
 Le contournement praticable serait de faire coller à l'opérateur l'identifiant lu dans l'URL d'un lieu Instagram (`instagram.com/explore/locations/<id>/…`), mémorisé par persona. **Décision: on s'en passe.** À rouvrir seulement si la localisation devient un levier mesurable, et alors la question à trancher sera l'App Review, pas l'implémentation.
 
+**4.1.11 Hashtags.** Il n'existe **aucun paramètre dédié**: les hashtags vivent dans la `caption`, comme dans l'application. Deux plafonds indépendants, qu'on confond volontiers:
+
+- **30 hashtags par publication**, imposé par Instagram sur la légende;
+- **30 hashtags uniques interrogeables par fenêtre glissante de 7 jours** via `GET /ig_hashtag_search`, qui est une limite d'API et n'a rien à voir avec la précédente.
+
+Le second plafond dicte la conception: une validation à la frappe épuiserait le budget d'une semaine en une seule légende. Chaque résolution est donc mise en cache en base (`InstagramHashtag`), un hashtag déjà connu n'est jamais réinterrogé, et la vérification est déclenchée explicitement par l'opérateur, qui voit sa consommation.
+
+`GET /{ig-hashtag-id}/top_media` donne les likes des meilleurs posts d'un hashtag. Leur médiane est un signal de **concurrence**, pas de volume: un hashtag dont les top posts font des milliers de likes est un hashtag où une petite audience n'apparaîtra jamais.
+
+Un hashtag introuvable renvoie une erreur 24 / sous-code 2207024, sans distinguer l'inexistant du restreint. Il n'empêche pas la publication, il ne sert simplement à rien: l'interface le signale comme tel.
+
+Contrairement à la localisation (4.1.9 bis), cet endpoint **fonctionne en mode développement** sur un compte réel, alors que la documentation mentionne une feature `Instagram Public Content Access`. Ne pas s'y fier aveuglément: si Meta resserre, le cache conserve l'acquis et seule la vérification de nouveaux hashtags s'arrête.
+
 **4.1.10 Ce que l'API ne donne pas.** Pas de follow ni d'unfollow. Pas de liste de followers (seulement `followers_count` et des démographies agrégées). Pas d'accès aux stories d'autrui.
 
 ### 4.2 Telegram

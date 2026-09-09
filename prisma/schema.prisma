@@ -103,8 +103,9 @@ model ChannelAccount {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  persona      Persona       @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  persona      Persona            @relation(fields: [personaId], references: [id], onDelete: Cascade)
   publications Publication[]
+  hashtags     InstagramHashtag[]
 
   @@unique([personaId, platform, externalId])
   @@index([personaId])
@@ -223,6 +224,30 @@ model PublicationItem {
 
   @@unique([publicationId, position])
   @@index([variantId])
+}
+
+/// Hashtag Instagram résolu, mis en cache.
+///
+/// L'API n'autorise que **30 hashtags uniques par fenêtre de 7 jours et par
+/// compte** (4.1.11). Une validation à la frappe épuiserait ce budget en une
+/// seule légende: chaque résolution est donc conservée, et un hashtag déjà
+/// connu n'est jamais réinterrogé.
+model InstagramHashtag {
+  id               String   @id @default(cuid())
+  channelAccountId String
+  /// Sans le croisillon, en minuscules.
+  name             String
+  /// Identifiant Meta. Null si le hashtag n'existe pas ou est refusé.
+  hashtagId        String?
+  /// Médiane des likes des top posts: signal de concurrence, pas de volume.
+  topMedianLikes   Int?
+  /// Sert au décompte du budget hebdomadaire.
+  checkedAt        DateTime @default(now())
+
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([channelAccountId, name])
+  @@index([channelAccountId, checkedAt])
 }
 
 model TelegramSubscriber {

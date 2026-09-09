@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
+import { HashtagPanel } from "@/components/hashtag-panel";
 import { cn } from "cn";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -72,6 +73,8 @@ export function ComposerForm({
   const [channelIds, setChannelIds] = useState<string[]>([]);
   const [kind, setKind] = useState("SINGLE");
   const [selected, setSelected] = useState<string[]>([]);
+  const [ratioFilter, setRatioFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [caption, setCaption] = useState("");
   const [audio, setAudio] = useState<SelectedAudio | null>(null);
 
@@ -110,6 +113,23 @@ export function ComposerForm({
   }
 
   const blockedCount = variants.filter(isBlocked).length;
+
+  /** Ratios réellement présents: proposer 1:1 quand rien ne l'est n'aide pas. */
+  const availableRatios = useMemo(
+    () => [...new Set(variants.map((variant) => variant.ratio))].sort(),
+    [variants],
+  );
+
+  const shownVariants = useMemo(
+    () =>
+      variants.filter((variant) => {
+        if (ratioFilter !== "all" && variant.ratio !== ratioFilter) return false;
+        if (typeFilter === "image" && variant.isVideo) return false;
+        if (typeFilter === "video" && !variant.isVideo) return false;
+        return true;
+      }),
+    [variants, ratioFilter, typeFilter],
+  );
 
   /** Un Reel sur une photo déclenche un rendu vidéo au moment de la publication. */
   const selectionIsVideo = selected.every(
@@ -358,13 +378,67 @@ export function ComposerForm({
                 </p>
               )}
 
+              {variants.length > 0 && (
+                // Le ratio commande le cadrage publié: pouvoir isoler le 9:16
+                // avant de choisir évite de sélectionner un 4:5 pour un Reel.
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex gap-1 rounded-md border p-0.5 text-xs">
+                    {["all", ...availableRatios].map((ratio) => (
+                      <button
+                        key={ratio}
+                        type="button"
+                        onClick={() => setRatioFilter(ratio)}
+                        className={cn(
+                          "rounded px-2 py-1 transition-colors",
+                          ratioFilter === ratio
+                            ? "bg-accent font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {ratio === "all" ? "All ratios" : ratio}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-1 rounded-md border p-0.5 text-xs">
+                    {[
+                      ["all", "All types"],
+                      ["image", "Images"],
+                      ["video", "Videos"],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setTypeFilter(value)}
+                        className={cn(
+                          "rounded px-2 py-1 transition-colors",
+                          typeFilter === value
+                            ? "bg-accent font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {shownVariants.length} of {variants.length}
+                  </span>
+                </div>
+              )}
+
               {variants.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   No variant derived for this persona yet. Go through the Library.
                 </p>
+              ) : shownVariants.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No variant matches these filters.
+                </p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-6">
-                  {variants.map((variant) => {
+                  {shownVariants.map((variant) => {
                     const index = selected.indexOf(variant.id);
                     const blocked = isBlocked(variant);
                     return (
@@ -432,10 +506,18 @@ export function ComposerForm({
                   className="w-full rounded-md border bg-transparent p-2 text-sm"
                   placeholder="2200 characters maximum on Instagram."
                 />
-                <p className="text-xs text-muted-foreground">
-                  {caption.length} / 2200
-                </p>
+                <p className="text-xs text-muted-foreground">{caption.length} / 2200</p>
               </div>
+
+              {/* Les hashtags vivent dans la légende: l'API n'a pas de champ
+                  séparé. Ce panneau les compte, les valide et surveille les
+                  deux plafonds (4.1.11). */}
+              {instagramChannel && (
+                <HashtagPanel
+                  channelAccountId={instagramChannel.id}
+                  caption={caption}
+                />
+              )}
 
             </div>
           )}

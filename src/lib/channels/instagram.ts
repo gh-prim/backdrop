@@ -404,6 +404,58 @@ export class InstagramAdapter implements ChannelAdapter {
     };
   }
 
+  /**
+   * Résout un hashtag en identifiant Meta.
+   *
+   * Renvoie `null` si le hashtag n'existe pas, ou s'il est jugé sensible: Meta
+   * renvoie la même erreur dans les deux cas, sans les distinguer.
+   *
+   * **Consomme le budget de 30 hashtags uniques par 7 jours** (4.1.11): ne
+   * jamais appeler sans avoir vérifié le cache.
+   */
+  async searchHashtag(name: string): Promise<string | null> {
+    try {
+      const body = await this.call<{ data?: { id?: string }[] }>("ig_hashtag_search", {
+        user_id: this.credentials.igUserId,
+        q: name.replace(/^#/, "").toLowerCase(),
+      });
+      return body.data?.[0]?.id ?? null;
+    } catch (error) {
+      // Code 24 / sous-code 2207024: hashtag inexistant, invalide ou refusé.
+      if (error instanceof ChannelError && error.code === "graph_24") return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Médiane des likes des top posts d'un hashtag.
+   *
+   * C'est un signal de **concurrence**, pas de volume: un hashtag dont les
+   * meilleurs posts font des milliers de likes est un hashtag où une petite
+   * audience n'apparaîtra jamais.
+   */
+  async hashtagCompetition(hashtagId: string): Promise<number | null> {
+    const body = await this.call<{ data?: { like_count?: number }[] }>(
+      `${hashtagId}/top_media`,
+      {
+        user_id: this.credentials.igUserId,
+        fields: "like_count",
+        limit: "12",
+      },
+    );
+
+    const likes = (body.data ?? [])
+      .map((media) => media.like_count)
+      .filter((count): count is number => typeof count === "number")
+      .sort((a, b) => a - b);
+    if (likes.length === 0) return null;
+
+    const middle = Math.floor(likes.length / 2);
+    return likes.length % 2 === 0
+      ? Math.round((likes[middle - 1] + likes[middle]) / 2)
+      : likes[middle];
+  }
+
   async fetchMetrics(remoteId: string): Promise<PublishMetrics> {
     const body = await this.call<{
       id?: string;
