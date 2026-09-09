@@ -85,7 +85,7 @@ export async function loadPublicationPlan(
 
   if (!publication) {
     throw ApplicationFailure.create({
-      message: `Publication ${publicationId} introuvable.`,
+      message: `Publication ${publicationId} not found.`,
       nonRetryable: true,
     });
   }

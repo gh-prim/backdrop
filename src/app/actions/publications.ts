@@ -16,7 +16,9 @@ import {
   startPublishWorkflow,
 } from "@/temporal/client";
 
-export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+export type ActionResult =
+  | { ok: true; message?: string; publicationIds?: string[] }
+  | { ok: false; error: string };
 
 const createSchema = z.object({
   channelAccountIds: z.array(z.string().min(1)).min(1, "At least one channel."),
@@ -105,6 +107,7 @@ export async function schedulePublicationAction(
   const suffix = count > 1 ? `s (${count} channels)` : "";
   return {
     ok: true,
+    publicationIds: created.map((publication) => publication.id),
     message: publishNow
       ? `Publication${suffix} sent, going out now.`
       : `Publication${suffix} scheduled.`,

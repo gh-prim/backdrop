@@ -29,3 +29,24 @@ export const REFRESH_META_TOKENS_SCHEDULE_ID = "refresh-meta-tokens";
 
 /** Signal de reprogrammation, reçu par un workflow déjà en attente (7.6). */
 export const RESCHEDULE_SIGNAL = "reschedule";
+
+/** Nom de la requête d'avancement exposée par le workflow de publication. */
+export const PROGRESS_QUERY = "publishProgress";
+
+export type PublishStep = {
+  label: string;
+  status: "done" | "active" | "failed";
+};
+
+/**
+ * Avancement réel d'une publication.
+ *
+ * Alimenté par le workflow lui-même et lu par requête Temporal: ce que voit
+ * l'opérateur est l'état de l'exécution, pas une animation qui l'imite.
+ */
+export type PublishProgress = {
+  percent: number;
+  state: "waiting" | "running" | "published" | "failed" | "missed" | "skipped";
+  steps: PublishStep[];
+  detail: string | null;
+};

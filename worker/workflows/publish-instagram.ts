@@ -1,6 +1,7 @@
 import {
   proxyActivities,
   defineSignal,
+  defineQuery,
   setHandler,
   condition,
   sleep,
@@ -8,7 +9,12 @@ import {
   ApplicationFailure,
 } from "@temporalio/workflow";
 import type * as activities from "../activities";
-import { RESCHEDULE_SIGNAL } from "../../src/temporal/config";
+import {
+  PROGRESS_QUERY,
+  RESCHEDULE_SIGNAL,
+  type PublishProgress,
+  type PublishStep,
+} from "../../src/temporal/config";
 
 /**
  * Publication Instagram (spec 7.2, 4.1.3, 4.1.4).
@@ -43,6 +49,15 @@ const graph = proxyActivities<typeof activities>({
 
 export const rescheduleSignal = defineSignal<[string]>(RESCHEDULE_SIGNAL);
 
+/**
+ * Avancement interrogeable.
+ *
+ * L'interface le lit par requête Temporal plutôt que d'animer une barre au
+ * hasard: ce qui s'affiche est l'état réel de l'exécution, y compris quand
+ * elle patiente sur un container qui met deux minutes à finir.
+ */
+export const progressQuery = defineQuery<PublishProgress>(PROGRESS_QUERY);
+
 /** Bornes du polling de container (4.1.3). */
 const POLL_INTERVAL_SECONDS = 5;
 const POLL_MAX_ATTEMPTS = 120; // ~10 minutes, une vidéo longue peut les prendre
@@ -52,6 +67,38 @@ export type PublishInstagramInput = { publicationId: string };
 export async function publishInstagram(
   input: PublishInstagramInput,
 ): Promise<{ outcome: "published" | "missed" | "skipped"; remoteId?: string }> {
+  const steps: PublishStep[] = [];
+  const progress: PublishProgress = {
+    percent: 0,
+    state: "waiting",
+    steps,
+    detail: null,
+  };
+  setHandler(progressQuery, () => progress);
+
+  function advance(
+    percent: number,
+    label: string,
+    state: PublishProgress["state"] = "running",
+  ) {
+    for (const step of steps) if (step.status === "active") step.status = "done";
+    steps.push({ label, status: "active" });
+    progress.percent = percent;
+    progress.state = state;
+  }
+
+  function finish(state: PublishProgress["state"], detail: string | null = null) {
+    for (const step of steps) {
+      if (step.status === "active") {
+        step.status = state === "published" ? "done" : "failed";
+      }
+    }
+    progress.percent = state === "published" ? 100 : progress.percent;
+    progress.state = state;
+    progress.detail = detail;
+  }
+
+  advance(4, "Reading the publication", "waiting");
   const initial = await db.loadPublicationPlan(input.publicationId);
 
   let targetAt = Date.parse(initial.scheduledAt);
@@ -62,6 +109,8 @@ export async function publishInstagram(
       targetAt = next;
     }
   });
+
+  if (Date.now() < targetAt) advance(8, "Waiting for the scheduled time", "waiting");
 
   // Timer durable. Une reprogrammation réveille la condition et recalcule le
   // délai, sans annuler ni redémarrer le workflow.
@@ -76,6 +125,7 @@ export async function publishInstagram(
     log.info("Publication non programmée au réveil, on ne touche à rien", {
       status: plan.status,
     });
+    finish("skipped", `Status is ${plan.status}: nothing was sent.`);
     return { outcome: "skipped" };
   }
 
@@ -88,15 +138,20 @@ export async function publishInstagram(
       toleranceMinutes: plan.toleranceMinutes,
     });
     await db.markMissed(input.publicationId);
+    finish(
+      "missed",
+      `Overdue by ${Math.round(latenessMinutes)} min, tolerance is ${plan.toleranceMinutes} min.`,
+    );
     return { outcome: "missed" };
   }
 
+  advance(12, "Preparing");
   await db.markPublishing(input.publicationId);
 
   try {
     if (plan.items.length === 0) {
       throw ApplicationFailure.create({
-        message: "Publication sans aucun élément.",
+        message: "Publication has no items.",
         nonRetryable: true,
       });
     }
@@ -107,42 +162,50 @@ export async function publishInstagram(
       // sans URL publique, il n'y a rien à tenter.
       throw ApplicationFailure.create({
         message:
-          "Variant sans URL publique: le push R2 n'a pas eu lieu ou l'Asset n'est pas SFW.",
+          "Variant has no public URL: the R2 push did not happen, or the asset is not SFW.",
         nonRetryable: true,
       });
     }
 
+    advance(18, "Checking the publishing quota");
     // Le quota est interrogé avant d'envoyer, pas encaissé en erreur 9 (4.1.8).
     const quota = await graph.checkInstagramQuota(plan.channelAccountId);
     if (quota.remaining <= 0) {
       throw ApplicationFailure.create({
-        message: `Quota de publication atteint: ${quota.used}/${quota.limit} sur 24 h.`,
+        message: `Publishing quota reached: ${quota.used}/${quota.limit} over 24 h.`,
         nonRetryable: true,
       });
     }
 
     const creationId =
       plan.kind === "CAROUSEL"
-        ? await buildCarousel(plan)
-        : await buildSingle(plan);
+        ? await buildCarousel(plan, advance)
+        : await buildSingle(plan, advance);
 
+    advance(92, "Publishing");
     const remoteId = await graph.publishInstagramContainer(
       plan.channelAccountId,
       creationId,
     );
     await db.markPublished(input.publicationId, remoteId);
 
+    advance(100, "Published");
+    finish("published", remoteId);
     log.info("Publication Instagram réussie", { remoteId });
     return { outcome: "published", remoteId };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     await db.markFailed(input.publicationId, reason);
+    finish("failed", reason);
     throw error;
   }
 }
 
+type Advance = (percent: number, label: string) => void;
+
 async function buildSingle(
   plan: Awaited<ReturnType<typeof db.loadPublicationPlan>>,
+  advance: Advance,
 ): Promise<string> {
   const item = plan.items[0];
   let url = item.publicUrl as string;
@@ -151,19 +214,21 @@ async function buildSingle(
   // IMAGE (4.1.5), donc on fabrique une vidéo à partir de l'image. C'est ce
   // que fait l'app mobile quand on pose une musique sur un post photo.
   if (plan.kind === "REEL" && !item.isVideo) {
+    advance(28, "Rendering the photo as a video");
     const rendered = await media.renderStillAsReel(item.variantId);
     if (!rendered.publicUrl) {
       throw ApplicationFailure.create({
         message:
           rendered.skipped === "not_sfw"
-            ? "Un Reel photo exige un Asset SFW: sans URL publique, Meta ne peut rien récupérer."
-            : "Reel photo rendu mais non poussé sur R2: pas d'URL publique à fournir à Meta.",
+            ? "A photo Reel requires an SFW asset: without a public URL, Meta has nothing to fetch."
+            : "Photo Reel rendered but not pushed to R2: no public URL to hand to Meta.",
         nonRetryable: true,
       });
     }
     url = rendered.publicUrl;
   }
 
+  advance(45, "Creating the container");
   const containerId = await graph.createInstagramContainer(
     plan.channelAccountId,
     plan.kind === "REEL"
@@ -181,6 +246,7 @@ async function buildSingle(
   );
 
   await db.persistChildContainerId(item.itemId, containerId);
+  advance(70, "Waiting for Instagram to process the media");
   await waitForContainer(plan.channelAccountId, containerId);
   return containerId;
 }
@@ -192,14 +258,16 @@ async function buildSingle(
  */
 async function buildCarousel(
   plan: Awaited<ReturnType<typeof db.loadPublicationPlan>>,
+  advance: Advance,
 ): Promise<string> {
   if (plan.items.length > 10) {
     throw ApplicationFailure.create({
-      message: `Carrousel de ${plan.items.length} éléments: 10 au maximum.`,
+      message: `Carousel of ${plan.items.length} items: 10 maximum.`,
       nonRetryable: true,
     });
   }
 
+  advance(25, `Creating ${plan.items.length} child containers`);
   const children = await Promise.all(
     plan.items.map(async (item) => {
       const containerId = await graph.createInstagramContainer(
@@ -213,6 +281,7 @@ async function buildCarousel(
     }),
   );
 
+  advance(50, `Waiting for the ${children.length} children to be processed`);
   await Promise.all(
     children.map((child) => waitForContainer(plan.channelAccountId, child.containerId)),
   );
@@ -220,6 +289,7 @@ async function buildCarousel(
   // L'ordre du carrousel est celui de `children`, donc celui des positions.
   const ordered = [...children].sort((a, b) => a.position - b.position);
 
+  advance(78, "Assembling the carousel");
   const parentId = await graph.createInstagramContainer(plan.channelAccountId, {
     type: "CAROUSEL",
     children: ordered.map((child) => child.containerId),
@@ -227,6 +297,7 @@ async function buildCarousel(
     caption: plan.caption,
   });
 
+  advance(86, "Waiting for the carousel to be ready");
   await waitForContainer(plan.channelAccountId, parentId);
   return parentId;
 }
@@ -250,7 +321,7 @@ async function waitForContainer(
 
     if (status === "ERROR" || status === "EXPIRED") {
       throw ApplicationFailure.create({
-        message: `Container ${containerId} en ${status}: ${error ?? "sans détail"}`,
+        message: `Container ${containerId} is ${status}: ${error ?? "no detail"}`,
         nonRetryable: true,
       });
     }
@@ -259,7 +330,7 @@ async function waitForContainer(
   }
 
   throw ApplicationFailure.create({
-    message: `Container ${containerId} toujours en cours après ${
+    message: `Container ${containerId} still processing after ${
       (POLL_MAX_ATTEMPTS * POLL_INTERVAL_SECONDS) / 60
     } minutes.`,
     nonRetryable: true,

@@ -421,6 +421,8 @@ Volume nommé `media` monté sur `worker-node`, `worker-telegram` et `web` (lect
 
 **Programmation:** le workflow est démarré à la programmation et dort jusqu'à l'échéance, aucune horloge n'est déléguée à une plateforme. Règle complète et tolérance de retard en 7.6.
 
+**Avancement interrogeable:** le workflow de publication expose son état par une requête Temporal (`publishProgress`), que l'interface lit pour afficher un suivi d'envoi. Le principe qui compte: ce que voit l'opérateur est **l'état réel de l'exécution**, pas une animation qui l'imite. Une barre arrêtée à 70 % sur l'attente d'un container signifie qu'Instagram encode vraiment.
+
 **Contrainte de sandbox:** le code de workflow s'exécute dans un contexte déterministe sans `process` ni accès au système. Tout module qu'il importe doit donc être exempt de lecture d'environnement, d'où la séparation entre les constantes (`src/temporal/config.ts`, importable depuis un workflow) et la configuration (`src/temporal/env.ts`, qui ne l'est pas). Un `process.env` qui remonte par un import transitif ne casse pas la compilation, il casse l'activation du workflow à l'exécution.
 
 ### 7.3 Contrainte de session Telegram

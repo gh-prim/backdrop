@@ -5,11 +5,13 @@ import {
   WorkflowExecutionAlreadyStartedError,
 } from "@temporalio/client";
 import {
+  PROGRESS_QUERY,
   RESCHEDULE_SIGNAL,
   REFRESH_META_TOKENS_SCHEDULE_ID,
   TASK_QUEUE,
   ingestWorkflowId,
   publishWorkflowId,
+  type PublishProgress,
 } from "./config";
 import { TEMPORAL_ADDRESS, TEMPORAL_NAMESPACE } from "./env";
 
@@ -120,5 +122,24 @@ export async function ensureRefreshMetaTokensSchedule(): Promise<void> {
     });
   } catch (error) {
     if ((error as { name?: string }).name !== "ScheduleAlreadyRunning") throw error;
+  }
+}
+
+/**
+ * Avancement réel d'une publication, lu par requête Temporal.
+ *
+ * Renvoie `null` si le workflow n'existe plus: l'historique est purgé au bout
+ * de la rétention, et une publication ancienne n'a plus rien à raconter.
+ */
+export async function readPublishProgress(
+  publicationId: string,
+): Promise<PublishProgress | null> {
+  const client = await temporalClient();
+  try {
+    return await client.workflow
+      .getHandle(publishWorkflowId(publicationId))
+      .query<PublishProgress, []>(PROGRESS_QUERY);
+  } catch {
+    return null;
   }
 }

@@ -24,13 +24,13 @@ async function adapterFor(channelAccountId: string): Promise<InstagramAdapter> {
 
   if (!account) {
     throw ApplicationFailure.create({
-      message: `ChannelAccount ${channelAccountId} introuvable.`,
+      message: `ChannelAccount ${channelAccountId} not found.`,
       nonRetryable: true,
     });
   }
   if (account.platform !== Platform.INSTAGRAM) {
     throw ApplicationFailure.create({
-      message: `ChannelAccount ${channelAccountId} n'est pas Instagram.`,
+      message: `ChannelAccount ${channelAccountId} is not Instagram.`,
       nonRetryable: true,
     });
   }
@@ -141,7 +141,7 @@ export async function refreshInstagramToken(
   });
   if (!account || account.platform !== Platform.INSTAGRAM) {
     throw ApplicationFailure.create({
-      message: `ChannelAccount ${channelAccountId} inexploitable pour un refresh Meta.`,
+      message: `ChannelAccount ${channelAccountId} cannot be used for a Meta refresh.`,
       nonRetryable: true,
     });
   }

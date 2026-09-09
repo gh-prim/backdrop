@@ -60,7 +60,7 @@ export async function probeAndStoreAsset(assetId: string): Promise<MediaProbe> {
   });
   if (!asset) {
     throw ApplicationFailure.create({
-      message: `Asset ${assetId} introuvable.`,
+      message: `Asset ${assetId} not found.`,
       nonRetryable: true,
     });
   }
@@ -113,7 +113,7 @@ export async function probeMedia(relativePath: string): Promise<MediaProbe> {
     };
   } catch (error) {
     throw ApplicationFailure.create({
-      message: `Média illisible (${relativePath}): ${(error as Error).message}`,
+      message: `Unreadable media (${relativePath}): ${(error as Error).message}`,
       nonRetryable: true,
     });
   }
@@ -127,7 +127,7 @@ function cropFilter(ratio: string): string {
   const value = RATIO_VALUES[ratio];
   if (!value) {
     throw ApplicationFailure.create({
-      message: `Ratio non supporté: ${ratio}`,
+      message: `Unsupported ratio: ${ratio}`,
       nonRetryable: true,
     });
   }
@@ -176,7 +176,7 @@ export async function transcodeVariant(
     await run("ffmpeg", args, { maxBuffer: 32 * 1024 * 1024 });
   } catch (error) {
     throw ApplicationFailure.create({
-      message: `ffmpeg a échoué sur ${input.sourcePath} (${input.ratio}): ${
+      message: `ffmpeg failed on ${input.sourcePath} (${input.ratio}): ${
         (error as Error).message
       }`,
       nonRetryable: true,
@@ -241,7 +241,7 @@ export async function uploadVariantToR2(
 
   if (!variant) {
     throw ApplicationFailure.create({
-      message: `Variant ${variantId} introuvable.`,
+      message: `Variant ${variantId} not found.`,
       nonRetryable: true,
     });
   }
@@ -311,7 +311,7 @@ export async function renderStillAsReel(
   });
   if (!variant) {
     throw ApplicationFailure.create({
-      message: `Variant ${variantId} introuvable.`,
+      message: `Variant ${variantId} not found.`,
       nonRetryable: true,
     });
   }
@@ -353,7 +353,7 @@ export async function renderStillAsReel(
     );
   } catch (error) {
     throw ApplicationFailure.create({
-      message: `Rendu du Reel photo impossible (${variant.localPath}): ${(error as Error).message}`,
+      message: `Photo Reel render failed (${variant.localPath}): ${(error as Error).message}`,
       nonRetryable: true,
     });
   }
@@ -393,7 +393,7 @@ export async function loadAssetForIngest(assetId: string): Promise<{
   });
   if (!asset) {
     throw ApplicationFailure.create({
-      message: `Asset ${assetId} introuvable.`,
+      message: `Asset ${assetId} not found.`,
       nonRetryable: true,
     });
   }

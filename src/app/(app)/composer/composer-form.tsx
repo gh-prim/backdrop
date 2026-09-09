@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
 import { HashtagPanel } from "@/components/hashtag-panel";
+import { PublishProgressDialog } from "@/components/publish-progress-dialog";
 import { cn } from "cn";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -78,8 +79,18 @@ export function ComposerForm({
   const [caption, setCaption] = useState("");
   const [audio, setAudio] = useState<SelectedAudio | null>(null);
 
+  const [tracked, setTracked] = useState<string[] | null>(null);
+
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
-    schedulePublicationAction,
+    async (prev, formData) => {
+      const result = await schedulePublicationAction(prev, formData);
+      // Le suivi s'ouvre sur les identifiants réellement créés: sans eux, il
+      // n'y aurait rien de réel à interroger.
+      if (result.ok && result.publicationIds?.length) {
+        setTracked(result.publicationIds);
+      }
+      return result;
+    },
     null,
   );
 
@@ -182,6 +193,13 @@ export function ComposerForm({
 
   return (
     <form action={action} className="flex min-h-0 flex-1 flex-col gap-4">
+      {tracked && (
+        <PublishProgressDialog
+          publicationIds={tracked}
+          onClose={() => setTracked(null)}
+        />
+      )}
+
       {/* Tout l'état du wizard est réémis à la soumission finale. */}
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />

@@ -147,7 +147,7 @@ function graphError(status: number, body: unknown): ChannelError {
   const message =
     error?.error_user_msg ??
     error?.message ??
-    `Réponse Graph inattendue (HTTP ${status}).`;
+    `Unexpected Graph response (HTTP ${status}).`;
 
   const retryable =
     code !== undefined && NON_RETRYABLE_CODES.has(code)
@@ -284,7 +284,7 @@ export class InstagramAdapter implements ChannelAdapter {
     );
 
     if (!body.id) {
-      throw new ChannelError("Container créé sans identifiant.", {
+      throw new ChannelError("Container created without an id.", {
         retryable: false,
         code: "missing_creation_id",
         details: body,
@@ -321,7 +321,7 @@ export class InstagramAdapter implements ChannelAdapter {
     );
 
     if (!body.id) {
-      throw new ChannelError("Publication sans media_id en retour.", {
+      throw new ChannelError("Publish returned no media_id.", {
         retryable: false,
         code: "missing_media_id",
         details: body,
@@ -498,7 +498,7 @@ export class InstagramAdapter implements ChannelAdapter {
     });
 
     if (!body.access_token) {
-      throw new ChannelError("Rafraîchissement sans token en retour.", {
+      throw new ChannelError("Refresh returned no token.", {
         retryable: false,
         code: "missing_access_token",
         details: body,
