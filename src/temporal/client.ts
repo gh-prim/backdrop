@@ -1,4 +1,9 @@
-import { Client, Connection, ScheduleOverlapPolicy } from "@temporalio/client";
+import {
+  Client,
+  Connection,
+  ScheduleOverlapPolicy,
+  WorkflowExecutionAlreadyStartedError,
+} from "@temporalio/client";
 import {
   RESCHEDULE_SIGNAL,
   REFRESH_META_TOKENS_SCHEDULE_ID,
@@ -47,16 +52,22 @@ export async function startPublishWorkflow(publication: {
     );
   }
 
-  await client.workflow.signalWithStart("publishInstagram", {
-    workflowId: publishWorkflowId(publication.id),
-    taskQueue: TASK_QUEUE.node,
-    args: [{ publicationId: publication.id }],
-    signal: RESCHEDULE_SIGNAL,
-    signalArgs: [new Date().toISOString()],
-    // signalWithStart démarre s'il n'existe pas, signale sinon. Le signal
-    // porte l'heure courante, immédiatement écrasée par l'heure lue en base
-    // au démarrage: c'est la reprogrammation qui compte, pas cette valeur.
-  });
+  try {
+    await client.workflow.start("publishInstagram", {
+      workflowId: publishWorkflowId(publication.id),
+      taskQueue: TASK_QUEUE.node,
+      args: [{ publicationId: publication.id }],
+    });
+  } catch (error) {
+    // Un workflow déjà démarré pour cette publication est exactement ce que
+    // `workflowId = publish:{id}` garantit (7.2): c'est le succès du garde-fou,
+    // pas une erreur à remonter.
+    //
+    // Surtout, ne pas utiliser signalWithStart ici: le signal de
+    // reprogrammation porterait l'heure courante et écraserait l'échéance lue
+    // en base, ce qui ferait publier immédiatement.
+    if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  }
 }
 
 /** Reprogrammation: signal sur le workflow en cours, pas d'annulation (7.6). */

@@ -55,6 +55,17 @@ describe("frontières serveur / client", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("le démarrage d'une publication n'envoie pas de signal de reprogrammation", () => {
+    // Régression: `signalWithStart` avec le signal de reprogrammation portait
+    // l'heure courante, qui écrasait l'échéance lue en base au démarrage du
+    // workflow. Résultat: toute publication programmée partait immédiatement.
+    // Le démarrage et la reprogrammation sont deux gestes distincts (7.6).
+    const source = readFileSync("src/temporal/client.ts", "utf8");
+    // On cible l'appel, pas la mention: le commentaire qui explique l'erreur
+    // a le droit de nommer la méthode fautive.
+    expect(source).not.toMatch(/\.signalWithStart\s*\(/);
+  });
+
   it("le code de workflow ne lit jamais l'environnement", () => {
     // La sandbox Temporal n'a pas `process`: un accès à l'environnement fait
     // échouer l'activation du workflow, pas la compilation.

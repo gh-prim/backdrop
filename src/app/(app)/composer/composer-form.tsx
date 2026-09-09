@@ -208,12 +208,23 @@ export function ComposerForm({
               {variants.map((variant) => {
                 const index = selected.indexOf(variant.id);
                 return (
-                  <button
+                  // Un div et non un button: la vignette contient elle-même un
+                  // contrôle « Révéler », et un bouton imbriqué dans un bouton
+                  // est du HTML invalide qui casse l'hydratation.
+                  <div
                     key={variant.id}
-                    type="button"
+                    role="checkbox"
+                    aria-checked={index >= 0}
+                    tabIndex={0}
                     onClick={() => toggle(variant.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggle(variant.id);
+                      }
+                    }}
                     className={cn(
-                      "relative rounded-md ring-offset-2 ring-offset-background transition",
+                      "relative cursor-pointer rounded-md ring-offset-2 ring-offset-background transition",
                       index >= 0 && "ring-2 ring-primary",
                     )}
                   >
@@ -233,7 +244,7 @@ export function ComposerForm({
                         pas sur R2
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>

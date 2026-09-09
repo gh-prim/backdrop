@@ -99,11 +99,12 @@ services:
       R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
     volumes:
       # Source de vérité des Assets et Variants (section 5).
-      - media:/media
+      #
+      # Bind mount et non volume nommé: en développement le service web tourne
+      # sur l'hôte, et un volume nommé lui rendrait les fichiers invisibles.
+      # Le worker écrirait des dérivations que personne d'autre ne verrait.
+      - ${MEDIA_HOST_PATH:-./media}:/media
 
 volumes:
   postgres-data:
   postgres-temporal-data:
-  # Volume média: source de vérité des Assets et Variants (section 5).
-  # Monté par worker-node, worker-telegram et web à partir de la phase 1.
-  media:

@@ -86,14 +86,28 @@ export function MediaThumb({
       />
 
       {hidden && (
-        <button
-          type="button"
-          onClick={() => setRevealed(true)}
-          className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-background/40 text-xs text-foreground"
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(event) => {
+            // Révéler n'est pas sélectionner: la vignette peut être imbriquée
+            // dans un contrôle de sélection (Composer), qui ne doit pas
+            // recevoir ce clic.
+            event.stopPropagation();
+            setRevealed(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              setRevealed(true);
+            }
+          }}
+          className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-1 bg-background/40 text-xs text-foreground"
         >
           <EyeOff className="size-4" />
           Révéler
-        </button>
+        </span>
       )}
 
       <div className="absolute left-1 top-1 flex gap-1">
