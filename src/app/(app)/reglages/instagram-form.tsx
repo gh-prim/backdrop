@@ -53,8 +53,9 @@ export function InstagramForm({ personas }: { personas: PersonaOption[] }) {
           className="h-8 w-full max-w-2xl"
         />
         <p className="text-xs text-muted-foreground">
-          Chiffré au repos immédiatement, et jamais réaffiché: ni ici, ni ailleurs, ni
-          pour un owner. Le rafraîchissement à 60 jours est automatique.
+          Colle le token du Graph API Explorer, même de courte durée: il est échangé
+          contre un long-lived de 60 jours à la connexion, puis chiffré au repos. Il
+          n&apos;est jamais réaffiché, ni ici, ni ailleurs, ni pour un owner.
         </p>
       </div>
 
@@ -64,7 +65,9 @@ export function InstagramForm({ personas }: { personas: PersonaOption[] }) {
 
       {state && !state.ok && <p className="text-xs text-destructive">{state.error}</p>}
       {state?.ok && (
-        <p className="text-xs text-muted-foreground">Canal connecté.</p>
+        <p className="text-xs text-muted-foreground">
+          Canal connecté et vérifié: le token répond pour cet ig_user_id.
+        </p>
       )}
     </form>
   );

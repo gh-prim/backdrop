@@ -15,7 +15,13 @@ import {
  */
 
 export const GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v25.0";
-const GRAPH_BASE = "https://graph.facebook.com";
+
+/**
+ * Base de l'API Graph. Surchargeable pour pointer un double local et exercer
+ * toute la chaîne sans compte Instagram réel (scripts/dev-graph-stub.ts).
+ * En production, la valeur par défaut est la seule correcte.
+ */
+const GRAPH_BASE = process.env.META_GRAPH_BASE ?? "https://graph.facebook.com";
 
 export type InstagramCredentials = {
   /** ig_user_id, l'identifiant du compte professionnel. */

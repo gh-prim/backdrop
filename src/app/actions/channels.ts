@@ -6,6 +6,8 @@ import { Platform, Rating } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/session";
 import { encryptCredentials } from "@/lib/crypto";
+import { InstagramAdapter } from "@/lib/channels/instagram";
+import { ChannelError } from "@/lib/channels/types";
 
 const schema = z.object({
   personaId: z.string().min(1),
@@ -19,9 +21,19 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 /**
  * Connexion d'un compte Instagram (7.4: réservé à `owner`).
  *
- * Le token est chiffré immédiatement et n'est jamais relu vers le client.
- * `maxRating` est forcé à SFW pour Instagram et n'est pas modifiable via l'UI
- * (spec 8): c'est une propriété du canal, pas un réglage.
+ * Trois choses se passent ici, dans cet ordre:
+ *
+ *  1. **Échange du token.** Le Graph API Explorer délivre un token de courte
+ *     durée, une heure ou deux. Le stocker tel quel donnerait une connexion
+ *     morte avant le premier passage de `refreshMetaTokens`. On l'échange donc
+ *     immédiatement contre un long-lived, et on garde la date d'expiration
+ *     renvoyée par Meta plutôt qu'une estimation (4.1.9).
+ *  2. **Vérification.** Un appel à `content_publishing_limit` prouve que le
+ *     couple token + ig_user_id fonctionne. Mieux vaut échouer ici, devant
+ *     l'opérateur, qu'à l'heure de la première publication programmée.
+ *  3. **Chiffrement.** Le token n'est jamais relu vers le client (9.7), et
+ *     `maxRating` est forcé à SFW: c'est une propriété du canal Instagram,
+ *     pas un réglage (spec 8).
  */
 export async function connectInstagramAccountAction(
   _prev: ActionResult | null,
@@ -44,15 +56,48 @@ export async function connectInstagramAccountAction(
   });
   if (!persona) return { ok: false, error: "Persona introuvable." };
 
-  const credentials = encryptCredentials({
+  if (!process.env.META_APP_ID || !process.env.META_APP_SECRET) {
+    return {
+      ok: false,
+      error:
+        "META_APP_ID et META_APP_SECRET manquants dans l'environnement: impossible d'échanger le token contre un long-lived.",
+    };
+  }
+
+  const submitted = new InstagramAdapter({
     igUserId: parsed.data.igUserId,
     accessToken: parsed.data.accessToken,
-    pageId: parsed.data.pageId,
   });
 
-  // Le long-lived token vaut 60 jours (4.1.9). La date est indicative jusqu'au
-  // premier passage de refreshMetaTokens, qui la remplacera par celle de Meta.
-  const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+  let accessToken: string;
+  let tokenExpiresAt: Date;
+  try {
+    const exchanged = await submitted.refreshLongLivedToken();
+    accessToken = exchanged.accessToken;
+    tokenExpiresAt = exchanged.expiresAt;
+  } catch (error) {
+    const detail = error instanceof ChannelError ? error.message : String(error);
+    return { ok: false, error: `Échange du token refusé par Meta: ${detail}` };
+  }
+
+  try {
+    await new InstagramAdapter({
+      igUserId: parsed.data.igUserId,
+      accessToken,
+    }).checkQuota();
+  } catch (error) {
+    const detail = error instanceof ChannelError ? error.message : String(error);
+    return {
+      ok: false,
+      error: `Token accepté mais le compte ne répond pas (${detail}). Vérifier l'ig_user_id, et que le compte a bien accepté l'invitation de testeur.`,
+    };
+  }
+
+  const credentials = encryptCredentials({
+    igUserId: parsed.data.igUserId,
+    accessToken,
+    pageId: parsed.data.pageId,
+  });
 
   await prisma.channelAccount.upsert({
     where: {

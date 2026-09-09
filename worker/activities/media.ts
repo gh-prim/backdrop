@@ -178,12 +178,23 @@ function r2Client(): S3Client | null {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  if (!accountId || !accessKeyId || !secretAccessKey) return null;
+  if (!accessKeyId || !secretAccessKey) return null;
+
+  // R2_ENDPOINT permet de pointer un stockage S3 local en développement.
+  // L'interface étant identique, c'est aussi le chemin de sortie vers
+  // Backblaze B2 si les CGU de Cloudflare changeaient (docs/findings).
+  const endpoint =
+    process.env.R2_ENDPOINT ??
+    (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : null);
+  if (!endpoint) return null;
 
   return new S3Client({
     region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    // Indispensable hors Cloudflare: MinIO et consorts servent le bucket en
+    // préfixe de chemin, pas en sous-domaine.
+    forcePathStyle: Boolean(process.env.R2_ENDPOINT),
   });
 }
 
