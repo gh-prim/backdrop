@@ -221,7 +221,9 @@ export function AudioPicker({
                     onSelect({
                       audioId: track.audioId,
                       title: track.title,
-                      artist: track.artist,
+                      artist:
+                        track.artist ||
+                        (track.creatorHandle ? `@${track.creatorHandle}` : ""),
                       // Par défaut on laisse Instagram fournir le son: c'est le
                       // cas qui apporte la découverte via la page de l'audio.
                       audioVolume: 100,
@@ -234,7 +236,9 @@ export function AudioPicker({
                       onSelect({
                         audioId: track.audioId,
                         title: track.title,
-                        artist: track.artist,
+                        artist:
+                          track.artist ||
+                          (track.creatorHandle ? `@${track.creatorHandle}` : ""),
                         audioVolume: 100,
                         videoVolume: 0,
                       });
@@ -246,8 +250,12 @@ export function AudioPicker({
                   )}
                 >
                   <span className="truncate font-medium">{track.title}</span>
+                  {/* Les sons originaux n'ont pas d'artiste: leur seule
+                      identité est le compte qui les a créés, et sans lui une
+                      liste de « Original audio » est indistinguable. */}
                   <span className="truncate text-xs text-muted-foreground">
-                    {track.artist}
+                    {track.artist ||
+                      (track.creatorHandle ? `@${track.creatorHandle}` : "")}
                   </span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                     {duration(track.durationMs)}
