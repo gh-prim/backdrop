@@ -3,6 +3,7 @@ import { requireOrgContext } from "@/lib/session";
 import { getSelectedPersonaId, listPersonas } from "@/lib/persona-scope";
 import { PersonaSwitcher } from "@/components/persona-switcher";
 import { UserMenu } from "@/components/user-menu";
+import { TaskMenu } from "@/components/task-menu";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -50,7 +51,8 @@ export default async function AppLayout({
             ))}
           </nav>
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <TaskMenu />
             <UserMenu name={ctx.userName} email={ctx.userEmail} role={ctx.role} />
           </div>
         </div>

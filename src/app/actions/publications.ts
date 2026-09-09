@@ -13,7 +13,9 @@ import {
 import {
   cancelPublishWorkflow,
   rescheduleWorkflow,
+  schedulePublication,
   startPublishWorkflow,
+  unschedulePublication,
 } from "@/temporal/client";
 
 export type ActionResult =
@@ -82,12 +84,20 @@ export async function schedulePublicationAction(
     return { ok: false, error: message || "Could not create." };
   }
 
-  // Un workflow par publication: démarrage à la programmation, pas à
-  // l'échéance (7.6). L'échec d'un démarrage ne doit pas masquer les autres.
+  /**
+   * Deux chemins distincts (7.6):
+   *  - **envoi immédiat**: on démarre le workflow tout de suite, et
+   *    `workflowId = publish:{id}` interdit le doublon;
+   *  - **programmation**: un Temporal Schedule à déclenchement unique porte
+   *    l'échéance, ce qui la rend visible et modifiable dans la console.
+   *
+   * L'échec d'un démarrage ne doit pas masquer celui des autres canaux.
+   */
   const notStarted: string[] = [];
   for (const publication of created) {
     try {
-      await startPublishWorkflow(publication);
+      if (publishNow) await startPublishWorkflow(publication);
+      else await schedulePublication(publication, parsed.data.scheduledAt);
     } catch (error) {
       notStarted.push(`${publication.platform}: ${(error as Error).message}`);
     }
@@ -138,9 +148,14 @@ export async function reschedulePublicationAction(
   }
 
   try {
-    await updateScheduledPublication(ctx, parsed.data);
-    // Le workflow dort déjà: on lui signale la nouvelle heure plutôt que de
-    // l'annuler et d'en redémarrer un (7.6).
+    const { platform } = await updateScheduledPublication(ctx, parsed.data);
+    // La nouvelle échéance est portée par le Schedule. Le signal reste utile
+    // pour une publication déjà démarrée qui patiente sur son timer, cas des
+    // publications créées avant le passage aux Schedules.
+    await schedulePublication(
+      { id: parsed.data.publicationId, platform },
+      parsed.data.scheduledAt,
+    );
     await rescheduleWorkflow(parsed.data.publicationId, parsed.data.scheduledAt);
   } catch (error) {
     if (error instanceof StaleVersionError) return { ok: false, error: error.message };
@@ -153,6 +168,9 @@ export async function reschedulePublicationAction(
 
 export async function cancelPublicationAction(publicationId: string): Promise<void> {
   await requireOrgContext();
+  // L'ordre compte: retirer le Schedule d'abord, sinon il pourrait redéclencher
+  // le workflow qu'on vient d'annuler.
+  await unschedulePublication(publicationId);
   await cancelPublishWorkflow(publicationId);
   revalidatePath("/publications");
 }
@@ -161,6 +179,7 @@ export async function cancelPublicationAction(publicationId: string): Promise<vo
 export async function publishMissedNowAction(publicationId: string): Promise<void> {
   const ctx = await requireOrgContext();
   const { platform } = await requeueMissedPublication(ctx, publicationId);
+  await unschedulePublication(publicationId);
   await cancelPublishWorkflow(publicationId);
   await startPublishWorkflow({ id: publicationId, platform });
   revalidatePath("/publications");

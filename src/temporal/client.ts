@@ -6,10 +6,13 @@ import {
 } from "@temporalio/client";
 import {
   PROGRESS_QUERY,
+  classifyPublishSchedule,
   RESCHEDULE_SIGNAL,
   REFRESH_META_TOKENS_SCHEDULE_ID,
+  SWEEP_PUBLISH_SCHEDULES_SCHEDULE_ID,
   TASK_QUEUE,
   ingestWorkflowId,
+  publishScheduleId,
   publishWorkflowId,
   type PublishProgress,
 } from "./config";
@@ -72,6 +75,74 @@ export async function startPublishWorkflow(publication: {
   }
 }
 
+/**
+ * Programme une publication par un **Temporal Schedule à déclenchement unique**.
+ */
+const MONTHS = [
+  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
+] as const;
+
+export async function schedulePublication(
+  publication: { id: string; platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE" },
+  at: Date,
+): Promise<void> {
+  if (publication.platform !== "INSTAGRAM") {
+    throw new Error(`No publishing workflow for ${publication.platform} yet.`);
+  }
+
+  const client = await temporalClient();
+  const scheduleId = publishScheduleId(publication.id);
+
+  // Une reprogrammation supprime puis recrée: la mise à jour d'un Schedule
+  // demande de reconstruire sa description entière, pour un objet dont la
+  // durée de vie se compte en heures et qui n'a qu'un seul déclenchement.
+  await unschedulePublication(publication.id);
+
+  await client.schedule.create({
+    scheduleId,
+    spec: {
+      // Tous les champs sont épinglés: la spécification ne désigne qu'un
+      // instant. Exprimée en UTC pour ne pas dépendre du fuseau du serveur,
+      // qui n'est pas celui de la persona.
+      calendars: [
+        {
+          year: at.getUTCFullYear(),
+          month: MONTHS[at.getUTCMonth()],
+          dayOfMonth: at.getUTCDate(),
+          hour: at.getUTCHours(),
+          minute: at.getUTCMinutes(),
+          second: at.getUTCSeconds(),
+        },
+      ],
+      timezone: "UTC",
+    },
+    action: {
+      type: "startWorkflow",
+      workflowType: "publishInstagram",
+      workflowId: publishWorkflowId(publication.id),
+      taskQueue: TASK_QUEUE.node,
+      args: [{ publicationId: publication.id }],
+    },
+    policies: { overlap: ScheduleOverlapPolicy.SKIP },
+    // La garantie qui remplace ici l'unicité du workflowId: même si le
+    // Schedule survivait à sa publication — annulation ratée, nettoyage
+    // manqué — il ne peut pas se déclencher une seconde fois.
+    state: { remainingActions: 1 },
+  });
+}
+
+/** Retire le Schedule d'une publication: annulation, ou nettoyage après envoi. */
+export async function unschedulePublication(publicationId: string): Promise<void> {
+  const client = await temporalClient();
+  await client.schedule
+    .getHandle(publishScheduleId(publicationId))
+    .delete()
+    .catch(() => {
+      // Absent, déjà nettoyé, ou jamais créé: rien à signaler.
+    });
+}
+
 /** Reprogrammation: signal sur le workflow en cours, pas d'annulation (7.6). */
 export async function rescheduleWorkflow(
   publicationId: string,
@@ -116,6 +187,79 @@ export async function ensureRefreshMetaTokensSchedule(): Promise<void> {
       action: {
         type: "startWorkflow",
         workflowType: "refreshMetaTokens",
+        taskQueue: TASK_QUEUE.node,
+      },
+      policies: { overlap: ScheduleOverlapPolicy.SKIP },
+    });
+  } catch (error) {
+    if ((error as { name?: string }).name !== "ScheduleAlreadyRunning") throw error;
+  }
+}
+
+export type SweepResult = {
+  /** Schedules de publication examinés. */
+  inspected: number;
+  /** Épuisés: ils se sont déclenchés et ne se redéclencheront jamais. */
+  swept: string[];
+  /**
+   * Bloqués: ils ne se sont **jamais** déclenchés et ne le feront jamais —
+   * typiquement une échéance déjà passée à la création. Supprimés eux aussi,
+   * mais listés à part: derrière chacun se cache une publication restée
+   * `SCHEDULED` que plus rien ne viendra envoyer.
+   */
+  stuck: string[];
+};
+
+/**
+ * Supprime les Temporal Schedules de publication qui ont fini leur vie.
+ *
+ * Le workflow nettoie déjà le sien sur chacune de ses quatre sorties, mais ce
+ * nettoyage suppose qu'il aille jusqu'au bout: un worker tué entre la
+ * publication et le nettoyage laisse le Schedule derrière lui. Ce balayage ne
+ * dépend d'aucun workflow, et c'est tout son intérêt.
+ *
+ * Le critère est l'absence de déclenchement à venir. Couplé à
+ * `remainingActions: 1`, il est définitif: un Schedule sans prochaine occurrence
+ * ne peut pas en retrouver une.
+ */
+export async function sweepExhaustedPublishSchedules(): Promise<SweepResult> {
+  const client = await temporalClient();
+  const swept: string[] = [];
+  const stuck: string[] = [];
+  let inspected = 0;
+
+  for await (const summary of client.schedule.list()) {
+    const verdict = classifyPublishSchedule(summary);
+    // Ne jamais toucher aux Schedules qui ne portent pas une publication,
+    // ni à ceux qui ont encore un déclenchement devant eux.
+    if (verdict === "foreign") continue;
+    inspected += 1;
+    if (verdict === "live") continue;
+
+    await client.schedule
+      .getHandle(summary.scheduleId)
+      .delete()
+      .catch(() => {
+        // Course avec le nettoyage du workflow: il a gagné, tant mieux.
+      });
+
+    if (verdict === "exhausted") swept.push(summary.scheduleId);
+    else stuck.push(summary.scheduleId);
+  }
+
+  return { inspected, swept, stuck };
+}
+
+/** Schedule du balayeur, toutes les heures. Idempotent. */
+export async function ensureSweepPublishSchedulesSchedule(): Promise<void> {
+  const client = await temporalClient();
+  try {
+    await client.schedule.create({
+      scheduleId: SWEEP_PUBLISH_SCHEDULES_SCHEDULE_ID,
+      spec: { intervals: [{ every: "1 hour" }] },
+      action: {
+        type: "startWorkflow",
+        workflowType: "sweepPublishSchedules",
         taskQueue: TASK_QUEUE.node,
       },
       policies: { overlap: ScheduleOverlapPolicy.SKIP },

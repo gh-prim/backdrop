@@ -126,6 +126,7 @@ export async function publishInstagram(
       status: plan.status,
     });
     finish("skipped", `Status is ${plan.status}: nothing was sent.`);
+    await db.cleanupPublishSchedule(input.publicationId);
     return { outcome: "skipped" };
   }
 
@@ -142,6 +143,7 @@ export async function publishInstagram(
       "missed",
       `Overdue by ${Math.round(latenessMinutes)} min, tolerance is ${plan.toleranceMinutes} min.`,
     );
+    await db.cleanupPublishSchedule(input.publicationId);
     return { outcome: "missed" };
   }
 
@@ -191,12 +193,15 @@ export async function publishInstagram(
 
     advance(100, "Published");
     finish("published", remoteId);
+    await db.cleanupPublishSchedule(input.publicationId);
     log.info("Publication Instagram réussie", { remoteId });
     return { outcome: "published", remoteId };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     await db.markFailed(input.publicationId, reason);
     finish("failed", reason);
+    // Le Schedule a joué son unique déclenchement: le laisser n'apporte rien.
+    await db.cleanupPublishSchedule(input.publicationId);
     throw error;
   }
 }

@@ -2,6 +2,7 @@ import { ApplicationFailure } from "@temporalio/activity";
 import { PubStatus } from "@prisma/client";
 import { prisma } from "../../src/lib/db";
 import { DEFAULT_SCHEDULE_TOLERANCE_MINUTES } from "../../src/temporal/env";
+import { unschedulePublication } from "../../src/temporal/client";
 
 /**
  * Activités de persistance.
@@ -171,4 +172,15 @@ export async function persistChildContainerId(
     where: { id: itemId },
     data: { childContainerId: containerId },
   });
+}
+
+/**
+ * Retire le Schedule qui a porté cette publication.
+ *
+ * Purement cosmétique pour la sûreté — `remainingActions: 1` interdit déjà un
+ * second déclenchement — mais une console encombrée de Schedules épuisés rend
+ * illisibles ceux qui comptent encore.
+ */
+export async function cleanupPublishSchedule(publicationId: string): Promise<void> {
+  await unschedulePublication(publicationId);
 }

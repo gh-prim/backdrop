@@ -128,3 +128,9 @@
     @apply font-sans;
   }
 }
+/* Barre de progression indéterminée: la durée d'un traitement Instagram est
+   inconnue, une barre chiffrée mentirait. */
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}

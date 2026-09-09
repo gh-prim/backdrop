@@ -90,9 +90,10 @@ export function ComposerForm({
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     async (prev, formData) => {
       const result = await schedulePublicationAction(prev, formData);
-      // Le suivi s'ouvre sur les identifiants réellement créés: sans eux, il
-      // n'y aurait rien de réel à interroger.
-      if (result.ok && result.publicationIds?.length) {
+      // Le suivi ne s'ouvre que sur un envoi immédiat: une publication
+      // programmée pour ce soir n'a rien à montrer maintenant, et la barre de
+      // tâches du haut préviendra quand elle partira.
+      if (publishNow && result.ok && result.publicationIds?.length) {
         setTracked(result.publicationIds);
       }
       return result;

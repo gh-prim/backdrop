@@ -27,6 +27,20 @@ export function ingestWorkflowId(variantId: string): string {
 
 export const REFRESH_META_TOKENS_SCHEDULE_ID = "refresh-meta-tokens";
 
+/** Balayeur des Schedules de publication épuisés (7.6). */
+export const SWEEP_PUBLISH_SCHEDULES_SCHEDULE_ID = "sweep-publish-schedules";
+
+/**
+ * Préfixe des Schedules de publication. Il sert à les reconnaître au balayage:
+ * le balayeur ne doit jamais toucher `refresh-meta-tokens` ni lui-même.
+ */
+export const PUBLISH_SCHEDULE_PREFIX = "publish-at:";
+
+/** Schedule à déclenchement unique portant une publication programmée (7.6). */
+export function publishScheduleId(publicationId: string): string {
+  return `${PUBLISH_SCHEDULE_PREFIX}${publicationId}`;
+}
+
 /** Signal de reprogrammation, reçu par un workflow déjà en attente (7.6). */
 export const RESCHEDULE_SIGNAL = "reschedule";
 
@@ -50,3 +64,20 @@ export type PublishProgress = {
   steps: PublishStep[];
   detail: string | null;
 };
+
+/**
+ * Verdict du balayeur sur un Schedule, isolé du client Temporal pour être
+ * testable: c'est la seule ligne du système capable d'effacer un Schedule
+ * encore vivant, et une erreur ici perdrait une publication programmée.
+ */
+export type ScheduleVerdict = "foreign" | "live" | "exhausted" | "stuck";
+
+export function classifyPublishSchedule(summary: {
+  scheduleId: string;
+  info: { recentActions: unknown[]; nextActionTimes: unknown[] };
+}): ScheduleVerdict {
+  if (!summary.scheduleId.startsWith(PUBLISH_SCHEDULE_PREFIX)) return "foreign";
+  // Un déclenchement à venir: on n'y touche pas, quoi qu'il se soit passé avant.
+  if (summary.info.nextActionTimes.length > 0) return "live";
+  return summary.info.recentActions.length > 0 ? "exhausted" : "stuck";
+}

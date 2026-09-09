@@ -700,6 +700,39 @@ model FanvueEarning {
 
 Chaque phase se termine par un `docker compose up` fonctionnel et un commit. Ne pas démarrer une phase tant que la Definition of Done de la précédente n'est pas atteinte.
 
+**Cycle de vie d'un Schedule de publication.** Un Schedule `publish-at:{id}` est
+créé à la programmation et porte `remainingActions: 1`: même s'il survivait à sa
+publication, il lui est structurellement impossible de se déclencher une seconde
+fois. C'est cette garantie qui remplace l'unicité du `workflowId`, car Temporal
+suffixe l'identifiant du workflow déclenché par l'horodatage de l'occurrence
+(`publish:{id}-2026-09-09T20:20:12Z`): l'unicité du `workflowId` ne protège donc
+plus du doublon pour les publications programmées.
+
+Sa suppression obéit à deux mécanismes, volontairement indépendants:
+
+1. le workflow supprime son propre Schedule sur **chacune de ses quatre
+   sorties** — publié, échoué, ignoré, manqué;
+2. un balayeur `sweep-publish-schedules` passe toutes les heures et supprime les
+   Schedules `publish-at:` sans déclenchement à venir.
+
+Le second existe parce que le premier suppose que le workflow aille jusqu'au
+bout: un worker tué entre la publication et le nettoyage laisse le Schedule
+derrière lui. Un filet qui dépendrait du mécanisme qu'il rattrape ne servirait à
+rien.
+
+Le balayeur distingue deux cas et ne les traite pas de la même façon. Un Schedule
+qui **s'est déclenché** et n'a plus rien devant lui est un reliquat: supprimé
+sans bruit. Un Schedule qui ne s'est **jamais** déclenché et ne le fera jamais —
+échéance déjà passée à la création — est autre chose: sa publication est restée
+`SCHEDULED` sans que rien ne vienne l'envoyer. Il est supprimé lui aussi, mais
+journalisé en erreur. Effacer ce cas en silence transformerait un bug visible en
+bug silencieux.
+
+Ordre impératif à l'annulation et à la republication: **retirer le Schedule
+avant** d'annuler le workflow. L'inverse laisserait le Schedule relancer ce qu'on
+vient d'annuler.
+
+
 ### Phase 0 — Validation et fondations
 
 **À faire**
