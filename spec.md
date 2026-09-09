@@ -65,7 +65,9 @@ Accès via l'**Instagram API with Facebook Login** (pas Instagram Login, voir 4.
 
 **4.1.1 Prérequis de compte.** Chaque persona a besoin d'un compte Instagram Business lié à une Page Facebook. Les Pages sont regroupées sous un Business Manager unique.
 
-**4.1.2 Pas d'App Review.** L'app Meta reste en mode développement. Chaque compte est ajouté comme *tester* de l'app, ce qui débloque `instagram_content_publish` sans passer de review. Concevoir pour rester dans ce mode.
+**4.1.2 Pas d'App Review.** L'app Meta reste en mode développement, ce qui débloque `instagram_content_publish` sans passer de review. Concevoir pour rester dans ce mode.
+
+Le mécanisme n'est **pas** la liste « Instagram Tester » du tableau de bord: celle-ci appartient à l'Instagram Basic Display et à Instagram Login, où le compte Instagram autorise l'app directement. Avec Facebook Login, ce qui compte est que le **profil Facebook** porteur du jeton ait un rôle sur l'app (administrateur, développeur ou testeur) **et** puisse effectuer des tâches sur la Page liée au compte Instagram. Chercher son compte Instagram dans la liste des testeurs est une impasse: il n'y apparaîtra pas.
 
 **4.1.3 Publication en deux temps.**
 ```
