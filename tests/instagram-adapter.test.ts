@@ -283,6 +283,21 @@ describe("adapter Instagram", () => {
     ).rejects.toMatchObject({ retryable: true, code: "graph_4" });
   });
 
+  it("réessaye quand Meta n'a pas su récupérer le média à temps", async () => {
+    // Code -2, rencontré en production sur un carrousel: Meta abandonne le
+    // téléchargement d'une image. C'est transitoire, et le classer non
+    // réessayable perdait la publication entière.
+    const { http } = fakeGraph(
+      [{ error: { code: -2, message: "It takes too long to download the media." } }],
+      400,
+    );
+    const adapter = new InstagramAdapter(credentials, http);
+
+    await expect(
+      adapter.createContainer({ type: "IMAGE", imageUrl: "https://cdn.test/x.jpg" }),
+    ).rejects.toMatchObject({ retryable: true, code: "graph_-2" });
+  });
+
   it("classe un token invalide comme non réessayable", async () => {
     const { http } = fakeGraph([{ error: { code: 190, message: "Invalid OAuth token" } }], 400);
     const adapter = new InstagramAdapter(credentials, http);

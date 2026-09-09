@@ -139,6 +139,9 @@ const NON_RETRYABLE_CODES = new Set([
 ]);
 
 const RETRYABLE_CODES = new Set([
+  -2, // fourre-tout transitoire, dont « It takes too long to download the
+  //     media »: Meta n'a pas réussi à récupérer le fichier à temps. Le
+  //     réessayer aboutit, ne pas le réessayer perd la publication.
   1, // erreur inconnue, transitoire
   2, // service temporairement indisponible
   4, // limite de débit applicative
