@@ -27,6 +27,8 @@ function plan(overrides: Partial<PublicationPlan> = {}): PublicationPlan {
     kind: "SINGLE",
     caption: "légende",
     audioId: null,
+    audioVolume: null,
+    videoVolume: null,
     scheduledAt: new Date(Date.now() + HOUR).toISOString(),
     status: "SCHEDULED",
     toleranceMinutes: 45,

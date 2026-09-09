@@ -149,6 +149,8 @@ async function buildSingle(
           videoUrl: url,
           caption: plan.caption,
           audioId: plan.audioId ?? undefined,
+          audioVolume: plan.audioVolume ?? undefined,
+          videoVolume: plan.videoVolume ?? undefined,
         }
       : item.isVideo
         ? { type: "VIDEO", videoUrl: url, caption: plan.caption }

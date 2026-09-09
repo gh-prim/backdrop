@@ -81,6 +81,8 @@ export type CreatePublicationInput = {
   scheduledAt: Date;
   variantIds: string[];
   audioId?: string | null;
+  audioVolume?: number | null;
+  videoVolume?: number | null;
 };
 
 /**
@@ -131,6 +133,8 @@ export async function createPublication(
           scheduledAt: input.scheduledAt,
           status: PubStatus.SCHEDULED,
           audioId: input.audioId ?? null,
+          audioVolume: input.audioVolume ?? null,
+          videoVolume: input.videoVolume ?? null,
         },
         select: { id: true },
       });

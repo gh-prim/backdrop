@@ -26,6 +26,8 @@ const createSchema = z.object({
   scheduledAt: z.coerce.date(),
   variantIds: z.array(z.string().min(1)).min(1, "Au moins un média."),
   audioId: z.string().optional(),
+  audioVolume: z.coerce.number().int().min(0).max(100).optional(),
+  videoVolume: z.coerce.number().int().min(0).max(100).optional(),
 });
 
 export async function schedulePublicationAction(
@@ -47,6 +49,8 @@ export async function schedulePublicationAction(
     scheduledAt: publishNow ? new Date() : formData.get("scheduledAt"),
     variantIds: formData.getAll("variantIds").map(String),
     audioId: String(formData.get("audioId") ?? "").trim() || undefined,
+    audioVolume: String(formData.get("audioVolume") ?? "").trim() || undefined,
+    videoVolume: String(formData.get("videoVolume") ?? "").trim() || undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };

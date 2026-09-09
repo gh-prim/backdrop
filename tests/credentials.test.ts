@@ -57,6 +57,9 @@ describe("opacité des credentials plateforme", () => {
     const allowed = new Set([
       // Résout les credentials pour construire l'adapter, côté worker.
       join("worker", "activities", "instagram.ts"),
+      // Idem côté web, pour le catalogue audio. Ne rend qu'un adapter, jamais
+      // un token.
+      join("src", "lib", "channels", "instagram-account.ts"),
       // Les détient en mémoire le temps d'un appel Graph.
       join("src", "lib", "channels", "instagram.ts"),
       // N'écrit qu'un blob déjà chiffré, ne relit jamais.

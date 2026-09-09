@@ -175,6 +175,11 @@ model Publication {
   expiresAt        DateTime?
   /// Instagram Audio API, Reels uniquement (4.1.5).
   audioId          String?
+  /// Volumes du mixage, 0 à 100. Une piste native rend le Reel visible sur la
+  /// page de l'audio; couper le son de la vidéo évite de superposer deux fois
+  /// la même musique quand elle est déjà incrustée au montage.
+  audioVolume      Int?
+  videoVolume      Int?
   remoteId         String?
   failureReason    String?
   publishedAt      DateTime?

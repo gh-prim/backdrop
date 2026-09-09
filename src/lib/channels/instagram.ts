@@ -55,10 +55,28 @@ export type ContainerStatus =
   | "EXPIRED"
   | "PUBLISHED";
 
+/** Piste du catalogue Instagram, telle que renvoyée par `GET /ig_audio`. */
+export type InstagramAudioTrack = {
+  audioId: string;
+  title: string;
+  artist: string;
+  durationMs: number;
+  /** Page de l'audio sur Instagram, utile pour écouter avant de choisir. */
+  previewUrl: string | null;
+  creatorHandle: string | null;
+};
+
 export type CreateContainerInput =
   | { type: "IMAGE"; imageUrl: string; caption?: string }
   | { type: "VIDEO"; videoUrl: string; caption?: string }
-  | { type: "REELS"; videoUrl: string; caption?: string; audioId?: string }
+  | {
+      type: "REELS";
+      videoUrl: string;
+      caption?: string;
+      audioId?: string;
+      audioVolume?: number;
+      videoVolume?: number;
+    }
   | { type: "CAROUSEL_ITEM_IMAGE"; imageUrl: string }
   | { type: "CAROUSEL_ITEM_VIDEO"; videoUrl: string }
   | { type: "CAROUSEL"; children: string[]; caption?: string };
@@ -211,11 +229,13 @@ export class InstagramAdapter implements ChannelAdapter {
         params.is_ai_generated = AI_GENERATED;
         if (input.audioId) {
           // Piste native du catalogue Instagram, Reels uniquement (4.1.5).
-          // Aucune prévisualisation possible: ce qui est configuré part tel quel.
+          // Ce n'est pas qu'une question de son: un Reel avec piste native
+          // apparaît sur la page de cet audio, donc dans une surface de
+          // découverte qu'une musique incrustée au montage n'atteint jamais.
           params.audio_configuration = JSON.stringify({
             audio_id: input.audioId,
-            audio_volume: 80,
-            video_volume: 40,
+            audio_volume: input.audioVolume ?? 100,
+            video_volume: input.videoVolume ?? 0,
           });
         }
         break;
@@ -289,6 +309,44 @@ export class InstagramAdapter implements ChannelAdapter {
       });
     }
     return body.id;
+  }
+
+  /**
+   * Catalogue audio (4.1.5). Sans `query`, l'API renvoie les tendances.
+   *
+   * Le catalogue exposé est plus restreint que celui de l'app mobile, et
+   * aucune prévisualisation n'est possible depuis l'API: `previewUrl` renvoie
+   * vers la page Instagram de la piste, seul moyen de l'écouter avant de
+   * publier. Ce qui est configuré part en production tel quel.
+   */
+  async searchAudio(query?: string): Promise<InstagramAudioTrack[]> {
+    const body = await this.call<{
+      audio?: {
+        audio_id?: string;
+        title?: string;
+        display_artist?: string;
+        duration_in_ms?: number;
+        on_platform_audio_preview_link?: string;
+        ig_username?: string;
+      }[];
+    }>("ig_audio", {
+      audio_type: "music",
+      user_id: this.credentials.igUserId,
+      // La clé de réponse est `audio`, pas `data`: cet endpoint ne suit pas la
+      // convention du reste du Graph.
+      search_query: query?.trim() || undefined,
+    });
+
+    return (body.audio ?? [])
+      .filter((track) => track.audio_id)
+      .map((track) => ({
+        audioId: track.audio_id as string,
+        title: track.title ?? "(sans titre)",
+        artist: track.display_artist ?? "",
+        durationMs: track.duration_in_ms ?? 0,
+        previewUrl: track.on_platform_audio_preview_link ?? null,
+        creatorHandle: track.ig_username ?? null,
+      }));
   }
 
   async fetchMetrics(remoteId: string): Promise<PublishMetrics> {

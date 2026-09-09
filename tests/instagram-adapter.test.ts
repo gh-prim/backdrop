@@ -147,6 +147,77 @@ describe("adapter Instagram", () => {
     });
   });
 
+  it("laisse Instagram fournir le son par défaut sur un Reel avec musique", async () => {
+    const { http, calls } = fakeGraph([{ id: "reel-1" }]);
+    const adapter = new InstagramAdapter(credentials, http);
+
+    await adapter.createContainer({
+      type: "REELS",
+      videoUrl: "https://cdn.test/reel.mp4",
+      audioId: "audio-1",
+    });
+
+    // Le cas recommandé: la vidéo est exportée sans musique, Instagram la
+    // fournit, et le Reel apparaît sur la page de l'audio.
+    expect(JSON.parse(calls[0].params.audio_configuration)).toEqual({
+      audio_id: "audio-1",
+      audio_volume: 100,
+      video_volume: 0,
+    });
+  });
+
+  it("respecte les volumes choisis par l'opérateur", async () => {
+    const { http, calls } = fakeGraph([{ id: "reel-2" }]);
+    const adapter = new InstagramAdapter(credentials, http);
+
+    await adapter.createContainer({
+      type: "REELS",
+      videoUrl: "https://cdn.test/reel.mp4",
+      audioId: "audio-2",
+      audioVolume: 30,
+      videoVolume: 90,
+    });
+
+    expect(JSON.parse(calls[0].params.audio_configuration)).toMatchObject({
+      audio_volume: 30,
+      video_volume: 90,
+    });
+  });
+
+  it("lit le catalogue audio, tendances comprises", async () => {
+    const { http, calls } = fakeGraph([
+      {
+        // La clé est `audio`, pas `data`: cet endpoint ne suit pas la
+        // convention du reste du Graph.
+        audio: [
+          {
+            audio_id: "1059089980427304",
+            title: "Bass Persuades",
+            display_artist: "Miley Cyrus",
+            duration_in_ms: 202460,
+            on_platform_audio_preview_link: "https://www.instagram.com/reels/audio/1059089980427304/",
+            ig_username: "miley",
+          },
+          { title: "sans identifiant, à ignorer" },
+        ],
+      },
+    ]);
+    const adapter = new InstagramAdapter(credentials, http);
+
+    const tracks = await adapter.searchAudio();
+
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0]).toMatchObject({
+      audioId: "1059089980427304",
+      title: "Bass Persuades",
+      artist: "Miley Cyrus",
+      creatorHandle: "miley",
+    });
+    // Requête vide: pas de search_query, l'API renvoie alors les tendances.
+    expect(calls[0].params.search_query).toBeUndefined();
+    expect(calls[0].params.audio_type).toBe("music");
+  });
+
   it("lit le quota annoncé par Meta plutôt qu'une constante", async () => {
     const { http } = fakeGraph([
       { data: [{ quota_usage: 12, config: { quota_total: 50 } }] },

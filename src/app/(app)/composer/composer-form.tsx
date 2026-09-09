@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
+import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
 import { cn } from "cn";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -71,7 +72,7 @@ export function ComposerForm({
   const [kind, setKind] = useState("SINGLE");
   const [selected, setSelected] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
-  const [audioId, setAudioId] = useState("");
+  const [audio, setAudio] = useState<SelectedAudio | null>(null);
 
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     schedulePublicationAction,
@@ -79,6 +80,11 @@ export function ComposerForm({
   );
 
   const chosenChannels = channels.filter((channel) => channelIds.includes(channel.id));
+
+  /** Le catalogue audio est interrogé avec les credentials du compte choisi. */
+  const instagramChannel = chosenChannels.find(
+    (channel) => channel.platform === "INSTAGRAM",
+  );
 
   /**
    * Rating maximal admissible: le **plus restrictif** des canaux choisis.
@@ -154,7 +160,17 @@ export function ComposerForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />
       <input type="hidden" name="scheduledAt" value={scheduledAt} />
-      <input type="hidden" name="audioId" value={audioId} />
+      <input type="hidden" name="audioId" value={audio?.audioId ?? ""} />
+      <input
+        type="hidden"
+        name="audioVolume"
+        value={audio ? String(audio.audioVolume) : ""}
+      />
+      <input
+        type="hidden"
+        name="videoVolume"
+        value={audio ? String(audio.videoVolume) : ""}
+      />
       {channelIds.map((id) => (
         <input key={id} type="hidden" name="channelAccountIds" value={id} />
       ))}
@@ -295,6 +311,24 @@ export function ComposerForm({
                 </p>
               )}
 
+              {kind === "REEL" && instagramChannel && (
+                <AudioPicker
+                  channelAccountId={instagramChannel.id}
+                  selected={audio}
+                  onSelect={setAudio}
+                />
+              )}
+
+              {kind !== "REEL" && (
+                // L'API n'accepte l'audio que sur les Reels: le dire ici évite
+                // de chercher l'option ailleurs (4.1.5).
+                <p className="text-xs text-muted-foreground">
+                  La musique Instagram n&apos;est disponible que sur les Reels:
+                  l&apos;API n&apos;expose aucun paramètre audio pour une photo ou un
+                  carrousel, contrairement à l&apos;application mobile.
+                </p>
+              )}
+
               {variants.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   Aucun Variant dérivé pour cette persona. Passez par la Library.
@@ -374,22 +408,6 @@ export function ComposerForm({
                 </p>
               </div>
 
-              {kind === "REEL" && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="audioInput">Audio Instagram (optionnel)</Label>
-                  <Input
-                    id="audioInput"
-                    value={audioId}
-                    onChange={(event) => setAudioId(event.target.value)}
-                    className="h-8 w-72"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Aucune prévisualisation possible: ce qui est configuré part en
-                    production tel quel.
-                  </p>
-                </div>
-              )}
-
               <dl className="grid gap-x-6 gap-y-1 border-t pt-3 text-xs sm:grid-cols-2">
                 <Recap label="Nom" value={name} />
                 <Recap
@@ -409,6 +427,9 @@ export function ComposerForm({
                 />
                 <Recap label="Type" value={kind} />
                 <Recap label="Médias" value={`${selected.length}`} />
+                {audio && (
+                  <Recap label="Musique" value={`${audio.title} — ${audio.artist}`} />
+                )}
                 <Recap
                   label="Publications créées"
                   value={`${chosenChannels.length}`}

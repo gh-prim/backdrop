@@ -100,7 +100,13 @@ POST /{ig-user-id}/media
      video_url=...
      audio_configuration={"audio_id":"...","audio_volume":80,"video_volume":40}
 ```
-Le catalogue exposé par l'API est plus restreint que celui de l'app mobile. Aucune prévisualisation possible: ce qui est configuré part en production tel quel. Prévoir un compte de test.
+Le catalogue exposé par l'API est plus restreint que celui de l'app mobile. Aucune prévisualisation possible depuis l'API: seule la page Instagram de la piste (`on_platform_audio_preview_link`) permet de l'écouter avant de publier. Ce qui est configuré part en production tel quel. Prévoir un compte de test.
+
+**Pas de musique sur une photo.** L'app mobile sait poser une piste sur un post photo, l'API non: `audio_configuration` et `audio_name` sont l'un comme l'autre réservés à `media_type=REELS`, et aucun paramètre audio n'existe pour un container `IMAGE`. Vérifié en septembre 2026, ce n'est pas contournable.
+
+**Pourquoi préférer une piste native à une musique incrustée au montage.** Ce n'est pas une question de son. Un Reel portant une piste native apparaît sur la page de cet audio, donc dans une surface de découverte qu'une bande-son incrustée n'atteint jamais, et il s'expose moins à être coupé pour droits d'auteur. Le flux recommandé est donc d'exporter la vidéo **sans** musique et de laisser Instagram la fournir, d'où les volumes par défaut: `audio_volume` à 100, `video_volume` à 0.
+
+**Recherche.** `GET /ig_audio?audio_type=music&user_id={id}` avec `search_query` pour chercher, et **sans `search_query` pour obtenir les tendances**. La réponse arrive sous la clé `audio`, pas `data`: cet endpoint ne suit pas la convention du reste du Graph.
 
 **4.1.5 bis — Divulgation IA.** `POST /{ig-user-id}/media` accepte
 `is_ai_generated`, une auto-déclaration de contenu généré par IA. Elle est

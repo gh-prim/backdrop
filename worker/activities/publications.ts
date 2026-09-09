@@ -31,6 +31,8 @@ export type PublicationPlan = {
   kind: string;
   caption: string;
   audioId: string | null;
+  audioVolume: number | null;
+  videoVolume: number | null;
   scheduledAt: string;
   status: string;
   toleranceMinutes: number;
@@ -62,6 +64,8 @@ export async function loadPublicationPlan(
       kind: true,
       copy: true,
       audioId: true,
+      audioVolume: true,
+      videoVolume: true,
       scheduledAt: true,
       status: true,
       channelAccount: {
@@ -93,6 +97,8 @@ export async function loadPublicationPlan(
     kind: publication.kind,
     caption: publication.copy,
     audioId: publication.audioId,
+    audioVolume: publication.audioVolume,
+    videoVolume: publication.videoVolume,
     scheduledAt: publication.scheduledAt.toISOString(),
     status: publication.status,
     toleranceMinutes:
