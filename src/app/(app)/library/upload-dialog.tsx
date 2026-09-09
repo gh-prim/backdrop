@@ -47,7 +47,7 @@ export function UploadDialog({
         Uploader
       </DialogTrigger>
 
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[92vw] sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Uploader des médias</DialogTitle>
           <DialogDescription>
@@ -56,7 +56,7 @@ export function UploadDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[70vh] overflow-y-auto pr-1">
+        <div className="max-h-[72vh] overflow-y-auto pr-1">
           <UploadForm
             personas={personas}
             defaultPersonaId={defaultPersonaId}

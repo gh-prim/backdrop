@@ -147,12 +147,12 @@ export function UploadForm({
         }}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-10 transition-colors",
+          "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-16 transition-colors",
           dragging ? "border-primary bg-accent" : "border-border hover:bg-accent/40",
         )}
       >
-        <Upload className="size-5 text-muted-foreground" />
-        <p className="text-sm font-medium">
+        <Upload className="size-7 text-muted-foreground" />
+        <p className="text-base font-medium">
           Déposez des fichiers, ou cliquez pour parcourir
         </p>
         <p className="text-xs text-muted-foreground">

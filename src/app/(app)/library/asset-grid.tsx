@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CloudUpload, Loader2, Send } from "lucide-react";
+import { CloudUpload, Loader2, Search, Send, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { MediaThumb } from "@/components/media-thumb";
+import { useLocalPreference } from "@/lib/use-local-preference";
 import { cn } from "cn";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -18,124 +20,237 @@ export type AssetCard = {
   createdAt: string;
   isVideo: boolean;
   description: string | null;
-  /** Nombre de publications qui référencent ce média. */
   usageCount: number;
   variants: { id: string; ratio: string; onR2: boolean }[];
 };
 
-/**
- * Filtres de la Library (spec 6.1): par rating, et par canal de destination.
- *
- * « Prêt pour Instagram » n'est pas un synonyme de SFW: il faut aussi que le
- * Variant soit effectivement sur R2, sans quoi Meta n'aura rien à récupérer au
- * moment de la publication (4.1.6). Le filtre dit donc la vérité utile, pas
- * seulement le rating.
- */
 const RATING_FILTERS = ["Tous", "SFW", "SUGGESTIVE", "NSFW"] as const;
+const TYPE_FILTERS = [
+  { key: "all", label: "Tous types" },
+  { key: "image", label: "Images" },
+  { key: "video", label: "Vidéos" },
+] as const;
+
+const MIN_COLUMNS = 2;
+const MAX_COLUMNS = 8;
 
 export function AssetGrid({ assets }: { assets: AssetCard[] }) {
+  const [query, setQuery] = useState("");
   const [ratingFilter, setRatingFilter] = useState<string>("Tous");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [instagramReady, setInstagramReady] = useState(false);
+  const [neverUsed, setNeverUsed] = useState(false);
 
-  const filtered = useMemo(
-    () =>
-      assets.filter((asset) => {
-        if (ratingFilter !== "Tous" && asset.rating !== ratingFilter) return false;
-        if (instagramReady) {
-          return asset.rating === "SFW" && asset.variants.some((v) => v.onR2);
-        }
-        return true;
-      }),
-    [assets, ratingFilter, instagramReady],
+  // La densité est une préférence d'opérateur, pas un réglage de session:
+  // elle survit donc à la navigation et aux rechargements.
+  const [columns, setColumns] = useLocalPreference("backdrop.library.columns", 4, (raw) =>
+    Math.min(MAX_COLUMNS, Math.max(MIN_COLUMNS, Number(raw) || 4)),
   );
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    return assets.filter((asset) => {
+      if (ratingFilter !== "Tous" && asset.rating !== ratingFilter) return false;
+      if (typeFilter === "image" && asset.isVideo) return false;
+      if (typeFilter === "video" && !asset.isVideo) return false;
+      if (neverUsed && asset.usageCount > 0) return false;
+      if (instagramReady) {
+        if (asset.rating !== "SFW") return false;
+        if (!asset.variants.some((variant) => variant.onR2)) return false;
+      }
+      if (!needle) return true;
+
+      // Recherche sur ce que l'opérateur connaît d'un média: sa note, la
+      // persona, qui l'a ajouté, et les ratios disponibles.
+      return [
+        asset.description ?? "",
+        asset.personaName,
+        asset.authorName,
+        ...asset.variants.map((variant) => variant.ratio),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [assets, query, ratingFilter, typeFilter, instagramReady, neverUsed]);
+
+  const activeFilters =
+    (ratingFilter !== "Tous" ? 1 : 0) +
+    (typeFilter !== "all" ? 1 : 0) +
+    (instagramReady ? 1 : 0) +
+    (neverUsed ? 1 : 0) +
+    (query.trim() ? 1 : 0);
+
+  function reset() {
+    setQuery("");
+    setRatingFilter("Tous");
+    setTypeFilter("all");
+    setInstagramReady(false);
+    setNeverUsed(false);
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 rounded-md border p-0.5 text-xs">
-          {RATING_FILTERS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setRatingFilter(value)}
-              className={cn(
-                "rounded px-2.5 py-1 transition-colors",
-                ratingFilter === value
-                  ? "bg-accent font-medium text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {value}
-            </button>
-          ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-56 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Rechercher: description, persona, auteur, ratio"
+              className="h-8 pl-8"
+            />
+          </div>
+
+          {/* Densité d'affichage: de deux miniatures par ligne pour vérifier un
+              cadrage, à huit pour balayer une grande bibliothèque (6.1). */}
+          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+            Colonnes
+            <input
+              type="range"
+              min={MIN_COLUMNS}
+              max={MAX_COLUMNS}
+              value={columns}
+              onChange={(event) => setColumns(Number(event.target.value))}
+              className="w-28"
+            />
+            <span className="w-3 font-medium text-foreground">{columns}</span>
+          </label>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={instagramReady}
-            onChange={(event) => setInstagramReady(event.target.checked)}
-          />
-          Prêt pour Instagram
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 rounded-md border p-0.5 text-xs">
+            {RATING_FILTERS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setRatingFilter(value)}
+                className={cn(
+                  "rounded px-2.5 py-1 transition-colors",
+                  ratingFilter === value
+                    ? "bg-accent font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
 
-        <span className="ml-auto text-xs text-muted-foreground">
-          {filtered.length} sur {assets.length}
-        </span>
+          <div className="flex gap-1 rounded-md border p-0.5 text-xs">
+            {TYPE_FILTERS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setTypeFilter(option.key)}
+                className={cn(
+                  "rounded px-2.5 py-1 transition-colors",
+                  typeFilter === option.key
+                    ? "bg-accent font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={instagramReady}
+              onChange={(event) => setInstagramReady(event.target.checked)}
+            />
+            Prêt pour Instagram
+          </label>
+
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={neverUsed}
+              onChange={(event) => setNeverUsed(event.target.checked)}
+            />
+            Jamais utilisé
+          </label>
+
+          {activeFilters > 0 && (
+            <button
+              type="button"
+              onClick={reset}
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="size-3" />
+              Réinitialiser
+            </button>
+          )}
+
+          <span className="ml-auto text-xs text-muted-foreground">
+            {filtered.length} sur {assets.length}
+          </span>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             {assets.length === 0
-              ? "Aucun Asset. Déposez un fichier ci-dessus: les Variants sont dérivés automatiquement, et poussés sur R2 uniquement si l'Asset est SFW."
+              ? "Aucun Asset. Le bouton Uploader ouvre la zone de dépôt: les Variants sont dérivés automatiquement, et poussés sur R2 uniquement si l'Asset est SFW."
               : "Aucun Asset ne correspond à ces filtres."}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className="grid gap-3"
+          // Le nombre de colonnes est dynamique: une classe Tailwind ne peut
+          // pas l'exprimer, elle serait purgée à la compilation.
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+        >
           {filtered.map((asset) => {
             const cover = asset.variants[0];
-            const onR2 = asset.variants.filter((v) => v.onR2).length;
+            const onR2 = asset.variants.filter((variant) => variant.onR2).length;
+            const dense = columns >= 6;
             return (
               <Card
                 key={asset.id}
                 className="overflow-hidden py-0 transition-colors hover:border-primary/60"
               >
                 <Link href={`/library/${asset.id}`} className="block">
-                {cover ? (
-                  <MediaThumb
-                    variantId={cover.id}
-                    rating={asset.rating}
-                    className="aspect-[4/5] rounded-none border-0"
-                  />
-                ) : (
-                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-muted/40 text-xs text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    Dérivation en cours
-                  </div>
-                )}
-
+                  {cover ? (
+                    <MediaThumb
+                      variantId={cover.id}
+                      rating={asset.rating}
+                      className="aspect-[4/5] rounded-none border-0"
+                    />
+                  ) : (
+                    <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-muted/40 text-xs text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      {!dense && "Dérivation en cours"}
+                    </div>
+                  )}
                 </Link>
 
-                <CardContent className="space-y-2 p-3">
-                  <div className="flex flex-wrap gap-1">
-                    {asset.variants.map((variant) => (
-                      <Badge
-                        key={variant.id}
-                        variant="outline"
-                        className="h-4 px-1 text-[9px]"
-                      >
-                        {variant.ratio}
-                      </Badge>
-                    ))}
-                  </div>
+                {/* En forte densité, on n'affiche que l'indispensable: le pied
+                    de carte deviendrait plus haut que la vignette. */}
+                <CardContent className={cn("space-y-1.5", dense ? "p-2" : "p-3")}>
+                  {!dense && (
+                    <div className="flex flex-wrap gap-1">
+                      {asset.variants.map((variant) => (
+                        <Badge
+                          key={variant.id}
+                          variant="outline"
+                          className="h-4 px-1 text-[9px]"
+                        >
+                          {variant.ratio}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <span className="truncate">{asset.personaName}</span>
+                    {!dense && <span className="truncate">{asset.personaName}</span>}
                     {asset.usageCount > 0 && (
-                      // Savoir qu'un visuel est déjà parti évite de le
-                      // republier sur le même compte.
                       <span className="flex shrink-0 items-center gap-1">
                         <Send className="size-3" />
                         {asset.usageCount}
@@ -143,19 +258,17 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
                     )}
                     <span className="ml-auto flex shrink-0 items-center gap-1">
                       <CloudUpload
-                        className={cn(
-                          "size-3",
-                          onR2 > 0 ? "text-foreground" : "opacity-40",
-                        )}
+                        className={cn("size-3", onR2 > 0 ? "text-foreground" : "opacity-40")}
                       />
                       {onR2}/{asset.variants.length}
                     </span>
                   </div>
 
-                  {/* Attribution: qui a introduit ce média dans l'outil (7.4). */}
-                  <p className="truncate text-[11px] text-muted-foreground">
-                    {asset.authorName} · {asset.createdAt}
-                  </p>
+                  {!dense && (
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {asset.description || `${asset.authorName} · ${asset.createdAt}`}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             );
