@@ -5,6 +5,7 @@ import { requireOrgContext } from "@/lib/session";
 import { getAssetDetail } from "@/lib/assets";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AssetOriginal } from "./asset-original";
 import { DescriptionForm } from "./description-form";
 import { VariantList } from "./variant-list";
@@ -16,6 +17,13 @@ function humanSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+/**
+ * Fiche d'un média.
+ *
+ * Aucun défilement de page (spec 6.1): le contenu est réparti en onglets, les
+ * propriétés qui doivent rester visibles vivent dans la sidebar droite, et
+ * seuls les panneaux internes défilent s'ils débordent.
+ */
 export default async function AssetPage({
   params,
 }: {
@@ -35,127 +43,131 @@ export default async function AssetPage({
       asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—",
     ],
     ["Poids", humanSize(asset.sizeBytes)],
-    [
-      "Durée",
-      asset.durationMs ? `${(asset.durationMs / 1000).toFixed(1)} s` : "—",
-    ],
+    ["Durée", asset.durationMs ? `${(asset.durationMs / 1000).toFixed(1)} s` : "—"],
     ["Type", asset.mimeType ?? "—"],
-    ["Ajouté le", asset.createdAt.toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })],
+    [
+      "Ajouté le",
+      asset.createdAt.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" }),
+    ],
     ["Par", asset.createdBy.name],
     ["Empreinte", `${asset.sha256.slice(0, 16)}…`],
   ];
 
   return (
-    <div className="space-y-6">
-      <Link
-        href="/library"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Library
-      </Link>
+    // Hauteur contrainte: la fiche tient dans la fenêtre, elle ne défile pas.
+    <div className="flex h-[calc(100svh-7.5rem)] flex-col gap-4 overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href="/library"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Library
+        </Link>
+        <span className="text-sm text-muted-foreground">/</span>
+        <h1 className="text-sm font-bold">
+          {asset.description?.slice(0, 60) || "Média sans description"}
+        </h1>
+        <Badge
+          variant={asset.rating === "SFW" ? "secondary" : "destructive"}
+          className="h-5 px-1.5 text-[10px]"
+        >
+          {asset.rating}
+        </Badge>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {asset.variants.length} variant{asset.variants.length > 1 ? "s" : ""} ·{" "}
+          {asset.usages.length} utilisation{asset.usages.length > 1 ? "s" : ""}
+        </span>
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
-          <AssetOriginal
-            assetId={asset.id}
-            rating={asset.rating}
-            isVideo={isVideo}
-          />
+      <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+        <Tabs defaultValue="general" className="flex min-h-0 flex-col gap-3">
+          <TabsList>
+            <TabsTrigger value="general">Général</TabsTrigger>
+            <TabsTrigger value="variants">Variantes</TabsTrigger>
+            <TabsTrigger value="usages">Utilisations</TabsTrigger>
+          </TabsList>
 
+          <TabsContent value="general" className="min-h-0 overflow-hidden">
+            <AssetOriginal assetId={asset.id} rating={asset.rating} isVideo={isVideo} />
+          </TabsContent>
+
+          <TabsContent value="variants" className="min-h-0 overflow-y-auto pr-1">
+            <VariantList
+              assetId={asset.id}
+              rating={asset.rating}
+              variants={asset.variants.map((variant) => ({
+                id: variant.id,
+                ratio: variant.ratio,
+                onR2: Boolean(variant.r2Key),
+                onTelegram: variant.tgSourceMessageId !== null,
+                onFanvue: Boolean(variant.fvMediaUuid),
+              }))}
+            />
+          </TabsContent>
+
+          <TabsContent value="usages" className="min-h-0 overflow-y-auto pr-1">
+            <UsageList
+              usages={asset.usages.map((usage) => ({
+                publicationId: usage.publication.id,
+                name: usage.publication.name,
+                kind: usage.publication.kind,
+                status: usage.publication.status,
+                platform: usage.publication.channelAccount.platform,
+                ratio: usage.variant.ratio,
+                position: usage.position,
+                scheduledAt: usage.publication.scheduledAt.toISOString(),
+                publishedAt: usage.publication.publishedAt?.toISOString() ?? null,
+                remoteId: usage.publication.remoteId,
+              }))}
+            />
+          </TabsContent>
+        </Tabs>
+
+        {/* Sidebar persistante: ce qui doit rester lisible quel que soit
+            l'onglet actif. Elle défile en interne, pas la page. */}
+        <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Variants</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <VariantList
-                assetId={asset.id}
-                rating={asset.rating}
-                variants={asset.variants.map((variant) => ({
-                  id: variant.id,
-                  ratio: variant.ratio,
-                  onR2: Boolean(variant.r2Key),
-                  onTelegram: variant.tgSourceMessageId !== null,
-                  onFanvue: Boolean(variant.fvMediaUuid),
-                }))}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Utilisations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <UsageList
-                usages={asset.usages.map((usage) => ({
-                  publicationId: usage.publication.id,
-                  name: usage.publication.name,
-                  kind: usage.publication.kind,
-                  status: usage.publication.status,
-                  platform: usage.publication.channelAccount.platform,
-                  ratio: usage.variant.ratio,
-                  position: usage.position,
-                  scheduledAt: usage.publication.scheduledAt.toISOString(),
-                  publishedAt: usage.publication.publishedAt?.toISOString() ?? null,
-                  remoteId: usage.publication.remoteId,
-                }))}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Classification</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Badge
-                variant={asset.rating === "SFW" ? "secondary" : "destructive"}
-                className="text-xs"
-              >
-                {asset.rating}
-              </Badge>
-              {/* Le rating est immuable (9.4): l'écran doit dire pourquoi, et
-                  donner le chemin de correction, plutôt qu'un champ grisé. */}
-              <p className="text-xs text-muted-foreground">
-                Le rating est définitif. Il commande les canaux autorisés et le
-                passage par R2, et le modifier après coup rendrait publiable
-                ailleurs un média déjà classé. Pour le corriger, réuploadez le
-                fichier avec le bon rating: l&apos;original reste intact.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm">Description</CardTitle>
             </CardHeader>
             <CardContent>
-              <DescriptionForm
-                assetId={asset.id}
-                description={asset.description ?? ""}
-              />
+              <DescriptionForm assetId={asset.id} description={asset.description ?? ""} />
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm">Métadonnées</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="space-y-1.5 text-xs">
                 {metadata.map(([label, value]) => (
                   <div key={label} className="flex gap-3">
-                    <dt className="w-24 shrink-0 text-muted-foreground">{label}</dt>
+                    <dt className="w-20 shrink-0 text-muted-foreground">{label}</dt>
                     <dd className="min-w-0 flex-1 break-words font-medium">{value}</dd>
                   </div>
                 ))}
               </dl>
             </CardContent>
           </Card>
-        </div>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Classification</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Immuable (9.4): dire pourquoi et donner le chemin de
+                  correction vaut mieux qu'un champ grisé. */}
+              <p className="text-xs text-muted-foreground">
+                Le rating <span className="font-medium text-foreground">{asset.rating}</span>{" "}
+                est définitif. Il commande les canaux autorisés et le passage par R2, et
+                le modifier après coup rendrait publiable ailleurs un média déjà classé.
+                Pour le corriger, réuploadez le fichier avec le bon rating.
+              </p>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
     </div>
   );

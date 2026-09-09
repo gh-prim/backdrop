@@ -24,8 +24,8 @@ export function AssetOriginal({
   const src = `/api/media/asset/${assetId}`;
 
   return (
-    <Card className="overflow-hidden py-0">
-      <CardContent className="relative bg-black/40 p-0">
+    <Card className="flex h-full overflow-hidden py-0">
+      <CardContent className="relative flex min-h-0 flex-1 items-center justify-center bg-black/40 p-0">
         <div className="absolute left-3 top-3 z-10 flex gap-1">
           <Badge
             variant={rating === "SFW" ? "secondary" : "destructive"}
@@ -43,7 +43,7 @@ export function AssetOriginal({
             src={src}
             controls
             className={cn(
-              "max-h-[60vh] w-full object-contain transition",
+              "h-full max-h-full w-full object-contain transition",
               !revealed && "blur-2xl",
             )}
           />
@@ -53,7 +53,7 @@ export function AssetOriginal({
             src={src}
             alt=""
             className={cn(
-              "max-h-[60vh] w-full object-contain transition",
+              "h-full max-h-full w-full object-contain transition",
               !revealed && "scale-105 blur-2xl",
             )}
           />

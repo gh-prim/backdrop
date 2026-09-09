@@ -331,6 +331,12 @@ Le CLI livre désormais des primitives **Base UI**, pas Radix: shadcn a migré, 
 
 **Sélecteur de persona persistant** dans le header, visible sur tous les écrans. C'est le geste le plus fréquent du produit.
 
+**Pas de défilement vertical sur une page de détail ou de formulaire.** Le contenu tient dans la hauteur de la fenêtre, découpé en **onglets**, avec une **sidebar droite persistante** pour les propriétés qui doivent rester visibles quel que soit l'onglet actif.
+
+La seule exception est la **liste assumée**: grille de la bibliothèque, table des publications, calendrier. Là, le défilement est le geste attendu et il n'y a rien à masquer.
+
+Un panneau qui déborde défile à l'intérieur de lui-même, jamais la page. La raison est la même que pour la densité: une fiche qui défile oblige l'opérateur à mémoriser ce qui est sorti du cadre, plusieurs fois par jour, sur les mêmes écrans.
+
 **Traitement des médias dans l'UI.** L'outil est partagé entre plusieurs opérateurs et affiche du contenu NSFW.
 - Les vignettes des Assets `NSFW` et `SUGGESTIVE` sont **floutées par défaut**, révélées au survol ou au clic, avec une préférence utilisateur pour désactiver le flou.
 - Le `rating` est affiché en badge sur chaque Asset et chaque Variant, partout où ils apparaissent, sans exception.
