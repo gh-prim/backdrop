@@ -37,7 +37,7 @@ export default async function LibraryPage() {
           rating: asset.rating,
           personaName: personaNames.get(asset.personaId) ?? "",
           authorName: asset.createdBy.name,
-          createdAt: asset.createdAt.toLocaleDateString("fr-FR", {
+          createdAt: asset.createdAt.toLocaleDateString("en-GB", {
             day: "2-digit",
             month: "short",
           }),
