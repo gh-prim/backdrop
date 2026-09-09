@@ -2,10 +2,9 @@ import { requireOrgContext } from "@/lib/session";
 import { listPersonas, getSelectedPersonaId } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
 import { listAssets } from "@/lib/assets";
-import { Card, CardContent } from "@/components/ui/card";
 import { BlurPreferenceToggle } from "@/components/media-thumb";
 import { PageHeader } from "@/components/page-header";
-import { UploadForm } from "./upload-form";
+import { UploadDialog } from "./upload-dialog";
 import { AssetGrid } from "./asset-grid";
 
 export default async function LibraryPage() {
@@ -24,14 +23,13 @@ export default async function LibraryPage() {
       <PageHeader
         title="Library"
         description="Le rating choisi à l'upload est définitif: il commande les canaux autorisés et le passage par R2."
-        actions={<BlurPreferenceToggle />}
+        actions={
+          <>
+            <BlurPreferenceToggle />
+            <UploadDialog personas={personas} defaultPersonaId={selectedId} />
+          </>
+        }
       />
-
-      <Card>
-        <CardContent className="pt-6">
-          <UploadForm personas={personas} defaultPersonaId={selectedId} />
-        </CardContent>
-      </Card>
 
       <AssetGrid
         assets={assets.map((asset) => ({

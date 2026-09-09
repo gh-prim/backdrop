@@ -52,9 +52,11 @@ function humanSize(bytes: number) {
 export function UploadForm({
   personas,
   defaultPersonaId,
+  onUploaded,
 }: {
   personas: PersonaOption[];
   defaultPersonaId: string;
+  onUploaded?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -125,6 +127,7 @@ export function UploadForm({
     }
 
     setRunning(false);
+    onUploaded?.();
   }
 
   const pending = queue.filter((item) => item.status !== "fait").length;
