@@ -273,7 +273,7 @@ Trois emplacements, trois rôles distincts. C'est aussi un garde-fou de sécurit
 | Formulaires | react-hook-form + zod |
 | Tables | TanStack Table |
 | Auth | Better Auth, plugin organization |
-| ORM | Prisma |
+| ORM | Prisma 6 (épinglé, voir 6.2) |
 | Base | PostgreSQL |
 | Orchestration | Temporal |
 | Worker principal | Node / TypeScript (Instagram, ffmpeg, R2, Fanvue) |
@@ -288,7 +288,11 @@ Trois emplacements, trois rôles distincts. C'est aussi un garde-fou de sécurit
 
 **Dark mode uniquement.** Pas de thème clair, pas de sélecteur. Les tokens sont définis en variables CSS sous la classe `dark` appliquée sur `<html>`, ce qui laisse la porte ouverte à un thème clair plus tard sans refonte, mais il n'est pas construit et pas maintenu.
 
-**shadcn/ui sur primitives Radix.** Les composants sont copiés dans le repo via le CLI, donc éditables et versionnés avec le reste. Corollaire: on modifie le composant local plutôt que de l'envelopper dans une surcouche. Pas d'autre bibliothèque de composants ajoutée par-dessus.
+**shadcn/ui, composants copiés dans le repo** via le CLI, donc éditables et versionnés avec le reste. Corollaire: on modifie le composant local plutôt que de l'envelopper dans une surcouche. Pas d'autre bibliothèque de composants ajoutée par-dessus.
+
+Le CLI livre désormais des primitives **Base UI**, pas Radix: shadcn a migré, et c'est la même équipe derrière les deux. Conséquence pratique dans le code: `render={<Composant />}` remplace `asChild`, `onClick` remplace `onSelect` sur les items de menu, et un `Label` de menu doit être enveloppé dans un `Group`. La propriété qui comptait pour ce choix, des composants vendorisés et modifiables, est intacte.
+
+**Police: Lato**, chargée via `next/font/google`, exposée en `--font-lato` et branchée sur les tokens `--font-sans` et `--font-heading`.
 
 **Densité d'outil, pas de site vitrine.** C'est une interface utilisée plusieurs fois par jour sur les mêmes gestes. Priorité à la compacité, aux raccourcis clavier sur les actions répétitives (changement de persona, nouvelle publication, programmation), et aux tables denses plutôt qu'aux cartes aérées.
 
@@ -309,6 +313,14 @@ Trois emplacements, trois rôles distincts. C'est aussi un garde-fou de sécurit
 | Composer | Un ou plusieurs Assets, sélection des canaux, textes et prix par canal, programmation |
 | Calendrier | Vue temporelle tous canaux, par persona ou globale |
 | Réglages | Membres et invitations, ChannelAccount et leur état de connexion |
+
+### 6.2 Versions épinglées et pourquoi
+
+| Choix | Raison |
+|---|---|
+| **Prisma 6**, pas 7 | Prisma 7 déplace l'ORM vers un modèle « contract / Prisma Next » orienté plateforme, avec une CLI entièrement différente (`prisma contract`, `prisma migration plan`). Le schéma de la section 8 et l'adapter Prisma de Better Auth visent la génération 6. Migrer plus tard, délibérément, pas par accident d'installation. |
+| **Next 16, React 19, Tailwind 4** | Versions courantes du scaffold. Rien n'en dépend de manière risquée. |
+| **Base UI via shadcn** | Voir 6.1. Ce n'est pas un choix, c'est ce que le CLI livre. |
 
 ---
 
@@ -414,6 +426,8 @@ Tolérance par défaut: **45 minutes**, surchargeable par ChannelAccount. `MISSE
 ## 8. Modèle de données
 
 Les modèles `User`, `Session`, `Account`, `Verification`, `Organization`, `Member` et `Invitation` sont générés par Better Auth et son plugin organization. Ils ne figurent pas ci-dessous et ne doivent pas être écrits à la main.
+
+**Une exception, assumée.** Prisma exige les deux côtés d'une relation. Pour que la base pose réellement les clés étrangères de `Persona.organizationId` et des trois `createdByUserId`, les modèles `User` et `Organization` générés portent des champs de relation inverse ajoutés à la main, balisés en commentaire dans le schéma. Après un `better-auth generate`, il faut les remettre. L'alternative, des clés étrangères posées en SQL brut hors du schéma, ferait diverger la base et le schéma à chaque `migrate dev`: Prisma diffe les clés étrangères, contrairement aux triggers.
 
 ```prisma
 enum Platform { INSTAGRAM TELEGRAM FANVUE }
@@ -576,7 +590,7 @@ model FanvueEarning {
 5. **Alerting sur trois événements:** échec de refresh de token Meta, `PEER_FLOOD` sur une persona, échec de publication après épuisement des retries.
 6. **Scope serveur uniquement.** L'`organizationId` provient toujours de la session, jamais du corps de requête ni de l'URL. Un test doit prouver qu'une requête forgeant un `organizationId` étranger est rejetée.
 7. **Credentials plateforme opaques côté client.** Aucune route ne les renvoie, ni en clair ni tronqués. Le rôle `owner` ne change rien à cette règle.
-8. **Pas d'inscription ouverte.** L'accès se fait uniquement par invitation d'un `owner`. Aucune route publique de création de compte.
+8. **Pas d'inscription ouverte.** L'accès se fait uniquement par invitation d'un `owner`. Aucune route publique de création de compte: `emailAndPassword.disableSignUp` ferme la route de Better Auth, et le seul chemin de création passe par `acceptInvitation`, qui valide l'invitation puis crée le compte via l'adaptateur interne. L'email vient de l'invitation, jamais du formulaire. Faute de fournisseur d'email à ce stade, l'owner récupère un lien et le transmet lui-même.
 9. **Mots de passe:** politique par défaut de Better Auth au minimum, sessions expirantes, déconnexion de toutes les sessions au changement de mot de passe.
 
 ---

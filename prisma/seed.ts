@@ -34,7 +34,7 @@ async function main() {
       name: OWNER_NAME,
       email: OWNER_EMAIL,
       emailVerified: true,
-    });
+    }, { method: "email-password" });
     await ctx.internalAdapter.createAccount({
       id: randomUUID(),
       userId: created.id,

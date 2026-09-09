@@ -161,7 +161,7 @@ export async function acceptInvitation(
           name: input.name.trim(),
           email: invitation.email,
           emailVerified: true,
-        });
+        }, { method: "email-password" });
         await ctx.internalAdapter.createAccount({
           id: randomUUID(),
           userId: created.id,
