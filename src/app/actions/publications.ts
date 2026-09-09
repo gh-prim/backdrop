@@ -33,11 +33,16 @@ export async function schedulePublicationAction(
 ): Promise<ActionResult> {
   const ctx = await requireOrgContext();
 
+  // « Publier tout de suite » n'est pas un chemin d'exécution parallèle: c'est
+  // une programmation à l'instant présent. Le workflow, la tolérance de retard
+  // et l'idempotence restent exactement les mêmes (7.6).
+  const publishNow = formData.get("publishNow") === "1";
+
   const parsed = createSchema.safeParse({
     channelAccountId: formData.get("channelAccountId"),
     kind: formData.get("kind"),
     caption: String(formData.get("caption") ?? ""),
-    scheduledAt: formData.get("scheduledAt"),
+    scheduledAt: publishNow ? new Date() : formData.get("scheduledAt"),
     variantIds: formData.getAll("variantIds").map(String),
     audioId: String(formData.get("audioId") ?? "").trim() || undefined,
   });
@@ -81,7 +86,12 @@ export async function schedulePublicationAction(
 
   revalidatePath("/publications");
   revalidatePath("/");
-  return { ok: true, message: "Publication programmée." };
+  return {
+    ok: true,
+    message: publishNow
+      ? "Publication lancée, elle part maintenant."
+      : "Publication programmée.",
+  };
 }
 
 const updateSchema = z.object({

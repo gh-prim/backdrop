@@ -255,9 +255,21 @@ export function ComposerForm({
       {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
       {state?.ok && <p className="text-sm text-muted-foreground">{state.message}</p>}
 
-      <Button type="submit" disabled={pending || selected.length === 0}>
-        {pending ? "Programmation…" : "Programmer"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="submit" disabled={pending || selected.length === 0}>
+          {pending ? "Programmation…" : "Programmer"}
+        </Button>
+        {/* Même chemin que « Programmer », avec une échéance à l'instant. */}
+        <Button
+          type="submit"
+          name="publishNow"
+          value="1"
+          variant="secondary"
+          disabled={pending || selected.length === 0}
+        >
+          {pending ? "Envoi…" : "Publier tout de suite"}
+        </Button>
+      </div>
     </form>
   );
 }
