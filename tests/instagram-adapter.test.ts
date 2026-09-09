@@ -199,6 +199,13 @@ describe("adapter Instagram", () => {
             ig_username: "miley",
           },
           { title: "sans identifiant, à ignorer" },
+          // Le catalogue renvoie parfois deux fois la même piste.
+          {
+            audio_id: "1059089980427304",
+            title: "Bass Persuades",
+            display_artist: "Miley Cyrus",
+            duration_in_ms: 202460,
+          },
         ],
       },
     ]);

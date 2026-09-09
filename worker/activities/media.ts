@@ -263,6 +263,110 @@ export async function uploadVariantToR2(
   return { r2Key: key, skipped: null };
 }
 
+/**
+ * Durée d'un Reel fabriqué à partir d'une photo. Instagram refuse en dessous
+ * de trois secondes; huit laisse le temps d'entendre la musique.
+ */
+const STILL_REEL_SECONDS = 8;
+
+/**
+ * Transforme une photo en vidéo publiable en Reel.
+ *
+ * L'API n'accepte aucun paramètre audio sur un container IMAGE (4.1.5): pour
+ * poser une musique sur une photo, il faut lui donner une vidéo. C'est
+ * exactement ce que fait l'application mobile quand on ajoute une piste à un
+ * post photo.
+ *
+ * Une piste audio silencieuse est ajoutée: un Reel sans flux audio du tout est
+ * refusé par l'encodage côté Meta, et c'est `audio_configuration` qui apportera
+ * la musique.
+ *
+ * Idempotent: le rendu est nommé d'après le Variant, donc rejouer l'activité
+ * réécrit le même fichier au lieu d'en accumuler.
+ */
+export async function renderStillAsReel(
+  variantId: string,
+): Promise<{ publicUrl: string | null; skipped: "not_sfw" | "no_r2_config" | null }> {
+  const variant = await prisma.variant.findUnique({
+    where: { id: variantId },
+    select: {
+      id: true,
+      localPath: true,
+      asset: { select: { rating: true, personaId: true } },
+    },
+  });
+  if (!variant) {
+    throw ApplicationFailure.create({
+      message: `Variant ${variantId} introuvable.`,
+      nonRetryable: true,
+    });
+  }
+
+  // Même garde-fou que pour l'upload: un Asset non SFW n'obtient jamais
+  // d'URL publique, quel que soit le format dans lequel on l'emballe.
+  if (variant.asset.rating !== Rating.SFW) {
+    return { publicUrl: null, skipped: "not_sfw" };
+  }
+
+  const relativeOutput = join("reels", `${variant.id}.mp4`);
+  const output = absolutePath(relativeOutput);
+  await mkdir(dirname(output), { recursive: true });
+
+  try {
+    await run(
+      "ffmpeg",
+      [
+        "-y",
+        "-loop", "1", "-i", absolutePath(variant.localPath),
+        // Piste silencieuse: la musique viendra d'Instagram.
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+        "-t", String(STILL_REEL_SECONDS),
+        // 9:16 plein cadre, dimensions paires exigées par yuv420p.
+        "-vf", "scale=1080:-2,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+        "-r", "30",
+        "-c:v", "libx264",
+        "-profile:v", "high",
+        "-preset", "medium",
+        "-crf", "23",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ar", "48000",
+        "-shortest",
+        "-movflags", "+faststart",
+        output,
+      ],
+      { maxBuffer: 32 * 1024 * 1024 },
+    );
+  } catch (error) {
+    throw ApplicationFailure.create({
+      message: `Rendu du Reel photo impossible (${variant.localPath}): ${(error as Error).message}`,
+      nonRetryable: true,
+    });
+  }
+
+  const client = r2Client();
+  const bucket = process.env.R2_BUCKET;
+  if (!client || !bucket) return { publicUrl: null, skipped: "no_r2_config" };
+
+  const key = `${variant.asset.personaId}/${variant.id}-reel.mp4`;
+  const { size } = await stat(output);
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: createReadStream(output),
+      ContentLength: size,
+      ContentType: "video/mp4",
+    }),
+  );
+
+  const base = process.env.R2_PUBLIC_BASE_URL;
+  return {
+    publicUrl: base ? `${base.replace(/\/$/, "")}/${key}` : null,
+    skipped: null,
+  };
+}
+
 export async function loadAssetForIngest(assetId: string): Promise<{
   assetId: string;
   personaId: string;

@@ -26,6 +26,7 @@ type VariantOption = {
   ratio: string;
   rating: Rating;
   hasPublicUrl: boolean;
+  isVideo: boolean;
 };
 
 const RATING_RANK: Record<Rating, number> = { SFW: 0, SUGGESTIVE: 1, NSFW: 2 };
@@ -109,6 +110,11 @@ export function ComposerForm({
   }
 
   const blockedCount = variants.filter(isBlocked).length;
+
+  /** Un Reel sur une photo déclenche un rendu vidéo au moment de la publication. */
+  const selectionIsVideo = selected.every(
+    (id) => variants.find((v) => v.id === id)?.isVideo,
+  );
 
   function toggleChannel(id: string) {
     setChannelIds((current) => {
@@ -296,6 +302,34 @@ export function ComposerForm({
                 </span>
               </div>
 
+              {(kind === "SINGLE" || (kind === "REEL" && !selectionIsVideo)) &&
+                instagramChannel && (
+                  <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={kind === "REEL"}
+                      onChange={(event) => {
+                        // Poser une musique sur une photo n'est possible qu'en
+                        // Reel: l'API n'accepte aucun audio sur un container
+                        // IMAGE (4.1.5). Le choix est donc présenté tel qu'il
+                        // est — avec sa conséquence, pas comme une case isolée.
+                        setKind(event.target.checked ? "REEL" : "SINGLE");
+                        if (!event.target.checked) setAudio(null);
+                        setSelected((current) => current.slice(0, 1));
+                      }}
+                    />
+                    <span>
+                      Ajouter une musique
+                      <span className="block text-xs text-muted-foreground">
+                        La photo devient un Reel: elle sera rendue en vidéo de 8
+                        secondes, et Instagram fournira la piste. Une photo publiée
+                        telle quelle ne peut pas porter de musique.
+                      </span>
+                    </span>
+                  </label>
+                )}
+
               {blockedCount > 0 && (
                 // La couche pédagogique: on nomme le canal qui interdit, pas
                 // seulement le fait que ce soit interdit (6.1).
@@ -319,13 +353,10 @@ export function ComposerForm({
                 />
               )}
 
-              {kind !== "REEL" && (
-                // L'API n'accepte l'audio que sur les Reels: le dire ici évite
-                // de chercher l'option ailleurs (4.1.5).
+              {kind === "CAROUSEL" && (
                 <p className="text-xs text-muted-foreground">
-                  La musique Instagram n&apos;est disponible que sur les Reels:
-                  l&apos;API n&apos;expose aucun paramètre audio pour une photo ou un
-                  carrousel, contrairement à l&apos;application mobile.
+                  Un carrousel ne peut pas porter de musique: l&apos;API n&apos;expose
+                  aucun paramètre audio en dehors des Reels.
                 </p>
               )}
 
@@ -425,7 +456,14 @@ export function ComposerForm({
                   label="Canaux"
                   value={chosenChannels.map((c) => c.platform).join(", ")}
                 />
-                <Recap label="Type" value={kind} />
+                <Recap
+                  label="Type"
+                  value={
+                    kind === "REEL" && !selectionIsVideo
+                      ? "Reel (photo rendue en vidéo)"
+                      : kind
+                  }
+                />
                 <Recap label="Médias" value={`${selected.length}`} />
                 {audio && (
                   <Recap label="Musique" value={`${audio.title} — ${audio.artist}`} />

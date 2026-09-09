@@ -49,6 +49,7 @@ export default async function ComposerPage() {
           ratio: variant.ratio,
           rating: variant.asset.rating,
           hasPublicUrl: Boolean(variant.r2Key),
+          isVideo: /\.(mp4|mov|m4v)$/i.test(variant.localPath),
         }))}
       />
     </div>

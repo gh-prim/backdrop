@@ -55,15 +55,34 @@ export type ContainerStatus =
   | "EXPIRED"
   | "PUBLISHED";
 
+/**
+ * Deux catalogues distincts. `music` est sous licence, `original_sound`
+ * regroupe les sons créés par les comptes eux-mêmes — et c'est la différence
+ * qui décide de l'écoute possible, voir `downloadUrl`.
+ */
+export type InstagramAudioType = "music" | "original_sound";
+
 /** Piste du catalogue Instagram, telle que renvoyée par `GET /ig_audio`. */
 export type InstagramAudioTrack = {
   audioId: string;
   title: string;
   artist: string;
   durationMs: number;
-  /** Page de l'audio sur Instagram, utile pour écouter avant de choisir. */
+  /** Page de l'audio sur Instagram: le seul moyen d'écouter une piste sous licence. */
   previewUrl: string | null;
   creatorHandle: string | null;
+};
+
+/**
+ * Détail d'une piste.
+ *
+ * `downloadUrl` n'est renseigné que pour les sons originaux: Meta ne distribue
+ * pas les masters de la musique sous licence, vérifié sur le catalogue réel.
+ * C'est ce qui limite l'écoute intégrée aux seuls sons originaux.
+ */
+export type InstagramAudioDetail = InstagramAudioTrack & {
+  downloadUrl: string | null;
+  coverUrl: string | null;
 };
 
 export type CreateContainerInput =
@@ -319,7 +338,10 @@ export class InstagramAdapter implements ChannelAdapter {
    * vers la page Instagram de la piste, seul moyen de l'écouter avant de
    * publier. Ce qui est configuré part en production tel quel.
    */
-  async searchAudio(query?: string): Promise<InstagramAudioTrack[]> {
+  async searchAudio(
+    query?: string,
+    audioType: InstagramAudioType = "music",
+  ): Promise<InstagramAudioTrack[]> {
     const body = await this.call<{
       audio?: {
         audio_id?: string;
@@ -330,15 +352,24 @@ export class InstagramAdapter implements ChannelAdapter {
         ig_username?: string;
       }[];
     }>("ig_audio", {
-      audio_type: "music",
+      audio_type: audioType,
       user_id: this.credentials.igUserId,
       // La clé de réponse est `audio`, pas `data`: cet endpoint ne suit pas la
       // convention du reste du Graph.
       search_query: query?.trim() || undefined,
     });
 
+    // Le catalogue renvoie parfois deux fois le même `audio_id` dans une même
+    // page. Dédupliquer ici plutôt que dans chaque consommateur: une liste
+    // avec des identifiants répétés casse le rendu côté client.
+    const seen = new Set<string>();
+
     return (body.audio ?? [])
-      .filter((track) => track.audio_id)
+      .filter((track) => {
+        if (!track.audio_id || seen.has(track.audio_id)) return false;
+        seen.add(track.audio_id);
+        return true;
+      })
       .map((track) => ({
         audioId: track.audio_id as string,
         title: track.title ?? "(sans titre)",
@@ -347,6 +378,30 @@ export class InstagramAdapter implements ChannelAdapter {
         previewUrl: track.on_platform_audio_preview_link ?? null,
         creatorHandle: track.ig_username ?? null,
       }));
+  }
+
+  /** Détail d'une piste, dont l'URL d'écoute quand elle existe. */
+  async getAudio(audioId: string): Promise<InstagramAudioDetail> {
+    const body = await this.call<{
+      audio_id?: string;
+      title?: string;
+      display_artist?: string;
+      duration_in_ms?: number;
+      on_platform_audio_preview_link?: string;
+      download_url?: string | null;
+      cover_artwork_thumbnail_uri?: string | null;
+    }>(audioId, { user_id: this.credentials.igUserId });
+
+    return {
+      audioId: body.audio_id ?? audioId,
+      title: body.title ?? "(sans titre)",
+      artist: body.display_artist ?? "",
+      durationMs: body.duration_in_ms ?? 0,
+      previewUrl: body.on_platform_audio_preview_link ?? null,
+      creatorHandle: null,
+      downloadUrl: body.download_url ?? null,
+      coverUrl: body.cover_artwork_thumbnail_uri ?? null,
+    };
   }
 
   async fetchMetrics(remoteId: string): Promise<PublishMetrics> {

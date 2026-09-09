@@ -25,6 +25,12 @@ const db = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 5, initialInterval: "1 second" },
 });
 
+/** ffmpeg peut prendre du temps: sa propre patience, séparée du reste. */
+const media = proxyActivities<typeof activities>({
+  startToCloseTimeout: "10 minutes",
+  retry: { maximumAttempts: 3, initialInterval: "5 seconds" },
+});
+
 const graph = proxyActivities<typeof activities>({
   startToCloseTimeout: "2 minutes",
   retry: {
@@ -139,7 +145,24 @@ async function buildSingle(
   plan: Awaited<ReturnType<typeof db.loadPublicationPlan>>,
 ): Promise<string> {
   const item = plan.items[0];
-  const url = item.publicUrl as string;
+  let url = item.publicUrl as string;
+
+  // Reel demandé sur une photo: l'API n'accepte aucun audio sur un container
+  // IMAGE (4.1.5), donc on fabrique une vidéo à partir de l'image. C'est ce
+  // que fait l'app mobile quand on pose une musique sur un post photo.
+  if (plan.kind === "REEL" && !item.isVideo) {
+    const rendered = await media.renderStillAsReel(item.variantId);
+    if (!rendered.publicUrl) {
+      throw ApplicationFailure.create({
+        message:
+          rendered.skipped === "not_sfw"
+            ? "Un Reel photo exige un Asset SFW: sans URL publique, Meta ne peut rien récupérer."
+            : "Reel photo rendu mais non poussé sur R2: pas d'URL publique à fournir à Meta.",
+        nonRetryable: true,
+      });
+    }
+    url = rendered.publicUrl;
+  }
 
   const containerId = await graph.createInstagramContainer(
     plan.channelAccountId,

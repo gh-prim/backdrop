@@ -64,6 +64,10 @@ function activityDoubles(planned: PublicationPlan, options: {
         void calls.push(`markFailed:${reason}`),
       markMissed: async () => void calls.push("markMissed"),
       persistChildContainerId: async () => void calls.push("persistChildContainerId"),
+      renderStillAsReel: async (variantId: string) => {
+        calls.push(`renderStillAsReel:${variantId}`);
+        return { publicUrl: `https://cdn.test/${variantId}-reel.mp4`, skipped: null };
+      },
       checkInstagramQuota: async () => {
         calls.push("checkInstagramQuota");
         const remaining = options.quotaRemaining ?? 38;
@@ -156,6 +160,48 @@ describe("workflow publishInstagram", () => {
     const { result } = await runWorkflow(slightlyLate);
 
     expect(result).toMatchObject({ outcome: "published" });
+  }, 60_000);
+
+  it("fabrique une vidéo quand un Reel est demandé sur une photo", async () => {
+    const photoReel = plan({
+      kind: "REEL",
+      audioId: "audio-1",
+      items: [
+        {
+          itemId: "item-1",
+          variantId: "var-photo",
+          position: 0,
+          publicUrl: "https://cdn.test/photo.jpg",
+          // Une image: l'API n'accepte pas d'audio sur un container IMAGE,
+          // donc le workflow doit passer par un rendu vidéo (4.1.5).
+          isVideo: false,
+        },
+      ],
+    });
+
+    const { result, calls } = await runWorkflow(photoReel);
+
+    expect(result).toMatchObject({ outcome: "published" });
+    expect(calls).toContain("renderStillAsReel:var-photo");
+  }, 60_000);
+
+  it("ne rend aucune vidéo quand le Reel porte déjà une vidéo", async () => {
+    const videoReel = plan({
+      kind: "REEL",
+      items: [
+        {
+          itemId: "item-1",
+          variantId: "var-video",
+          position: 0,
+          publicUrl: "https://cdn.test/reel.mp4",
+          isVideo: true,
+        },
+      ],
+    });
+
+    const { calls } = await runWorkflow(videoReel);
+
+    expect(calls.some((c) => c.startsWith("renderStillAsReel"))).toBe(false);
   }, 60_000);
 
   it("ne touche à rien si la publication n'est plus programmée au réveil", async () => {

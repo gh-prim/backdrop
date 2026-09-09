@@ -106,7 +106,15 @@ Le catalogue exposé par l'API est plus restreint que celui de l'app mobile. Auc
 
 **Pourquoi préférer une piste native à une musique incrustée au montage.** Ce n'est pas une question de son. Un Reel portant une piste native apparaît sur la page de cet audio, donc dans une surface de découverte qu'une bande-son incrustée n'atteint jamais, et il s'expose moins à être coupé pour droits d'auteur. Le flux recommandé est donc d'exporter la vidéo **sans** musique et de laisser Instagram la fournir, d'où les volumes par défaut: `audio_volume` à 100, `video_volume` à 0.
 
-**Recherche.** `GET /ig_audio?audio_type=music&user_id={id}` avec `search_query` pour chercher, et **sans `search_query` pour obtenir les tendances**. La réponse arrive sous la clé `audio`, pas `data`: cet endpoint ne suit pas la convention du reste du Graph.
+**Recherche.** `GET /ig_audio?audio_type={music|original_sound}&user_id={id}` avec `search_query` pour chercher, et **sans `search_query` pour obtenir les tendances**. Deux pièges vérifiés sur le catalogue réel:
+- la réponse arrive sous la clé `audio`, pas `data`: cet endpoint ne suit pas la convention du reste du Graph;
+- une même page renvoie parfois **deux fois le même `audio_id`**. La déduplication est faite dans l'adapter, pas chez l'appelant.
+
+**Écoute.** `GET /{ig-audio-id}` renvoie `download_url`, mais il n'est rempli que pour les **sons originaux**: sur les six pistes de musique sous licence testées, il vaut `null` — Meta ne distribue pas les masters. L'écoute intégrée n'est donc possible que sur les sons originaux, via un relais applicatif (l'origine du CDN de Meta n'autorise pas le décodage nécessaire au tracé de forme d'onde, et l'URL signée n'a pas à descendre au client). Pour la musique sous licence, seul le lien vers la page Instagram permet d'entendre la piste.
+
+**Ce que l'API ne donne pas.** Aucune notion de « meilleurs moments » ou de segment recommandé. La fonction existe dans l'application mobile, elle n'est pas exposée.
+
+**Reel photo.** Poser une musique sur une photo passe par la fabrication d'une vidéo: ffmpeg produit un rendu de huit secondes en 9:16 avec une piste audio silencieuse, et `audio_configuration` apporte la musique. C'est ce que fait l'app mobile derrière son option « ajouter une musique » sur un post photo. Le rendu est déclenché par le workflow de publication, pas à la composition, et il reste soumis au même garde-fou: un Asset non SFW n'obtient jamais d'URL publique, quel que soit le format dans lequel on l'emballe.
 
 **4.1.5 bis — Divulgation IA.** `POST /{ig-user-id}/media` accepte
 `is_ai_generated`, une auto-déclaration de contenu généré par IA. Elle est
