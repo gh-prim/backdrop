@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "Asset" ADD COLUMN     "description" TEXT,
+ADD COLUMN     "durationMs" INTEGER,
+ADD COLUMN     "height" INTEGER,
+ADD COLUMN     "sizeBytes" INTEGER,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "width" INTEGER;

@@ -27,7 +27,8 @@ export async function ingestVariant(
   input: IngestVariantInput,
 ): Promise<IngestVariantResult> {
   const asset = await act.loadAssetForIngest(input.assetId);
-  await act.probeMedia(asset.localPath);
+  // Valide que le fichier est lisible et retient ses dimensions au passage.
+  await act.probeAndStoreAsset(input.assetId);
 
   const { localPath } = await act.transcodeVariant({
     sourcePath: asset.localPath,

@@ -116,10 +116,20 @@ model Asset {
   createdByUserId String
   /// Immuable après création (9.4).
   rating          Rating
+  /// Fichier tel qu'uploadé, jamais réécrit: les Variants sont des dérivés.
   localPath       String
   sha256          String
   mimeType        String?
+  /// Note libre de l'opérateur. Ne part jamais sur une plateforme.
+  description     String?
+  /// Métadonnées relevées à l'ingestion, pour ne pas resonder le fichier
+  /// chaque fois qu'on veut afficher ses dimensions.
+  width           Int?
+  height          Int?
+  durationMs      Int?
+  sizeBytes       Int?
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
 
   persona   Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
   createdBy User      @relation("AssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)

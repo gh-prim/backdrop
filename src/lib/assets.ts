@@ -74,6 +74,83 @@ export async function createAssetFromUpload(
   return { ok: true, assetId: asset.id, deduplicated: false };
 }
 
+/**
+ * Fiche complète d'un média: métadonnées, variants, et **usages**.
+ *
+ * L'usage est ce qui manque le plus quand on gère plusieurs personas: savoir
+ * si un média est déjà parti, où, et quand, évite de le republier par erreur.
+ */
+export async function getAssetDetail(ctx: OrgContext, assetId: string) {
+  const asset = await prisma.asset.findFirst({
+    where: { id: assetId, persona: { organizationId: ctx.organizationId } },
+    select: {
+      id: true,
+      rating: true,
+      localPath: true,
+      sha256: true,
+      mimeType: true,
+      description: true,
+      width: true,
+      height: true,
+      durationMs: true,
+      sizeBytes: true,
+      createdAt: true,
+      personaId: true,
+      persona: { select: { id: true, name: true, handle: true } },
+      createdBy: { select: { name: true, email: true } },
+      variants: {
+        orderBy: { ratio: "asc" },
+        select: {
+          id: true,
+          ratio: true,
+          localPath: true,
+          r2Key: true,
+          tgSourceMessageId: true,
+          fvMediaUuid: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+  if (!asset) return null;
+
+  const usages = await prisma.publicationItem.findMany({
+    where: { variant: { assetId } },
+    select: {
+      position: true,
+      variant: { select: { ratio: true } },
+      publication: {
+        select: {
+          id: true,
+          name: true,
+          kind: true,
+          status: true,
+          scheduledAt: true,
+          publishedAt: true,
+          remoteId: true,
+          channelAccount: { select: { platform: true } },
+        },
+      },
+    },
+    orderBy: { publication: { scheduledAt: "desc" } },
+  });
+
+  return { ...asset, usages };
+}
+
+export async function updateAssetDescription(
+  ctx: OrgContext,
+  assetId: string,
+  description: string,
+) {
+  // Scope: on ne modifie que ce qui appartient à l'organisation de la session.
+  const updated = await prisma.asset.updateMany({
+    where: { id: assetId, persona: { organizationId: ctx.organizationId } },
+    data: { description: description.trim() || null },
+  });
+  if (updated.count === 0) throw new Error("Asset introuvable.");
+}
+
 export async function listAssets(ctx: OrgContext, personaId?: string) {
   return prisma.asset.findMany({
     where: {
@@ -86,9 +163,18 @@ export async function listAssets(ctx: OrgContext, personaId?: string) {
       localPath: true,
       createdAt: true,
       personaId: true,
+      description: true,
       createdBy: { select: { name: true } },
       variants: {
-        select: { id: true, ratio: true, r2Key: true, localPath: true },
+        select: {
+          id: true,
+          ratio: true,
+          r2Key: true,
+          localPath: true,
+          // Compter les publications qui s'appuient sur ce Variant: la grille
+          // signale ainsi un média déjà parti sans ouvrir sa fiche.
+          _count: { select: { publicationItems: true } },
+        },
         orderBy: { ratio: "asc" },
       },
     },

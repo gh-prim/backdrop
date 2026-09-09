@@ -3,10 +3,10 @@ import { listPersonas, getSelectedPersonaId } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
 import { listAssets } from "@/lib/assets";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { MediaThumb, BlurPreferenceToggle } from "@/components/media-thumb";
+import { BlurPreferenceToggle } from "@/components/media-thumb";
 import { PageHeader } from "@/components/page-header";
 import { UploadForm } from "./upload-form";
+import { AssetGrid } from "./asset-grid";
 
 export default async function LibraryPage() {
   const ctx = await requireOrgContext();
@@ -17,11 +17,13 @@ export default async function LibraryPage() {
     selectedId === ALL_PERSONAS ? undefined : selectedId,
   );
 
+  const personaNames = new Map(personas.map((persona) => [persona.id, persona.name]));
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Library"
-        description={`${assets.length} Asset${assets.length > 1 ? "s" : ""} · les Variants sont dérivés automatiquement`}
+        description="Le rating choisi à l'upload est définitif: il commande les canaux autorisés et le passage par R2."
         actions={<BlurPreferenceToggle />}
       />
 
@@ -31,53 +33,29 @@ export default async function LibraryPage() {
         </CardContent>
       </Card>
 
-      {assets.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Aucun Asset. Uploadez un fichier: les Variants 4:5 et 9:16 sont dérivés
-            automatiquement, et poussés sur R2 uniquement si l&apos;Asset est SFW.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {assets.map((asset) => (
-            <Card key={asset.id} className="overflow-hidden">
-              <CardContent className="space-y-2 p-3">
-                {asset.variants.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-1">
-                    {asset.variants.map((variant) => (
-                      <MediaThumb
-                        key={variant.id}
-                        variantId={variant.id}
-                        rating={asset.rating}
-                        ratio={variant.ratio}
-                        className="aspect-[4/5]"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex aspect-[4/5] items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
-                    Dérivation en cours…
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
-                  <Badge
-                    variant={asset.rating === "SFW" ? "secondary" : "destructive"}
-                    className="h-4 px-1 text-[9px]"
-                  >
-                    {asset.rating}
-                  </Badge>
-                  <span>{asset.createdBy.name}</span>
-                  <span className="ml-auto">
-                    {asset.variants.filter((v) => v.r2Key).length}/{asset.variants.length} sur R2
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <AssetGrid
+        assets={assets.map((asset) => ({
+          id: asset.id,
+          rating: asset.rating,
+          personaName: personaNames.get(asset.personaId) ?? "",
+          authorName: asset.createdBy.name,
+          createdAt: asset.createdAt.toLocaleDateString("fr-FR", {
+            day: "2-digit",
+            month: "short",
+          }),
+          isVideo: /\.(mp4|mov|m4v)$/i.test(asset.localPath),
+          description: asset.description,
+          usageCount: asset.variants.reduce(
+            (total, variant) => total + variant._count.publicationItems,
+            0,
+          ),
+          variants: asset.variants.map((variant) => ({
+            id: variant.id,
+            ratio: variant.ratio,
+            onR2: Boolean(variant.r2Key),
+          })),
+        }))}
+      />
     </div>
   );
 }

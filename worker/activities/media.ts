@@ -45,6 +45,43 @@ export type MediaProbe = {
   isVideo: boolean;
 };
 
+/**
+ * Relève et **persiste** les métadonnées de l'Asset.
+ *
+ * `probeMedia` sondait déjà le fichier pour valider qu'il est lisible; on jetait
+ * le résultat. L'écrire évite de resonder le disque à chaque affichage de la
+ * fiche d'un média.
+ */
+export async function probeAndStoreAsset(assetId: string): Promise<MediaProbe> {
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { localPath: true },
+  });
+  if (!asset) {
+    throw ApplicationFailure.create({
+      message: `Asset ${assetId} introuvable.`,
+      nonRetryable: true,
+    });
+  }
+
+  const probe = await probeMedia(asset.localPath);
+  const { size } = await stat(absolutePath(asset.localPath));
+
+  await prisma.asset.update({
+    where: { id: assetId },
+    data: {
+      width: probe.width,
+      height: probe.height,
+      durationMs: probe.durationSeconds
+        ? Math.round(probe.durationSeconds * 1000)
+        : null,
+      sizeBytes: size,
+    },
+  });
+
+  return probe;
+}
+
 export async function probeMedia(relativePath: string): Promise<MediaProbe> {
   const path = absolutePath(relativePath);
   try {
