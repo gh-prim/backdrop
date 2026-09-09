@@ -31,6 +31,23 @@ export type InstagramCredentials = {
   pageId?: string;
 };
 
+/**
+ * Auto-déclaration de contenu généré par IA (`is_ai_generated`).
+ *
+ * Backdrop n'existe que pour administrer des influenceurs virtuels: **toutes**
+ * les publications sont générées. Le paramètre est donc posé systématiquement
+ * plutôt qu'offert en case à cocher, pour la même raison que le rating
+ * d'Instagram est verrouillé à SFW: ce qui peut être oublié finira par l'être.
+ *
+ * Meta étiquette aussi automatiquement quand il détecte des métadonnées IA
+ * standard dans le fichier. On ne peut pas compter dessus ici: le réencodage
+ * ffmpeg des Variants les efface. L'auto-déclaration est le seul rail fiable.
+ *
+ * Le paramètre n'est pas accepté sur les enfants d'un carrousel: l'étiquette
+ * appartient au container parent.
+ */
+const AI_GENERATED = "true";
+
 export type ContainerStatus =
   | "IN_PROGRESS"
   | "FINISHED"
@@ -179,16 +196,19 @@ export class InstagramAdapter implements ChannelAdapter {
       case "IMAGE":
         params.image_url = input.imageUrl;
         params.caption = input.caption;
+        params.is_ai_generated = AI_GENERATED;
         break;
       case "VIDEO":
         params.media_type = "VIDEO";
         params.video_url = input.videoUrl;
         params.caption = input.caption;
+        params.is_ai_generated = AI_GENERATED;
         break;
       case "REELS":
         params.media_type = "REELS";
         params.video_url = input.videoUrl;
         params.caption = input.caption;
+        params.is_ai_generated = AI_GENERATED;
         if (input.audioId) {
           // Piste native du catalogue Instagram, Reels uniquement (4.1.5).
           // Aucune prévisualisation possible: ce qui est configuré part tel quel.
@@ -213,6 +233,8 @@ export class InstagramAdapter implements ChannelAdapter {
         params.children = input.children.join(",");
         // La légende est portée par le parent, jamais par les enfants (4.1.4).
         params.caption = input.caption;
+        // L'étiquette IA aussi: elle vaut pour le carrousel entier.
+        params.is_ai_generated = AI_GENERATED;
         break;
     }
 

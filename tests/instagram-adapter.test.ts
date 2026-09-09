@@ -95,6 +95,41 @@ describe("adapter Instagram", () => {
     expect(calls[2].params.caption).toBe("la légende");
   });
 
+  it("déclare systématiquement le contenu comme généré par IA", async () => {
+    const { http, calls } = fakeGraph([{ id: "c1" }, { id: "c2" }, { id: "c3" }]);
+    const adapter = new InstagramAdapter(credentials, http);
+
+    await adapter.createContainer({ type: "IMAGE", imageUrl: "https://cdn.test/1.jpg" });
+    await adapter.createContainer({
+      type: "REELS",
+      videoUrl: "https://cdn.test/r.mp4",
+    });
+    await adapter.createContainer({
+      type: "CAROUSEL",
+      children: ["a", "b"],
+      caption: "légende",
+    });
+
+    // Toutes les personas sont générées: l'auto-déclaration n'est pas une
+    // option qu'un opérateur pourrait oublier de cocher.
+    for (const call of calls) {
+      expect(call.params.is_ai_generated).toBe("true");
+    }
+  });
+
+  it("ne pose pas l'étiquette IA sur les enfants d'un carrousel", async () => {
+    const { http, calls } = fakeGraph([{ id: "child-1" }]);
+    const adapter = new InstagramAdapter(credentials, http);
+
+    await adapter.createContainer({
+      type: "CAROUSEL_ITEM_IMAGE",
+      imageUrl: "https://cdn.test/1.jpg",
+    });
+
+    // Le paramètre n'y est pas accepté: l'étiquette appartient au parent.
+    expect(calls[0].params.is_ai_generated).toBeUndefined();
+  });
+
   it("configure l'audio d'un Reel, et seulement d'un Reel", async () => {
     const { http, calls } = fakeGraph([{ id: "reel-1" }]);
     const adapter = new InstagramAdapter(credentials, http);

@@ -102,13 +102,26 @@ POST /{ig-user-id}/media
 ```
 Le catalogue exposé par l'API est plus restreint que celui de l'app mobile. Aucune prévisualisation possible: ce qui est configuré part en production tel quel. Prévoir un compte de test.
 
+**4.1.5 bis — Divulgation IA.** `POST /{ig-user-id}/media` accepte
+`is_ai_generated`, une auto-déclaration de contenu généré par IA. Elle est
+posée **systématiquement**, pas offerte en option: toutes les personas de
+l'outil sont générées, et une case à cocher finirait par être oubliée. Même
+logique que le verrouillage de `maxRating` à SFW sur Instagram.
+
+Le paramètre n'est pas accepté sur les enfants d'un carrousel: l'étiquette
+appartient au container parent et vaut pour l'ensemble.
+
+Ne pas compter sur l'étiquetage automatique de Meta, qui repose sur la
+détection de métadonnées IA standard dans le fichier: le réencodage ffmpeg des
+Variants les efface. L'auto-déclaration est le seul rail fiable.
+
 **4.1.6 Hébergement média.** Meta fait un `cURL` sur `image_url` / `video_url` au moment de la publication. Le fichier doit être sur une URL publique accessible à cet instant.
 
 **4.1.7 Specs vidéo.** MP4 ou MOV, H264 ou HEVC, audio AAC 48 kHz, `moov` atom en début de fichier (`ffmpeg -movflags +faststart`). Un fichier non conforme échoue au stade container, souvent sans message clair.
 
 **4.1.8 Quotas.** Interroger `GET /{ig-user-id}/content_publishing_limit` avant chaque publication plutôt que d'encaisser l'erreur 9.
 
-Le plafond lui-même **ne se code pas en dur**: ce spec annonçait 100 par fenêtre glissante de 24 h, la documentation Meta en annonce 50 depuis le passage à l'Instagram Platform. Le nombre a déjà changé une fois, il changera encore. L'adapter lit `quota_total` dans la réponse et ne garde 50 que comme valeur de repli si le champ manque. Un carrousel compte toujours pour une seule publication.
+Le plafond lui-même **ne se code pas en dur**. Ce spec annonçait 100 par fenêtre glissante de 24 h, la documentation Meta en annonce 50 depuis le passage à l'Instagram Platform, et l'API interrogée sur un compte réel a renvoyé 100. Les trois sources divergent, ce qui règle le débat: l'adapter lit `quota_total` dans la réponse et ne garde 50 que comme valeur de repli si le champ manque. Un carrousel compte toujours pour une seule publication.
 
 **4.1.9 Tokens.** Le long-lived token expire à 60 jours. Un job de refresh est obligatoire, sinon la pipeline meurt silencieusement.
 
