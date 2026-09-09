@@ -29,6 +29,7 @@ type Track = {
   durationMs: number;
   previewUrl: string | null;
   creatorHandle: string | null;
+  coverUrl: string | null;
 };
 
 function duration(ms: number) {
@@ -245,10 +246,24 @@ export function AudioPicker({
                     }
                   }}
                   className={cn(
-                    "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                    "flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors",
                     "hover:bg-accent",
                   )}
                 >
+                  {track.coverUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={track.coverUrl}
+                      alt=""
+                      className="size-9 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    // Toutes les pistes n'en ont pas: un carré neutre vaut
+                    // mieux qu'une ligne qui se décale.
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded bg-muted">
+                      <Music className="size-3.5 text-muted-foreground" />
+                    </span>
+                  )}
                   <span className="truncate font-medium">{track.title}</span>
                   {/* Les sons originaux n'ont pas d'artiste: leur seule
                       identité est le compte qui les a créés, et sans lui une

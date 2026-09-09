@@ -9,9 +9,55 @@ import type {
 } from "@/lib/channels/instagram";
 import { ChannelError } from "@/lib/channels/types";
 
+export type AudioTrackWithCover = InstagramAudioTrack & {
+  coverUrl: string | null;
+};
+
 export type AudioSearchResult =
-  | { ok: true; tracks: InstagramAudioTrack[]; trending: boolean }
+  | { ok: true; tracks: AudioTrackWithCover[]; trending: boolean }
   | { ok: false; error: string };
+
+/**
+ * Cache des pochettes.
+ *
+ * La pochette n'est renvoyée que par l'endpoint de détail, pas par la
+ * recherche: afficher une vignette par ligne coûte donc un appel par piste,
+ * contre 200 par minute et par compte (4.3.4 pour Fanvue, même ordre chez
+ * Meta). Le cache évite de repayer ce prix à chaque frappe dans la recherche.
+ *
+ * TTL court parce que les URL de Meta sont signées et expirent: garder une
+ * pochette trop longtemps donnerait une image cassée plutôt qu'une économie.
+ */
+const COVER_TTL_MS = 10 * 60 * 1000;
+const coverCache = new Map<string, { url: string | null; expiresAt: number }>();
+
+async function withCovers(
+  adapter: { getAudio: (id: string) => Promise<{ coverUrl: string | null }> },
+  tracks: InstagramAudioTrack[],
+): Promise<AudioTrackWithCover[]> {
+  const now = Date.now();
+
+  return Promise.all(
+    tracks.map(async (track) => {
+      const cached = coverCache.get(track.audioId);
+      if (cached && cached.expiresAt > now) {
+        return { ...track, coverUrl: cached.url };
+      }
+
+      try {
+        const { coverUrl } = await adapter.getAudio(track.audioId);
+        coverCache.set(track.audioId, {
+          url: coverUrl,
+          expiresAt: now + COVER_TTL_MS,
+        });
+        return { ...track, coverUrl };
+      } catch {
+        // Une pochette manquante ne doit jamais faire échouer la recherche.
+        return { ...track, coverUrl: null };
+      }
+    }),
+  );
+}
 
 /**
  * Recherche dans le catalogue audio d'Instagram.
@@ -31,7 +77,11 @@ export async function searchInstagramAudioAction(
 
   try {
     const tracks = await adapter.searchAudio(query, audioType);
-    return { ok: true, tracks, trending: query.trim().length === 0 };
+    return {
+      ok: true,
+      tracks: await withCovers(adapter, tracks),
+      trending: query.trim().length === 0,
+    };
   } catch (error) {
     const detail = error instanceof ChannelError ? error.message : String(error);
     return { ok: false, error: `Catalogue audio indisponible: ${detail}` };
