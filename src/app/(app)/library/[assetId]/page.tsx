@@ -82,7 +82,9 @@ export default async function AssetPage({
 
       <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
         <Tabs defaultValue="general" className="flex min-h-0 flex-col gap-3">
-          <TabsList>
+          {/* Onglets pleine largeur en style souligné: ils tiennent lieu de
+              navigation de la fiche, pas de petit sélecteur secondaire. */}
+          <TabsList variant="line" className="w-full border-b">
             <TabsTrigger value="general">Général</TabsTrigger>
             <TabsTrigger value="variants">Variantes</TabsTrigger>
             <TabsTrigger value="usages">Utilisations</TabsTrigger>

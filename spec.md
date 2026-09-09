@@ -337,6 +337,8 @@ La seule exception est la **liste assumée**: grille de la bibliothèque, table 
 
 Un panneau qui déborde défile à l'intérieur de lui-même, jamais la page. La raison est la même que pour la densité: une fiche qui défile oblige l'opérateur à mémoriser ce qui est sorti du cadre, plusieurs fois par jour, sur les mêmes écrans.
 
+Les onglets sont **pleine largeur et soulignés**, pas des pastilles: ils tiennent lieu de navigation principale de la fiche, pas de sélecteur secondaire.
+
 **Traitement des médias dans l'UI.** L'outil est partagé entre plusieurs opérateurs et affiche du contenu NSFW.
 - Les vignettes des Assets `NSFW` et `SUGGESTIVE` sont **floutées par défaut**, révélées au survol ou au clic, avec une préférence utilisateur pour désactiver le flou.
 - Le `rating` est affiché en badge sur chaque Asset et chaque Variant, partout où ils apparaissent, sans exception.
