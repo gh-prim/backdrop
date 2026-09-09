@@ -80,6 +80,12 @@ export function ComposerForm({
   const [audio, setAudio] = useState<SelectedAudio | null>(null);
 
   const [tracked, setTracked] = useState<string[] | null>(null);
+  /**
+   * Le bouton d'envoi est désarmé un court instant à l'arrivée sur la dernière
+   * étape. Sans cela, un double clic sur « Next » publiait: le second clic
+   * tombait sur le bouton d'envoi qui venait d'apparaître.
+   */
+  const [armed, setArmed] = useState(true);
 
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     async (prev, formData) => {
@@ -191,6 +197,14 @@ export function ComposerForm({
 
   const isLast = step === STEPS.length - 1;
 
+  function goToStep(target: number) {
+    setStep(target);
+    if (target === STEPS.length - 1) {
+      setArmed(false);
+      setTimeout(() => setArmed(true), 600);
+    }
+  }
+
   return (
     <form action={action} className="flex min-h-0 flex-1 flex-col gap-4">
       {tracked && (
@@ -222,7 +236,7 @@ export function ComposerForm({
         <input key={id} type="hidden" name="variantIds" value={id} />
       ))}
 
-      <Stepper step={step} onJump={setStep} maxReached={step} />
+      <Stepper step={step} onJump={goToStep} maxReached={step} />
 
       <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
@@ -585,36 +599,37 @@ export function ComposerForm({
           type="button"
           variant="ghost"
           disabled={step === 0}
-          onClick={() => setStep((s) => s - 1)}
+          onClick={() => goToStep(step - 1)}
         >
           <ChevronLeft className="size-4" />
           Back
         </Button>
 
         {state && !state.ok && (
-          <span className="order-last w-full text-sm text-destructive">{state.error}</span>
+          <span className="text-sm text-destructive">{state.error}</span>
         )}
         {state?.ok && (
-          <span className="order-last w-full text-sm text-muted-foreground">
-            {state.message}
-          </span>
+          <span className="text-sm text-muted-foreground">{state.message}</span>
         )}
 
-        {!isLast ? (
-          <Button
-            type="button"
-            disabled={!stepValid}
-            onClick={() => setStep((s) => s + 1)}
-          >
+        {!isLast && (
+          <Button type="button" disabled={!stepValid} onClick={() => goToStep(step + 1)}>
             Next
             <ChevronRight className="size-4" />
           </Button>
-        ) : (
+        )}
+
+        {isLast && (
+          // Volontairement à l'opposé de « Next »: un clic répété au même
+          // endroit ne doit jamais tomber sur une action irréversible.
           <Button
             type="submit"
             name={publishNow ? "publishNow" : undefined}
             value={publishNow ? "1" : undefined}
-            disabled={pending || selected.length === 0 || channelIds.length === 0}
+            className="ml-auto"
+            disabled={
+              !armed || pending || selected.length === 0 || channelIds.length === 0
+            }
           >
             {pending ? "Sending…" : publishNow ? "Publish now" : "Schedule"}
           </Button>
