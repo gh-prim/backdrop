@@ -141,6 +141,10 @@ Le plafond lui-même **ne se code pas en dur**. Ce spec annonçait 100 par fenê
 
 **4.1.9 Tokens.** Le long-lived token expire à 60 jours. Un job de refresh est obligatoire, sinon la pipeline meurt silencieusement.
 
+**4.1.9 bis — Localisation: écartée.** `POST /{ig-user-id}/media` accepte un `location_id`, mais le trouver est fermé. `GET /pages/search?type=place` répond une erreur 10 réclamant la feature **Page Public Content Access**, y compris avec `pages_read_engagement` sur le jeton (vérifié par `debug_token` sur le compte réel). Cette feature passe par l'App Review, que 4.1.2 écarte. Lire le nom d'un lieu à partir de son identifiant bute sur la même feature.
+
+Le contournement praticable serait de faire coller à l'opérateur l'identifiant lu dans l'URL d'un lieu Instagram (`instagram.com/explore/locations/<id>/…`), mémorisé par persona. **Décision: on s'en passe.** À rouvrir seulement si la localisation devient un levier mesurable, et alors la question à trancher sera l'App Review, pas l'implémentation.
+
 **4.1.10 Ce que l'API ne donne pas.** Pas de follow ni d'unfollow. Pas de liste de followers (seulement `followers_count` et des démographies agrégées). Pas d'accès aux stories d'autrui.
 
 ### 4.2 Telegram
