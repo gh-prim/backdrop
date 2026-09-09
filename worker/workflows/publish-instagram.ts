@@ -31,6 +31,17 @@ const db = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 5, initialInterval: "1 second" },
 });
 
+/**
+ * Le nettoyage du Schedule est cosmétique: `remainingActions: 1` interdit déjà
+ * un second déclenchement, et le balayeur horaire rattrape ce qui reste. Il ne
+ * doit donc jamais faire échouer un workflow dont la publication est déjà
+ * partie sur Instagram — d'où sa patience courte, et le `try` qui l'entoure.
+ */
+const janitor = proxyActivities<typeof activities>({
+  startToCloseTimeout: "15 seconds",
+  retry: { maximumAttempts: 2, initialInterval: "1 second" },
+});
+
 /** ffmpeg peut prendre du temps: sa propre patience, séparée du reste. */
 const media = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
@@ -63,6 +74,19 @@ const POLL_INTERVAL_SECONDS = 5;
 const POLL_MAX_ATTEMPTS = 120; // ~10 minutes, une vidéo longue peut les prendre
 
 export type PublishInstagramInput = { publicationId: string };
+
+/** Retire le Schedule sans jamais compromettre l'issue de la publication. */
+async function dropSchedule(publicationId: string): Promise<void> {
+  try {
+    await janitor.cleanupPublishSchedule(publicationId);
+  } catch (error) {
+    // Le balayeur horaire s'en chargera: rien d'autre à faire ici.
+    log.warn("Nettoyage du Schedule impossible, laissé au balayeur", {
+      publicationId,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 export async function publishInstagram(
   input: PublishInstagramInput,
@@ -126,7 +150,7 @@ export async function publishInstagram(
       status: plan.status,
     });
     finish("skipped", `Status is ${plan.status}: nothing was sent.`);
-    await db.cleanupPublishSchedule(input.publicationId);
+    await dropSchedule(input.publicationId);
     return { outcome: "skipped" };
   }
 
@@ -143,7 +167,7 @@ export async function publishInstagram(
       "missed",
       `Overdue by ${Math.round(latenessMinutes)} min, tolerance is ${plan.toleranceMinutes} min.`,
     );
-    await db.cleanupPublishSchedule(input.publicationId);
+    await dropSchedule(input.publicationId);
     return { outcome: "missed" };
   }
 
@@ -193,7 +217,7 @@ export async function publishInstagram(
 
     advance(100, "Published");
     finish("published", remoteId);
-    await db.cleanupPublishSchedule(input.publicationId);
+    await dropSchedule(input.publicationId);
     log.info("Publication Instagram réussie", { remoteId });
     return { outcome: "published", remoteId };
   } catch (error) {
@@ -201,7 +225,7 @@ export async function publishInstagram(
     await db.markFailed(input.publicationId, reason);
     finish("failed", reason);
     // Le Schedule a joué son unique déclenchement: le laisser n'apporte rien.
-    await db.cleanupPublishSchedule(input.publicationId);
+    await dropSchedule(input.publicationId);
     throw error;
   }
 }

@@ -48,6 +48,7 @@ function plan(overrides: Partial<PublicationPlan> = {}): PublicationPlan {
 function activityDoubles(planned: PublicationPlan, options: {
   containerStatus?: (containerId: string) => string;
   quotaRemaining?: number;
+  cleanupFails?: boolean;
 } = {}) {
   const calls: string[] = [];
   return {
@@ -63,6 +64,10 @@ function activityDoubles(planned: PublicationPlan, options: {
       markFailed: async (_id: string, reason: string) =>
         void calls.push(`markFailed:${reason}`),
       markMissed: async () => void calls.push("markMissed"),
+      cleanupPublishSchedule: async () => {
+        calls.push("cleanupPublishSchedule");
+        if (options.cleanupFails) throw new Error("Temporal injoignable");
+      },
       persistChildContainerId: async () => void calls.push("persistChildContainerId"),
       renderStillAsReel: async (variantId: string) => {
         calls.push(`renderStillAsReel:${variantId}`);
@@ -134,6 +139,36 @@ describe("workflow publishInstagram", () => {
     expect(result).toMatchObject({ outcome: "published" });
     expect(calls).toContain("markPublishing");
     expect(calls).toContain("checkInstagramQuota");
+    expect(calls.some((c) => c.startsWith("markPublished:"))).toBe(true);
+  }, 60_000);
+
+  it("retire son Schedule sur toutes ses sorties", async () => {
+    // Publié.
+    expect((await runWorkflow(plan())).calls).toContain("cleanupPublishSchedule");
+
+    // Ignoré: la publication n'est plus programmée au réveil.
+    const skipped = await runWorkflow(plan({ status: "DRAFT" }));
+    expect(skipped.result).toMatchObject({ outcome: "skipped" });
+    expect(skipped.calls).toContain("cleanupPublishSchedule");
+
+    // Manqué: échéance dépassée au-delà de la tolérance.
+    const missed = await runWorkflow(
+      plan({
+        scheduledAt: new Date(Date.now() - 6 * HOUR).toISOString(),
+        toleranceMinutes: 45,
+      }),
+    );
+    expect(missed.result).toMatchObject({ outcome: "missed" });
+    expect(missed.calls).toContain("cleanupPublishSchedule");
+  }, 90_000);
+
+  it("publie quand même si le nettoyage du Schedule échoue", async () => {
+    // Le nettoyage est cosmétique et le balayeur horaire le rattrape. Il ne
+    // doit jamais faire échouer un workflow dont la photo est déjà sur
+    // Instagram: ce serait signaler un échec pour une publication réussie.
+    const { result, calls } = await runWorkflow(plan(), { cleanupFails: true });
+
+    expect(result).toMatchObject({ outcome: "published" });
     expect(calls.some((c) => c.startsWith("markPublished:"))).toBe(true);
   }, 60_000);
 
