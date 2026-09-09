@@ -1,0 +1,37 @@
+# Env
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+
+# Telegram
+*.session
+*.session-journal
+
+# Média: jamais versionné
+media/
+
+# Divers
+.DS_Store
+coverage/
+playwright-report/
+test-results/
