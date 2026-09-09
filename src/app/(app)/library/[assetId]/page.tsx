@@ -5,7 +5,7 @@ import { requireOrgContext } from "@/lib/session";
 import { getAssetDetail } from "@/lib/assets";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FixedHeightPage, TabsShell } from "@/components/tabs-shell";
 import { AssetOriginal } from "./asset-original";
 import { PropertiesForm } from "./properties-form";
 import { VariantList } from "./variant-list";
@@ -17,13 +17,6 @@ function humanSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/**
- * Fiche d'un média.
- *
- * Aucun défilement de page (spec 6.1): le contenu est réparti en onglets, les
- * propriétés qui doivent rester visibles vivent dans la sidebar droite, et
- * seuls les panneaux internes défilent s'ils débordent.
- */
 export default async function AssetPage({
   params,
 }: {
@@ -38,10 +31,7 @@ export default async function AssetPage({
 
   const metadata: [string, string][] = [
     ["Persona", `${asset.persona.name} @${asset.persona.handle}`],
-    [
-      "Dimensions",
-      asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—",
-    ],
+    ["Dimensions", asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"],
     ["Size", humanSize(asset.sizeBytes)],
     ["Duration", asset.durationMs ? `${(asset.durationMs / 1000).toFixed(1)} s` : "—"],
     ["Type", asset.mimeType ?? "—"],
@@ -54,8 +44,7 @@ export default async function AssetPage({
   ];
 
   return (
-    // Hauteur contrainte: la fiche tient dans la fenêtre, elle ne défile pas.
-    <div className="flex h-[calc(100svh-7.5rem)] flex-col gap-4 overflow-hidden">
+    <FixedHeightPage>
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/library"
@@ -80,89 +69,89 @@ export default async function AssetPage({
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Tabs defaultValue="general" className="flex min-h-0 flex-col gap-3">
-          {/* Onglets pleine largeur en style souligné: ils tiennent lieu de
-              navigation de la fiche, pas de petit sélecteur secondaire. */}
-          <TabsList variant="line" className="w-full border-b">
-            <TabsTrigger value="general">Overview</TabsTrigger>
-            <TabsTrigger value="variants">Variants</TabsTrigger>
-            <TabsTrigger value="usages">Usage</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="general" className="min-h-0 overflow-hidden">
-            <AssetOriginal assetId={asset.id} rating={asset.rating} isVideo={isVideo} />
-          </TabsContent>
-
-          <TabsContent value="variants" className="min-h-0 overflow-y-auto pr-1">
-            <VariantList
-              assetId={asset.id}
-              rating={asset.rating}
-              variants={asset.variants.map((variant) => ({
-                id: variant.id,
-                ratio: variant.ratio,
-                onR2: Boolean(variant.r2Key),
-                onTelegram: variant.tgSourceMessageId !== null,
-                onFanvue: Boolean(variant.fvMediaUuid),
-              }))}
-            />
-          </TabsContent>
-
-          <TabsContent value="usages" className="min-h-0 overflow-y-auto pr-1">
-            <UsageList
-              usages={asset.usages.map((usage) => ({
-                publicationId: usage.publication.id,
-                name: usage.publication.name,
-                kind: usage.publication.kind,
-                status: usage.publication.status,
-                platform: usage.publication.channelAccount.platform,
-                ratio: usage.variant.ratio,
-                position: usage.position,
-                scheduledAt: usage.publication.scheduledAt.toISOString(),
-                publishedAt: usage.publication.publishedAt?.toISOString() ?? null,
-                remoteId: usage.publication.remoteId,
-              }))}
-            />
-          </TabsContent>
-        </Tabs>
-
-        {/* Sidebar persistante: ce qui doit rester lisible quel que soit
-            l'onglet actif. Elle défile en interne, pas la page. */}
-        <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Properties</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PropertiesForm
+      <TabsShell
+        tabs={[
+          {
+            value: "overview",
+            label: "Overview",
+            fill: true,
+            content: (
+              <AssetOriginal assetId={asset.id} rating={asset.rating} isVideo={isVideo} />
+            ),
+          },
+          {
+            value: "variants",
+            label: "Variants",
+            content: (
+              <VariantList
                 assetId={asset.id}
-                name={asset.name ?? ""}
-                description={asset.description ?? ""}
                 rating={asset.rating}
-                usageCount={asset.usages.length}
+                variants={asset.variants.map((variant) => ({
+                  id: variant.id,
+                  ratio: variant.ratio,
+                  onR2: Boolean(variant.r2Key),
+                  onTelegram: variant.tgSourceMessageId !== null,
+                  onFanvue: Boolean(variant.fvMediaUuid),
+                }))}
               />
-            </CardContent>
-          </Card>
+            ),
+          },
+          {
+            value: "usage",
+            label: "Usage",
+            content: (
+              <UsageList
+                usages={asset.usages.map((usage) => ({
+                  publicationId: usage.publication.id,
+                  name: usage.publication.name,
+                  kind: usage.publication.kind,
+                  status: usage.publication.status,
+                  platform: usage.publication.channelAccount.platform,
+                  ratio: usage.variant.ratio,
+                  position: usage.position,
+                  scheduledAt: usage.publication.scheduledAt.toISOString(),
+                  publishedAt: usage.publication.publishedAt?.toISOString() ?? null,
+                  remoteId: usage.publication.remoteId,
+                }))}
+              />
+            ),
+          },
+        ]}
+        sidebar={
+          <>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Properties</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PropertiesForm
+                  assetId={asset.id}
+                  name={asset.name ?? ""}
+                  description={asset.description ?? ""}
+                  rating={asset.rating}
+                  usageCount={asset.usages.length}
+                />
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Metadata</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-1.5 text-xs">
-                {metadata.map(([label, value]) => (
-                  <div key={label} className="flex gap-3">
-                    <dt className="w-20 shrink-0 text-muted-foreground">{label}</dt>
-                    <dd className="min-w-0 flex-1 break-words font-medium">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </CardContent>
-          </Card>
-
-
-        </aside>
-      </div>
-    </div>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Metadata</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="space-y-1.5 text-xs">
+                  {metadata.map(([label, value]) => (
+                    <div key={label} className="flex gap-3">
+                      <dt className="w-20 shrink-0 text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0 flex-1 break-words font-medium">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </CardContent>
+            </Card>
+          </>
+        }
+      />
+    </FixedHeightPage>
   );
 }

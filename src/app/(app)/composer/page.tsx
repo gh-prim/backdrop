@@ -4,7 +4,7 @@ import { ALL_PERSONAS } from "@/lib/persona";
 import { listChannelStatus } from "@/lib/channels";
 import { listPublishableVariants } from "@/lib/publications";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageHeader } from "@/components/page-header";
+import { FixedHeightPage } from "@/components/tabs-shell";
 import { ComposerForm } from "./composer-form";
 
 export default async function ComposerPage() {
@@ -29,11 +29,13 @@ export default async function ComposerPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <PageHeader
-        title="Composer"
-        description="Schedule, name, channels, media: a channel's limits decide which media you can pick next."
-      />
+    <FixedHeightPage>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="text-xl font-bold tracking-tight">Composer</h1>
+        <p className="text-sm text-muted-foreground">
+          A channel&apos;s limits decide which media you can pick next.
+        </p>
+      </div>
       <ComposerForm
         personaName={personas.find((p) => p.id === personaId)?.name ?? ""}
         channels={channels
@@ -52,6 +54,6 @@ export default async function ComposerPage() {
           isVideo: /\.(mp4|mov|m4v)$/i.test(variant.localPath),
         }))}
       />
-    </div>
+    </FixedHeightPage>
   );
 }

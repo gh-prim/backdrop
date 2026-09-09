@@ -161,7 +161,7 @@ export function ComposerForm({
   const isLast = step === STEPS.length - 1;
 
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="flex min-h-0 flex-1 flex-col gap-4">
       {/* Tout l'état du wizard est réémis à la soumission finale. */}
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />
@@ -186,8 +186,8 @@ export function ComposerForm({
 
       <Stepper step={step} onJump={setStep} maxReached={step} />
 
-      <Card>
-        <CardContent className="min-h-64 space-y-4 pt-6">
+      <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
           {step === 0 && (
             <div className="space-y-3">
               <div className="space-y-1.5">
@@ -437,49 +437,50 @@ export function ComposerForm({
                 </p>
               </div>
 
-              <dl className="grid gap-x-6 gap-y-1 border-t pt-3 text-xs sm:grid-cols-2">
-                <Recap label="Name" value={name} />
-                <Recap
-                  label="Schedule"
-                  value={
-                    publishNow
-                      ? "immediate"
-                      : new Date(scheduledAt).toLocaleString("en-GB", {
+            </div>
+          )}
+        </div>
+
+        {/* Récapitulatif permanent: les choix restent lisibles pendant qu'on
+            avance, ce qui remplace l'étape de relecture finale. */}
+        <aside className="min-h-0 overflow-y-auto pr-1">
+          <Card>
+            <CardContent className="space-y-1 pt-5 text-xs">
+              <Recap label="Name" value={name} />
+              <Recap
+                label="Schedule"
+                value={
+                  publishNow
+                    ? "immediate"
+                    : scheduledAt
+                      ? new Date(scheduledAt).toLocaleString("en-GB", {
                           dateStyle: "short",
                           timeStyle: "short",
                         })
-                  }
-                />
-                <Recap
-                  label="Channels"
-                  value={chosenChannels.map((c) => c.platform).join(", ")}
-                />
-                <Recap
-                  label="Type"
-                  value={
-                    kind === "REEL" && !selectionIsVideo
-                      ? "Reel (photo rendered as video)"
-                      : kind
-                  }
-                />
-                <Recap label="Media" value={`${selected.length}`} />
-                {audio && (
-                  <Recap label="Music" value={`${audio.title} — ${audio.artist}`} />
-                )}
-                <Recap
-                  label="Publications created"
-                  value={`${chosenChannels.length}`}
-                />
-              </dl>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                      : ""
+                }
+              />
+              <Recap
+                label="Channels"
+                value={chosenChannels.map((c) => c.platform).join(", ")}
+              />
+              <Recap
+                label="Type"
+                value={
+                  kind === "REEL" && !selectionIsVideo
+                    ? "Reel (photo rendered as video)"
+                    : kind
+                }
+              />
+              <Recap label="Media" value={`${selected.length}`} />
+              {audio && <Recap label="Music" value={`${audio.title} — ${audio.artist}`} />}
+              <Recap label="Publications" value={`${chosenChannels.length}`} />
+            </CardContent>
+          </Card>
+        </aside>
+      </div>
 
-      {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
-      {state?.ok && <p className="text-sm text-muted-foreground">{state.message}</p>}
-
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 border-t pt-3">
         <Button
           type="button"
           variant="ghost"
@@ -489,6 +490,15 @@ export function ComposerForm({
           <ChevronLeft className="size-4" />
           Back
         </Button>
+
+        {state && !state.ok && (
+          <span className="order-last w-full text-sm text-destructive">{state.error}</span>
+        )}
+        {state?.ok && (
+          <span className="order-last w-full text-sm text-muted-foreground">
+            {state.message}
+          </span>
+        )}
 
         {!isLast ? (
           <Button
@@ -533,38 +543,38 @@ function Stepper({
   onJump: (index: number) => void;
 }) {
   return (
-    <ol className="flex flex-wrap items-center gap-1 text-xs">
+    // Même forme que les onglets d'une page de détail (6.1): pleine largeur,
+    // soulignés. La différence est qu'un pas non atteint reste inaccessible.
+    <ol className="flex w-full items-stretch border-b text-sm">
       {STEPS.map((entry, index) => {
         const done = index < step;
         const current = index === step;
+        const reachable = index <= maxReached;
         return (
-          <li key={entry.key} className="flex items-center gap-1">
+          <li key={entry.key} className="flex-1">
             <button
               type="button"
-              disabled={index > maxReached}
+              disabled={!reachable}
               onClick={() => onJump(index)}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2 py-1 transition",
-                current && "bg-accent font-medium text-foreground",
-                !current && "text-muted-foreground",
-                index <= maxReached && !current && "hover:text-foreground",
-                index > maxReached && "cursor-default opacity-50",
+                "relative flex w-full items-center justify-center gap-2 px-2 py-2 transition-colors",
+                current ? "font-medium text-foreground" : "text-muted-foreground",
+                reachable && !current && "hover:text-foreground",
+                !reachable && "cursor-default opacity-40",
+                current && "after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-foreground",
               )}
             >
               <span
                 className={cn(
-                  "flex size-4 items-center justify-center rounded-full border text-[9px]",
+                  "flex size-4 shrink-0 items-center justify-center rounded-full border text-[9px]",
                   done && "border-primary bg-primary text-primary-foreground",
                   current && "border-primary",
                 )}
               >
                 {done ? <Check className="size-2.5" /> : index + 1}
               </span>
-              {entry.label}
+              <span className="truncate">{entry.label}</span>
             </button>
-            {index < STEPS.length - 1 && (
-              <ChevronRight className="size-3 text-muted-foreground/50" />
-            )}
           </li>
         );
       })}
