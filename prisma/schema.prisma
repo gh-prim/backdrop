@@ -157,6 +157,9 @@ model Publication {
   /// Verrou optimiste, édition concurrente (7.4).
   version          Int       @default(0)
   kind             PubKind
+  /// Libellé interne, partagé par les publications sœurs d'un même envoi
+  /// multi-canal. Sert à les retrouver, pas à être publié.
+  name             String    @default("")
   copy             String    @default("")
   scheduledAt      DateTime
   status           PubStatus @default(DRAFT)

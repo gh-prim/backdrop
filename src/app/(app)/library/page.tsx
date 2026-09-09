@@ -5,6 +5,7 @@ import { listAssets } from "@/lib/assets";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MediaThumb, BlurPreferenceToggle } from "@/components/media-thumb";
+import { PageHeader } from "@/components/page-header";
 import { UploadForm } from "./upload-form";
 
 export default async function LibraryPage() {
@@ -17,11 +18,12 @@ export default async function LibraryPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <h1 className="text-lg font-bold">Library</h1>
-        <BlurPreferenceToggle />
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Library"
+        description={`${assets.length} Asset${assets.length > 1 ? "s" : ""} · les Variants sont dérivés automatiquement`}
+        actions={<BlurPreferenceToggle />}
+      />
 
       <Card>
         <CardContent className="pt-6">
@@ -37,7 +39,7 @@ export default async function LibraryPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {assets.map((asset) => (
             <Card key={asset.id} className="overflow-hidden">
               <CardContent className="space-y-2 p-3">

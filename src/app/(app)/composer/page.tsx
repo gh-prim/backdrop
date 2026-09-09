@@ -4,6 +4,7 @@ import { ALL_PERSONAS } from "@/lib/persona";
 import { listChannelStatus } from "@/lib/channels";
 import { listPublishableVariants } from "@/lib/publications";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { ComposerForm } from "./composer-form";
 
 export default async function ComposerPage() {
@@ -28,8 +29,11 @@ export default async function ComposerPage() {
   ]);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-lg font-bold">Composer</h1>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        title="Composer"
+        description="Programmation, nom, canaux, médias: les contraintes d'un canal s'appliquent aux médias que vous pouvez choisir ensuite."
+      />
       <ComposerForm
         personaName={personas.find((p) => p.id === personaId)?.name ?? ""}
         channels={channels

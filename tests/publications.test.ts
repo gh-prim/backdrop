@@ -50,13 +50,15 @@ describe("publications", () => {
   async function scheduleOne() {
     const { createPublication } = await import("@/lib/publications");
     const variant = await createVariant(personaId, userId, Rating.SFW);
-    return createPublication(ctx(), {
-      channelAccountId: channelId,
+    const [publication] = await createPublication(ctx(), {
+      channelAccountIds: [channelId],
       kind: PubKind.SINGLE,
+      name: "Envoi de test",
       caption: "première légende",
       scheduledAt: new Date(Date.now() + 3_600_000),
       variantIds: [variant.id],
     });
+    return publication;
   }
 
   it("crée une publication programmée avec son auteur", async () => {
@@ -132,8 +134,9 @@ describe("publications", () => {
 
     await expect(
       createPublication(ctx(other.id), {
-        channelAccountId: channelId,
+        channelAccountIds: [channelId],
         kind: PubKind.SINGLE,
+        name: "Intrusion",
         caption: "intrusion",
         scheduledAt: new Date(Date.now() + 3_600_000),
         variantIds: [variant.id],
@@ -149,8 +152,9 @@ describe("publications", () => {
 
     await expect(
       createPublication(ctx(), {
-        channelAccountId: channelId,
+        channelAccountIds: [channelId],
         kind: PubKind.SINGLE,
+        name: "Interdit",
         caption: "interdit sur Instagram",
         scheduledAt: new Date(Date.now() + 3_600_000),
         variantIds: [nsfw.id],
@@ -159,6 +163,54 @@ describe("publications", () => {
 
     // La transaction couvre la publication et ses items: le rejet du trigger
     // ne doit pas laisser une publication vide derrière lui.
+    expect(await prisma.publication.count()).toBe(0);
+    expect(await prisma.publicationItem.count()).toBe(0);
+  });
+
+  it("crée une publication indépendante par canal sélectionné", async () => {
+    const { createPublication } = await import("@/lib/publications");
+    const second = await createChannel(personaId, Platform.TELEGRAM, Rating.NSFW);
+    const variant = await createVariant(personaId, userId, Rating.SFW);
+
+    const created = await createPublication(ctx(), {
+      channelAccountIds: [channelId, second.id],
+      kind: PubKind.SINGLE,
+      name: "Envoi multi-canal",
+      caption: "même texte pour l'instant",
+      scheduledAt: new Date(Date.now() + 3_600_000),
+      variantIds: [variant.id],
+    });
+
+    // Règle d'or de la section 3: chaque canal a son propre état, donc son
+    // propre objet. Le nom est ce qui les relie.
+    expect(created).toHaveLength(2);
+    const rows = await prisma.publication.findMany({ select: { name: true, channelAccountId: true, status: true } });
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.channelAccountId))).toEqual(
+      new Set([channelId, second.id]),
+    );
+    expect(rows.every((r) => r.name === "Envoi multi-canal")).toBe(true);
+  });
+
+  it("un média interdit sur un seul canal annule toute la création", async () => {
+    const { createPublication } = await import("@/lib/publications");
+    const telegram = await createChannel(personaId, Platform.TELEGRAM, Rating.NSFW);
+    const nsfw = await createVariant(personaId, userId, Rating.NSFW);
+
+    // Instagram refuse ce média, Telegram l'accepte. La création est atomique:
+    // on ne veut pas d'un sous-ensemble que l'opérateur n'a pas demandé, et
+    // dont la composition dépendrait de l'ordre de traitement des canaux.
+    await expect(
+      createPublication(ctx(), {
+        channelAccountIds: [telegram.id, channelId],
+        kind: PubKind.SINGLE,
+        name: "Mixte",
+        caption: "",
+        scheduledAt: new Date(Date.now() + 3_600_000),
+        variantIds: [nsfw.id],
+      }),
+    ).rejects.toThrow(/rating_violation/);
+
     expect(await prisma.publication.count()).toBe(0);
     expect(await prisma.publicationItem.count()).toBe(0);
   });

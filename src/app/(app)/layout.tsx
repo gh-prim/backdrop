@@ -25,20 +25,25 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-svh flex-col">
       {/* Sélecteur de persona persistant, visible sur tous les écrans (6.1). */}
-      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-        <div className="flex h-12 items-center gap-4 px-4">
-          <Link href="/" className="text-sm font-black tracking-tight">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
+        {/* Même gouttière que le contenu: l'alignement du header sur la page
+            est ce qui fait la différence entre « appli » et « page web ». */}
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-5 px-6">
+          <Link
+            href="/"
+            className="text-sm font-black tracking-tight transition-opacity hover:opacity-70"
+          >
             Backdrop
           </Link>
 
           <PersonaSwitcher personas={personas} selectedId={selectedId} />
 
-          <nav className="flex items-center gap-1 text-sm">
+          <nav className="hidden items-center gap-0.5 text-sm md:flex">
             {NAV.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-md px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 {item.label}
               </Link>
@@ -51,7 +56,7 @@ export default async function AppLayout({
         </div>
       </header>
 
-      <main className="flex-1 p-4">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</main>
     </div>
   );
 }

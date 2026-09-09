@@ -6,6 +6,8 @@ import { listChannelStatus } from "@/lib/channels";
 import { listPublications } from "@/lib/publications";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/page-header";
 
 function formatDate(date: Date) {
   return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
@@ -36,17 +38,18 @@ export default async function DashboardPage() {
   const missed = publications.filter((p) => p.status === "MISSED");
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-bold">
-          {selectedId === ALL_PERSONAS ? "Toutes les personas" : scoped[0]?.name}
-        </h1>
-        <Link href="/composer" className="text-xs text-muted-foreground hover:text-foreground">
-          Nouvelle publication →
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={selectedId === ALL_PERSONAS ? "Toutes les personas" : (scoped[0]?.name ?? "")}
+        description={`${upcoming.length} à venir · ${failed.length} en échec · ${missed.length} manquée${missed.length > 1 ? "s" : ""}`}
+        actions={
+          <Button size="sm" render={<Link href="/composer" />}>
+            Nouvelle publication
+          </Button>
+        }
+      />
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Publications à venir</CardTitle>
@@ -85,19 +88,29 @@ export default async function DashboardPage() {
             <CardTitle className="text-sm">À traiter</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Link href="/publications" className="block hover:underline">
-              <span className="text-2xl font-black">{failed.length}</span>{" "}
+            <Link
+              href="/publications"
+              className="flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent"
+            >
+              <span
+                className={failed.length > 0 ? "text-3xl font-black text-destructive" : "text-3xl font-black"}
+              >
+                {failed.length}
+              </span>
               <span className="text-xs text-muted-foreground">échec(s)</span>
             </Link>
-            <Link href="/publications" className="block hover:underline">
-              <span className="text-2xl font-black">{missed.length}</span>{" "}
+            <Link
+              href="/publications"
+              className="flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent"
+            >
+              <span className="text-3xl font-black">{missed.length}</span>
               <span className="text-xs text-muted-foreground">manquée(s) à trancher</span>
             </Link>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {scoped.map((persona) => {
           const personaChannels = channels.filter((c) => c.personaId === persona.id);
           const personaPublications = publications.filter(

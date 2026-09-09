@@ -8,6 +8,7 @@ import { InviteForm } from "./invite-form";
 import { PersonaForm } from "./persona-form";
 import { InvitationRow } from "./invitation-row";
 import { InstagramForm } from "./instagram-form";
+import { PageHeader } from "@/components/page-header";
 
 export default async function SettingsPage() {
   const ctx = await requireOrgContext();
@@ -21,8 +22,11 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <h1 className="text-lg font-bold">Réglages</h1>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        title="Réglages"
+        description="Membres, personas et canaux de l'organisation."
+      />
 
       <Card>
         <CardHeader className="pb-3">

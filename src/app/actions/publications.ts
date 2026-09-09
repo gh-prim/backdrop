@@ -19,8 +19,9 @@ import {
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
 const createSchema = z.object({
-  channelAccountId: z.string().min(1, "Canal requis."),
+  channelAccountIds: z.array(z.string().min(1)).min(1, "Au moins un canal."),
   kind: z.enum(PubKind),
+  name: z.string().min(1, "Nom requis.").max(120),
   caption: z.string().max(2200, "2200 caractères maximum sur Instagram."),
   scheduledAt: z.coerce.date(),
   variantIds: z.array(z.string().min(1)).min(1, "Au moins un média."),
@@ -39,8 +40,9 @@ export async function schedulePublicationAction(
   const publishNow = formData.get("publishNow") === "1";
 
   const parsed = createSchema.safeParse({
-    channelAccountId: formData.get("channelAccountId"),
+    channelAccountIds: formData.getAll("channelAccountIds").map(String),
     kind: formData.get("kind"),
+    name: String(formData.get("name") ?? "").trim(),
     caption: String(formData.get("caption") ?? ""),
     scheduledAt: publishNow ? new Date() : formData.get("scheduledAt"),
     variantIds: formData.getAll("variantIds").map(String),
@@ -57,7 +59,7 @@ export async function schedulePublicationAction(
     return { ok: false, error: "Un carrousel accepte 10 éléments au maximum." };
   }
 
-  let created: { id: string; platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE" };
+  let created: { id: string; platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE" }[];
   try {
     created = await createPublication(ctx, parsed.data);
   } catch (error) {
@@ -74,23 +76,34 @@ export async function schedulePublicationAction(
     return { ok: false, error: message || "Création impossible." };
   }
 
-  try {
-    // Démarrage à la programmation, pas à l'échéance (7.6).
-    await startPublishWorkflow(created);
-  } catch (error) {
-    return {
-      ok: false,
-      error: `Publication enregistrée mais le workflow n'a pas démarré: ${(error as Error).message}`,
-    };
+  // Un workflow par publication: démarrage à la programmation, pas à
+  // l'échéance (7.6). L'échec d'un démarrage ne doit pas masquer les autres.
+  const notStarted: string[] = [];
+  for (const publication of created) {
+    try {
+      await startPublishWorkflow(publication);
+    } catch (error) {
+      notStarted.push(`${publication.platform}: ${(error as Error).message}`);
+    }
   }
 
   revalidatePath("/publications");
   revalidatePath("/");
+
+  if (notStarted.length > 0) {
+    return {
+      ok: false,
+      error: `Publications enregistrées, mais des workflows n'ont pas démarré — ${notStarted.join(" ; ")}`,
+    };
+  }
+
+  const count = created.length;
+  const suffix = count > 1 ? `s (${count} canaux)` : "";
   return {
     ok: true,
     message: publishNow
-      ? "Publication lancée, elle part maintenant."
-      : "Publication programmée.",
+      ? `Publication${suffix} lancée${count > 1 ? "s" : ""}, elle part maintenant.`
+      : `Publication${suffix} programmée${count > 1 ? "s" : ""}.`,
   };
 }
 

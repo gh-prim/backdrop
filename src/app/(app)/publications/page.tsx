@@ -3,6 +3,7 @@ import { listPersonas, getSelectedPersonaId } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
 import { listPublications } from "@/lib/publications";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { PublicationsTable } from "./publications-table";
 
 export default async function PublicationsPage() {
@@ -15,8 +16,11 @@ export default async function PublicationsPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-lg font-bold">Publications</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title="Publications"
+        description={`${publications.length} publication${publications.length > 1 ? "s" : ""}`}
+      />
       {publications.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
@@ -24,9 +28,11 @@ export default async function PublicationsPage() {
           </CardContent>
         </Card>
       ) : (
+        <Card className="overflow-hidden py-0">
         <PublicationsTable
           rows={publications.map((publication) => ({
             id: publication.id,
+            name: publication.name,
             kind: publication.kind,
             status: publication.status,
             caption: publication.copy,
@@ -49,6 +55,7 @@ export default async function PublicationsPage() {
             ),
           }))}
         />
+        </Card>
       )}
     </div>
   );

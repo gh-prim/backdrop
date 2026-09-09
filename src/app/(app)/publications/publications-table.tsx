@@ -22,6 +22,7 @@ import {
 
 export type PublicationRow = {
   id: string;
+  name: string;
   kind: string;
   status: string;
   caption: string;
@@ -67,6 +68,7 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
       <TableHeader>
         <TableRow>
           <TableHead>État</TableHead>
+          <TableHead>Nom</TableHead>
           <TableHead>Persona</TableHead>
           <TableHead>Type</TableHead>
           <TableHead>Programmée</TableHead>
@@ -86,6 +88,9 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
                 >
                   {row.status}
                 </Badge>
+              </TableCell>
+              <TableCell className="max-w-48 truncate text-sm font-medium">
+                {row.name || "—"}
               </TableCell>
               <TableCell className="text-sm">
                 {row.persona}
@@ -113,7 +118,7 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
 
             {row.failureReason && (
               <TableRow>
-                <TableCell colSpan={7} className="pt-0 text-xs text-destructive">
+                <TableCell colSpan={8} className="pt-0 text-xs text-destructive">
                   {row.failureReason}
                 </TableCell>
               </TableRow>
@@ -121,7 +126,7 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
 
             {row.status === "MISSED" && (
               <TableRow>
-                <TableCell colSpan={7} className="pt-0 text-xs text-muted-foreground">
+                <TableCell colSpan={8} className="pt-0 text-xs text-muted-foreground">
                   Échéance dépassée au-delà de la tolérance: rien n&apos;a été publié, la
                   décision vous revient.
                 </TableCell>
@@ -130,7 +135,7 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
 
             {editing === row.id && (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <RescheduleForm row={row} onDone={() => setEditing(null)} />
                 </TableCell>
               </TableRow>

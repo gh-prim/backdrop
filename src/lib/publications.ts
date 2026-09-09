@@ -35,6 +35,7 @@ export async function listPublications(ctx: OrgContext, personaId?: string) {
     select: {
       id: true,
       kind: true,
+      name: true,
       copy: true,
       status: true,
       scheduledAt: true,
@@ -72,54 +73,85 @@ export async function listPublications(ctx: OrgContext, personaId?: string) {
 }
 
 export type CreatePublicationInput = {
-  channelAccountId: string;
+  /** Un canal, ou plusieurs: chacun donne sa propre Publication. */
+  channelAccountIds: string[];
   kind: PubKind;
+  name: string;
   caption: string;
   scheduledAt: Date;
   variantIds: string[];
   audioId?: string | null;
 };
 
+/**
+ * Crée une Publication **par canal** sélectionné.
+ *
+ * Règle d'or de la section 3: une publication qui échoue ne fait jamais tomber
+ * ses sœurs. Un envoi multi-canal n'est donc pas un objet unique diffusé
+ * partout, mais N publications indépendantes, chacune avec son propre état,
+ * son propre workflow et son propre échec possible. Le `name` est ce qui les
+ * relie pour l'œil de l'opérateur.
+ *
+ * **Cette indépendance vaut à l'exécution, pas à la création.** Ici, tout est
+ * dans une seule transaction: si un canal refuse le média, rien n'est créé.
+ *
+ * La raison est qu'un refus à la création n'est pas un aléa de plateforme mais
+ * une erreur de saisie, que le Composer empêche déjà en désactivant les médias
+ * interdits. S'il en reste une, mieux vaut la renvoyer entière à l'opérateur
+ * qu'écrire un sous-ensemble qu'il n'a pas demandé — d'autant que le résultat
+ * dépendrait sinon de l'ordre de traitement des canaux, donc de rien.
+ */
 export async function createPublication(
   ctx: OrgContext,
   input: CreatePublicationInput,
-): Promise<{ id: string; platform: Platform }> {
-  const channel = await prisma.channelAccount.findFirst({
+): Promise<{ id: string; platform: Platform; channelAccountId: string }[]> {
+  const channels = await prisma.channelAccount.findMany({
     where: {
-      id: input.channelAccountId,
+      id: { in: input.channelAccountIds },
       persona: { organizationId: ctx.organizationId },
     },
     select: { id: true, platform: true },
   });
-  if (!channel) throw new Error("Canal introuvable dans cette organisation.");
 
-  // Les items sont créés dans la même transaction: le trigger de rating
-  // s'exécute à l'insertion, donc une publication interdite ne laisse aucune
-  // ligne derrière elle.
-  const publication = await prisma.$transaction(async (tx) => {
-    const created = await tx.publication.create({
-      data: {
+  if (channels.length !== input.channelAccountIds.length) {
+    throw new Error("Canal introuvable dans cette organisation.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const created: { id: string; platform: Platform; channelAccountId: string }[] = [];
+
+    for (const channel of channels) {
+      const row = await tx.publication.create({
+        data: {
+          channelAccountId: channel.id,
+          createdByUserId: ctx.userId,
+          kind: input.kind,
+          name: input.name,
+          copy: input.caption,
+          scheduledAt: input.scheduledAt,
+          status: PubStatus.SCHEDULED,
+          audioId: input.audioId ?? null,
+        },
+        select: { id: true },
+      });
+
+      // Le trigger de rating s'exécute à l'insertion de chaque item: une
+      // violation annule toute la transaction, tous canaux confondus.
+      for (const [position, variantId] of input.variantIds.entries()) {
+        await tx.publicationItem.create({
+          data: { publicationId: row.id, variantId, position },
+        });
+      }
+
+      created.push({
+        id: row.id,
+        platform: channel.platform,
         channelAccountId: channel.id,
-        createdByUserId: ctx.userId,
-        kind: input.kind,
-        copy: input.caption,
-        scheduledAt: input.scheduledAt,
-        status: PubStatus.SCHEDULED,
-        audioId: input.audioId ?? null,
-      },
-      select: { id: true },
-    });
-
-    for (const [position, variantId] of input.variantIds.entries()) {
-      await tx.publicationItem.create({
-        data: { publicationId: created.id, variantId, position },
       });
     }
 
     return created;
   });
-
-  return { id: publication.id, platform: channel.platform };
 }
 
 /**
