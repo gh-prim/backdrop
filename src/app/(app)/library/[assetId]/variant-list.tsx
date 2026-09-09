@@ -35,7 +35,7 @@ export function VariantList({
     <div className="space-y-4">
       {variants.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Aucun Variant. Dérivez un ratio ci-dessous.
+          No variants yet. Derive a ratio below.
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-3">
@@ -53,7 +53,7 @@ export function VariantList({
                   variant={variant.onR2 ? "secondary" : "outline"}
                   className="h-4 px-1 text-[9px]"
                 >
-                  {variant.onR2 ? "sur R2" : "pas sur R2"}
+                  {variant.onR2 ? "on R2" : "not on R2"}
                 </Badge>
                 {variant.onTelegram && (
                   <Badge variant="secondary" className="h-4 px-1 text-[9px]">
@@ -73,7 +73,7 @@ export function VariantList({
 
       {missing.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-          <span className="text-xs text-muted-foreground">Dériver un ratio:</span>
+          <span className="text-xs text-muted-foreground">Derive a ratio:</span>
           {missing.map((ratio) => (
             <Button
               key={ratio}
@@ -98,8 +98,8 @@ export function VariantList({
 
       {message && <p className="text-xs text-muted-foreground">{message}</p>}
       <p className="text-xs text-muted-foreground">
-        Chaque Variant est recadré depuis l&apos;original, jamais depuis un autre
-        Variant: recadrer un recadrage perdrait de l&apos;image à chaque passage.
+        Every variant is cropped from the original, never from another variant:
+        cropping a crop would lose image on every pass.
       </p>
     </div>
   );

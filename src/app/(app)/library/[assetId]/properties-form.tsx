@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { cn } from "cn";
 
 const RATINGS = [
-  { value: "SFW", label: "SFW", hint: "Publiable sur Instagram, poussé sur R2." },
-  { value: "SUGGESTIVE", label: "Suggestif", hint: "Interdit sur Instagram." },
-  { value: "NSFW", label: "NSFW", hint: "Interdit sur Instagram." },
+  { value: "SFW", label: "SFW", hint: "Publishable on Instagram, pushed to R2." },
+  { value: "SUGGESTIVE", label: "Suggestive", hint: "Blocked on Instagram." },
+  { value: "NSFW", label: "NSFW", hint: "Blocked on Instagram." },
 ] as const;
 
 export function PropertiesForm({
@@ -47,12 +47,12 @@ export function PropertiesForm({
         <input type="hidden" name="assetId" value={assetId} />
 
         <div className="space-y-1.5">
-          <Label htmlFor="assetName">Nom</Label>
+          <Label htmlFor="assetName">Name</Label>
           <Input
             id="assetName"
             name="name"
             defaultValue={name}
-            placeholder="Séance yoga parc"
+            placeholder="Park yoga session"
             className="h-8"
           />
         </div>
@@ -65,13 +65,13 @@ export function PropertiesForm({
             rows={3}
             defaultValue={description}
             maxLength={2000}
-            placeholder="Note interne: contexte, tenue, série…"
+            placeholder="Internal note: context, outfit, series…"
             className="w-full rounded-md border bg-transparent p-2 text-sm"
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label>Classification</Label>
+          <Label>Rating</Label>
           <input type="hidden" name="rating" value={selectedRating} />
           <div className="space-y-1">
             {RATINGS.map((option) => (
@@ -98,21 +98,21 @@ export function PropertiesForm({
             // Conséquence physique, pas seulement logique: l'URL publique
             // disparaît, sinon le fichier resterait téléchargeable (section 5).
             <p className="rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
-              Les Variants seront retirés de R2: un média non SFW ne conserve pas
-              d&apos;URL publique. Il faudra les redériver pour repasser en SFW.
+              Variants will be removed from R2: non-SFW media keeps no public URL.
+              You will need to derive them again to go back to SFW.
             </p>
           )}
           {usageCount > 0 && (
             <p className="text-[11px] text-muted-foreground">
-              Utilisé par {usageCount} publication{usageCount > 1 ? "s" : ""}: la base
-              refusera un rating que l&apos;un de leurs canaux n&apos;accepte pas.
+              Used by {usageCount} publication{usageCount > 1 ? "s" : ""}: the database
+              will refuse a rating one of their channels does not accept.
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           <Button type="submit" size="sm" disabled={pending}>
-            {pending ? "Enregistrement…" : "Enregistrer"}
+            {pending ? "Saving…" : "Save"}
           </Button>
           {state && !state.ok && (
             <span className="text-[11px] text-destructive">{state.error}</span>
@@ -127,8 +127,8 @@ export function PropertiesForm({
         {confirming ? (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              Supprimer définitivement ce média, ses Variants, ses fichiers locaux et
-              ses objets R2 ?
+              Permanently delete this media, its variants, its local files and its
+              R2 objects?
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -147,7 +147,7 @@ export function PropertiesForm({
                   router.refresh();
                 }}
               >
-                {deleting ? <Loader2 className="size-3.5 animate-spin" /> : "Supprimer"}
+                {deleting ? <Loader2 className="size-3.5 animate-spin" /> : "Delete"}
               </Button>
               <Button
                 type="button"
@@ -155,7 +155,7 @@ export function PropertiesForm({
                 variant="ghost"
                 onClick={() => setConfirming(false)}
               >
-                Annuler
+                Cancel
               </Button>
             </div>
             {deleteError && (
@@ -171,7 +171,7 @@ export function PropertiesForm({
             onClick={() => setConfirming(true)}
           >
             <Trash2 className="size-3.5" />
-            Supprimer ce média
+            Delete this media
           </Button>
         )}
       </div>

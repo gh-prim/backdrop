@@ -141,7 +141,7 @@ describe("publications", () => {
         scheduledAt: new Date(Date.now() + 3_600_000),
         variantIds: [variant.id],
       }),
-    ).rejects.toThrow(/introuvable/i);
+    ).rejects.toThrow(/not found/i);
 
     expect(await prisma.publication.count()).toBe(0);
   });

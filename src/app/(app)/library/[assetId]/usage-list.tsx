@@ -33,7 +33,7 @@ export function UsageList({ usages }: { usages: Usage[] }) {
   if (usages.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Jamais utilisé. Aucune publication ne référence ce média.
+        Never used. No publication references this media.
       </p>
     );
   }
@@ -52,13 +52,13 @@ export function UsageList({ usages }: { usages: Usage[] }) {
             {usage.status}
           </Badge>
           <Link href="/publications" className="font-medium hover:underline">
-            {usage.name || "(sans nom)"}
+            {usage.name || "(untitled)"}
           </Link>
           <span className="text-xs text-muted-foreground">
             {usage.platform} · {usage.kind} · {usage.ratio}
           </span>
           <span className="ml-auto text-xs text-muted-foreground">
-            {new Date(usage.publishedAt ?? usage.scheduledAt).toLocaleString("fr-FR", {
+            {new Date(usage.publishedAt ?? usage.scheduledAt).toLocaleString("en-GB", {
               dateStyle: "short",
               timeStyle: "short",
             })}

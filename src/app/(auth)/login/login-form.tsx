@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const schema = z.object({
-  email: z.email("Adresse email invalide."),
-  password: z.string().min(1, "Mot de passe requis."),
+  email: z.email("Invalid email address."),
+  password: z.string().min(1, "Password required."),
 });
 
 type Values = z.infer<typeof schema>;
@@ -33,7 +33,7 @@ export function LoginForm() {
       password: values.password,
     });
     if (error) {
-      setError("Identifiants invalides.");
+      setError("Invalid credentials.");
       return;
     }
     router.push("/");
@@ -51,7 +51,7 @@ export function LoginForm() {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="password">Mot de passe</Label>
+        <Label htmlFor="password">Password</Label>
         <Input
           id="password"
           type="password"
@@ -66,7 +66,7 @@ export function LoginForm() {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? "Connexion…" : "Se connecter"}
+        {isSubmitting ? "Signing in…" : "Sign in"}
       </Button>
     </form>
   );

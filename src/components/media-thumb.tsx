@@ -90,7 +90,7 @@ export function MediaThumb({
           role="button"
           tabIndex={0}
           onClick={(event) => {
-            // Révéler n'est pas sélectionner: la vignette peut être imbriquée
+            // Reveal n'est pas sélectionner: la vignette peut être imbriquée
             // dans un contrôle de sélection (Composer), qui ne doit pas
             // recevoir ce clic.
             event.stopPropagation();
@@ -106,7 +106,7 @@ export function MediaThumb({
           className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-1 bg-background/40 text-xs text-foreground"
         >
           <EyeOff className="size-4" />
-          Révéler
+          Reveal
         </span>
       )}
 
@@ -143,7 +143,7 @@ export function BlurPreferenceToggle() {
         checked={!blurDisabled}
         onChange={(event) => setBlurDisabled(!event.target.checked)}
       />
-      Flouter les médias sensibles
+      Blur sensitive media
     </label>
   );
 }

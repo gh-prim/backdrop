@@ -73,7 +73,7 @@ export async function searchInstagramAudioAction(
   const ctx = await requireOrgContext();
 
   const adapter = await instagramAdapterFor(ctx, channelAccountId);
-  if (!adapter) return { ok: false, error: "Canal Instagram introuvable." };
+  if (!adapter) return { ok: false, error: "Instagram channel not found." };
 
   try {
     const tracks = await adapter.searchAudio(query, audioType);
@@ -84,7 +84,7 @@ export async function searchInstagramAudioAction(
     };
   } catch (error) {
     const detail = error instanceof ChannelError ? error.message : String(error);
-    return { ok: false, error: `Catalogue audio indisponible: ${detail}` };
+    return { ok: false, error: `Audio catalogue unavailable: ${detail}` };
   }
 }
 
@@ -106,12 +106,12 @@ export async function getInstagramAudioAction(
   const ctx = await requireOrgContext();
 
   const adapter = await instagramAdapterFor(ctx, channelAccountId);
-  if (!adapter) return { ok: false, error: "Canal Instagram introuvable." };
+  if (!adapter) return { ok: false, error: "Instagram channel not found." };
 
   try {
     return { ok: true, detail: await adapter.getAudio(audioId) };
   } catch (error) {
     const detail = error instanceof ChannelError ? error.message : String(error);
-    return { ok: false, error: `Piste indisponible: ${detail}` };
+    return { ok: false, error: `Track unavailable: ${detail}` };
   }
 }

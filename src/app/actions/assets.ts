@@ -8,9 +8,9 @@ import { createAssetFromUpload } from "@/lib/assets";
 import { startIngestWorkflow } from "@/temporal/client";
 
 const schema = z.object({
-  personaId: z.string().min(1, "Persona requise."),
+  personaId: z.string().min(1, "Persona required."),
   rating: z.enum(Rating),
-  ratios: z.array(z.string()).min(1, "Au moins un ratio."),
+  ratios: z.array(z.string()).min(1, "At least one ratio."),
 });
 
 export type ActionResult =
@@ -31,7 +31,7 @@ export async function uploadAssetAction(
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, error: "Aucun fichier." };
+    return { ok: false, error: "No file." };
   }
 
   const parsed = schema.safeParse({
@@ -40,7 +40,7 @@ export async function uploadAssetAction(
     ratios: formData.getAll("ratios").map(String),
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   const result = await createAssetFromUpload(ctx, {
@@ -61,7 +61,7 @@ export async function uploadAssetAction(
       if (!(error as Error).message?.includes("already started")) {
         return {
           ok: false,
-          error: `Asset enregistré, mais la dérivation ${ratio} n'a pas démarré: ${(error as Error).message}`,
+          error: `Asset saved, but the ${ratio} derivation did not start: ${(error as Error).message}`,
         };
       }
     }
@@ -72,7 +72,7 @@ export async function uploadAssetAction(
     ok: true,
     assetId: result.assetId,
     message: result.deduplicated
-      ? "Fichier déjà présent, dérivations relancées."
-      : `Asset enregistré, dérivation lancée pour ${started.join(", ")}.`,
+      ? "File already present, derivations restarted."
+      : `Asset saved, derivation started for ${started.join(", ")}.`,
   };
 }

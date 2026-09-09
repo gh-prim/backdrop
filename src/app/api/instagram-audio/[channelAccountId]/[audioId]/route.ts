@@ -23,26 +23,26 @@ export async function GET(
   }: { params: Promise<{ channelAccountId: string; audioId: string }> },
 ) {
   const ctx = await getOrgContext();
-  if (!ctx) return new NextResponse("Non authentifié", { status: 401 });
+  if (!ctx) return new NextResponse("Not authenticated", { status: 401 });
 
   const { channelAccountId, audioId } = await params;
   const adapter = await instagramAdapterFor(ctx, channelAccountId);
-  if (!adapter) return new NextResponse("Canal introuvable", { status: 404 });
+  if (!adapter) return new NextResponse("Channel not found", { status: 404 });
 
   let downloadUrl: string | null = null;
   try {
     downloadUrl = (await adapter.getAudio(audioId)).downloadUrl;
   } catch {
-    return new NextResponse("Piste indisponible", { status: 502 });
+    return new NextResponse("Track unavailable", { status: 502 });
   }
 
   // Musique sous licence: Meta n'en distribue pas le master. Ce n'est pas une
   // erreur, c'est la règle — le client bascule alors sur le lien Instagram.
-  if (!downloadUrl) return new NextResponse("Écoute non distribuée", { status: 404 });
+  if (!downloadUrl) return new NextResponse("Playback not distributed", { status: 404 });
 
   const upstream = await fetch(downloadUrl);
   if (!upstream.ok || !upstream.body) {
-    return new NextResponse("Lecture impossible", { status: 502 });
+    return new NextResponse("Playback failed", { status: 502 });
   }
 
   return new NextResponse(upstream.body, {

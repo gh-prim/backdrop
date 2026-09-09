@@ -59,7 +59,7 @@ export async function requireOrgContext(): Promise<OrgContext> {
 export async function requireOwner(): Promise<OrgContext> {
   const ctx = await requireOrgContext();
   if (ctx.role !== "owner") {
-    throw new Error("Action réservée au rôle owner.");
+    throw new Error("Owner role required for this action.");
   }
   return ctx;
 }

@@ -17,7 +17,7 @@ export default async function ComposerPage() {
     return (
       <Card>
         <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Aucune persona. Un owner peut en créer une depuis les Réglages.
+          No persona yet. An owner can create one from Settings.
         </CardContent>
       </Card>
     );
@@ -32,7 +32,7 @@ export default async function ComposerPage() {
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
         title="Composer"
-        description="Programmation, nom, canaux, médias: les contraintes d'un canal s'appliquent aux médias que vous pouvez choisir ensuite."
+        description="Schedule, name, channels, media: a channel's limits decide which media you can pick next."
       />
       <ComposerForm
         personaName={personas.find((p) => p.id === personaId)?.name ?? ""}

@@ -6,8 +6,8 @@ import { acceptInvitation } from "@/lib/invitations";
 
 const schema = z.object({
   invitationId: z.string().min(1),
-  name: z.string().min(1, "Nom requis.").max(80),
-  password: z.string().min(12, "12 caractères minimum."),
+  name: z.string().min(1, "Name required.").max(80),
+  password: z.string().min(12, "12 characters minimum."),
 });
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -27,7 +27,7 @@ export async function acceptInvitationAction(
     password: formData.get("password"),
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   try {
@@ -36,7 +36,7 @@ export async function acceptInvitationAction(
       password: parsed.data.password,
     });
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Échec." };
+    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 
   redirect("/login");

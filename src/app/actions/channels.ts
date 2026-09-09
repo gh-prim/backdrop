@@ -11,8 +11,8 @@ import { ChannelError } from "@/lib/channels/types";
 
 const schema = z.object({
   personaId: z.string().min(1),
-  igUserId: z.string().min(1, "ig_user_id requis."),
-  accessToken: z.string().min(20, "Token trop court."),
+  igUserId: z.string().min(1, "ig_user_id required."),
+  accessToken: z.string().min(20, "Token too short."),
   pageId: z.string().optional(),
 });
 
@@ -47,20 +47,20 @@ export async function connectInstagramAccountAction(
     pageId: String(formData.get("pageId") ?? "").trim() || undefined,
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   const persona = await prisma.persona.findFirst({
     where: { id: parsed.data.personaId, organizationId: ctx.organizationId },
     select: { id: true },
   });
-  if (!persona) return { ok: false, error: "Persona introuvable." };
+  if (!persona) return { ok: false, error: "Persona not found." };
 
   if (!process.env.META_APP_ID || !process.env.META_APP_SECRET) {
     return {
       ok: false,
       error:
-        "META_APP_ID et META_APP_SECRET manquants dans l'environnement: impossible d'échanger le token contre un long-lived.",
+        "META_APP_ID and META_APP_SECRET are missing from the environment: the token cannot be exchanged for a long-lived one.",
     };
   }
 
@@ -77,7 +77,7 @@ export async function connectInstagramAccountAction(
     tokenExpiresAt = exchanged.expiresAt;
   } catch (error) {
     const detail = error instanceof ChannelError ? error.message : String(error);
-    return { ok: false, error: `Échange du token refusé par Meta: ${detail}` };
+    return { ok: false, error: `Token exchange refused by Meta: ${detail}` };
   }
 
   try {
@@ -89,7 +89,7 @@ export async function connectInstagramAccountAction(
     const detail = error instanceof ChannelError ? error.message : String(error);
     return {
       ok: false,
-      error: `Token accepté mais le compte ne répond pas (${detail}). Vérifier l'ig_user_id, et que le compte a bien accepté l'invitation de testeur.`,
+      error: `Token accepted but the account does not answer (${detail}). Check the ig_user_id, and that the account accepted the tester invitation.`,
     };
   }
 
@@ -118,7 +118,7 @@ export async function connectInstagramAccountAction(
     update: { credentials, tokenExpiresAt },
   });
 
-  revalidatePath("/reglages");
+  revalidatePath("/settings");
   revalidatePath("/");
   return { ok: true };
 }

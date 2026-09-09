@@ -48,7 +48,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("fr-FR", {
+  return new Date(iso).toLocaleString("en-GB", {
     dateStyle: "short",
     timeStyle: "short",
   });
@@ -67,13 +67,13 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>État</TableHead>
-          <TableHead>Nom</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Name</TableHead>
           <TableHead>Persona</TableHead>
           <TableHead>Type</TableHead>
-          <TableHead>Programmée</TableHead>
-          <TableHead>Légende</TableHead>
-          <TableHead>Auteur</TableHead>
+          <TableHead>Scheduled</TableHead>
+          <TableHead>Caption</TableHead>
+          <TableHead>Author</TableHead>
           <TableHead />
         </TableRow>
       </TableHeader>
@@ -127,8 +127,8 @@ export function PublicationsTable({ rows }: { rows: PublicationRow[] }) {
             {row.status === "MISSED" && (
               <TableRow>
                 <TableCell colSpan={8} className="pt-0 text-xs text-muted-foreground">
-                  Échéance dépassée au-delà de la tolérance: rien n&apos;a été publié, la
-                  décision vous revient.
+                  Overdue beyond the tolerance window: nothing was published, the
+                  call is yours.
                 </TableCell>
               </TableRow>
             )}
@@ -168,7 +168,7 @@ function RowActions({
             className="h-7 px-2 text-xs"
             onClick={() => setEditing(editing === row.id ? null : row.id)}
           >
-            Modifier
+            Edit
           </Button>
           <Button
             size="sm"
@@ -177,7 +177,7 @@ function RowActions({
             disabled={pending}
             onClick={() => startTransition(() => void cancelPublicationAction(row.id))}
           >
-            Annuler
+            Cancel
           </Button>
         </>
       )}
@@ -189,7 +189,7 @@ function RowActions({
           disabled={pending}
           onClick={() => startTransition(() => void publishMissedNowAction(row.id))}
         >
-          Publier maintenant
+          Publish now
         </Button>
       )}
       {row.remoteId && (
@@ -228,7 +228,7 @@ function RescheduleForm({
         name="caption"
         defaultValue={row.caption}
         className="h-8 w-96"
-        placeholder="Légende"
+        placeholder="Caption"
       />
       <Input
         name="scheduledAt"
@@ -237,10 +237,10 @@ function RescheduleForm({
         className="h-8 w-52"
       />
       <Button size="sm" type="submit" disabled={pending}>
-        Enregistrer
+        Save
       </Button>
       <Button size="sm" variant="ghost" type="button" onClick={onDone}>
-        Fermer
+        Close
       </Button>
       {state && !state.ok && (
         <p className="w-full text-xs text-destructive">{state.error}</p>

@@ -24,7 +24,7 @@ export default async function PublicationsPage() {
       {publications.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Aucune publication. Le Composer en programme une.
+            No publications yet. The Composer schedules one.
           </CardContent>
         </Card>
       ) : (

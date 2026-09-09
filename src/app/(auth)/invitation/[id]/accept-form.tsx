@@ -29,12 +29,12 @@ export function AcceptForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="name">Nom</Label>
+        <Label htmlFor="name">Name</Label>
         <Input id="name" name="name" required autoComplete="name" />
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="password">Mot de passe</Label>
+        <Label htmlFor="password">Password</Label>
         <Input
           id="password"
           name="password"
@@ -43,13 +43,13 @@ export function AcceptForm({
           minLength={12}
           autoComplete="new-password"
         />
-        <p className="text-xs text-muted-foreground">12 caractères minimum.</p>
+        <p className="text-xs text-muted-foreground">12 characters minimum.</p>
       </div>
 
       {state && !state.ok && <p className="text-sm text-destructive">{state.error}</p>}
 
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Création…" : "Créer mon compte"}
+        {pending ? "Creating…" : "Create my account"}
       </Button>
     </form>
   );

@@ -19,12 +19,12 @@ import {
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
 const createSchema = z.object({
-  channelAccountIds: z.array(z.string().min(1)).min(1, "Au moins un canal."),
+  channelAccountIds: z.array(z.string().min(1)).min(1, "At least one channel."),
   kind: z.enum(PubKind),
-  name: z.string().min(1, "Nom requis.").max(120),
-  caption: z.string().max(2200, "2200 caractères maximum sur Instagram."),
+  name: z.string().min(1, "Name required.").max(120),
+  caption: z.string().max(2200, "2200 characters maximum on Instagram."),
   scheduledAt: z.coerce.date(),
-  variantIds: z.array(z.string().min(1)).min(1, "Au moins un média."),
+  variantIds: z.array(z.string().min(1)).min(1, "At least one media."),
   audioId: z.string().optional(),
   audioVolume: z.coerce.number().int().min(0).max(100).optional(),
   videoVolume: z.coerce.number().int().min(0).max(100).optional(),
@@ -53,14 +53,14 @@ export async function schedulePublicationAction(
     videoVolume: String(formData.get("videoVolume") ?? "").trim() || undefined,
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   if (parsed.data.kind !== "CAROUSEL" && parsed.data.variantIds.length > 1) {
-    return { ok: false, error: "Un post simple ou un Reel ne porte qu'un média." };
+    return { ok: false, error: "A single post or a Reel carries one media only." };
   }
   if (parsed.data.kind === "CAROUSEL" && parsed.data.variantIds.length > 10) {
-    return { ok: false, error: "Un carrousel accepte 10 éléments au maximum." };
+    return { ok: false, error: "A carousel takes 10 items at most." };
   }
 
   let created: { id: string; platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE" }[];
@@ -74,10 +74,10 @@ export async function schedulePublicationAction(
       return {
         ok: false,
         error:
-          "Rejeté par la base: au moins un média dépasse le rating maximal autorisé sur ce canal.",
+          "Rejected by the database: at least one media exceeds the maximum rating allowed on this channel.",
       };
     }
-    return { ok: false, error: message || "Création impossible." };
+    return { ok: false, error: message || "Could not create." };
   }
 
   // Un workflow par publication: démarrage à la programmation, pas à
@@ -97,17 +97,17 @@ export async function schedulePublicationAction(
   if (notStarted.length > 0) {
     return {
       ok: false,
-      error: `Publications enregistrées, mais des workflows n'ont pas démarré — ${notStarted.join(" ; ")}`,
+      error: `Publications saved, but some workflows did not start — ${notStarted.join(" ; ")}`,
     };
   }
 
   const count = created.length;
-  const suffix = count > 1 ? `s (${count} canaux)` : "";
+  const suffix = count > 1 ? `s (${count} channels)` : "";
   return {
     ok: true,
     message: publishNow
-      ? `Publication${suffix} lancée${count > 1 ? "s" : ""}, elle part maintenant.`
-      : `Publication${suffix} programmée${count > 1 ? "s" : ""}.`,
+      ? `Publication${suffix} sent, going out now.`
+      : `Publication${suffix} scheduled.`,
   };
 }
 
@@ -131,7 +131,7 @@ export async function reschedulePublicationAction(
     scheduledAt: formData.get("scheduledAt"),
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   try {
@@ -145,7 +145,7 @@ export async function reschedulePublicationAction(
   }
 
   revalidatePath("/publications");
-  return { ok: true, message: "Publication réenregistrée." };
+  return { ok: true, message: "Publication saved." };
 }
 
 export async function cancelPublicationAction(publicationId: string): Promise<void> {

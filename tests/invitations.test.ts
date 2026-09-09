@@ -87,7 +87,7 @@ describe("invitations", () => {
     await acceptInvitation(invitation.id, { name: "A", password: "mot-de-passe-long-1" });
     await expect(
       acceptInvitation(invitation.id, { name: "B", password: "mot-de-passe-long-2" }),
-    ).rejects.toThrow(/invalide ou expirée/i);
+    ).rejects.toThrow(/invalid or expired/i);
 
     expect(await prisma.user.count({ where: { email: "double@test.local" } })).toBe(1);
   });
@@ -108,7 +108,7 @@ describe("invitations", () => {
 
     await expect(
       acceptInvitation(invitation.id, { name: "Tard", password: "mot-de-passe-long-3" }),
-    ).rejects.toThrow(/invalide ou expirée/i);
+    ).rejects.toThrow(/invalid or expired/i);
     expect(await prisma.user.count({ where: { email: "tard@test.local" } })).toBe(0);
   });
 
@@ -121,7 +121,7 @@ describe("invitations", () => {
 
     await expect(
       acceptInvitation(invitation.id, { name: "X", password: "mot-de-passe-long-4" }),
-    ).rejects.toThrow(/invalide ou expirée/i);
+    ).rejects.toThrow(/invalid or expired/i);
     expect(await prisma.user.count({ where: { email: "annule@test.local" } })).toBe(0);
   });
 

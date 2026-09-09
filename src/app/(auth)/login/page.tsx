@@ -11,7 +11,7 @@ export default async function LoginPage() {
         <div className="space-y-1">
           <h1 className="text-xl font-black tracking-tight">Backdrop</h1>
           <p className="text-sm text-muted-foreground">
-            Accès sur invitation uniquement.
+            Access by invitation only.
           </p>
         </div>
         <LoginForm />

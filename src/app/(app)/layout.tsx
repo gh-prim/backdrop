@@ -9,8 +9,8 @@ const NAV = [
   { href: "/library", label: "Library" },
   { href: "/composer", label: "Composer" },
   { href: "/publications", label: "Publications" },
-  { href: "/calendrier", label: "Calendrier" },
-  { href: "/reglages", label: "Réglages" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export default async function AppLayout({

@@ -12,14 +12,14 @@ const lato = Lato({
 
 export const metadata: Metadata = {
   title: "Backdrop",
-  description: "Administration multi-persona: Instagram, Telegram, Fanvue.",
+  description: "Multi-persona operations for Instagram, Telegram and Fanvue.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // Dark mode uniquement (spec 6.1). La classe est posée sur <html> pour
   // laisser la porte ouverte à un thème clair plus tard, sans refonte.
   return (
-    <html lang="fr" className="dark">
+    <html lang="en" className="dark">
       <body className={`${lato.variable} font-sans antialiased`}>
         {children}
         <Toaster />

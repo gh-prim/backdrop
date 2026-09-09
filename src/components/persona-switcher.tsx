@@ -52,7 +52,7 @@ export function PersonaSwitcher({
           ) : (
             <>
               <Users className="size-3.5 text-muted-foreground" />
-              <span>Toutes les personas</span>
+              <span>All personas</span>
             </>
           )}
         </span>
@@ -62,11 +62,11 @@ export function PersonaSwitcher({
       <DropdownMenuContent align="start" className="min-w-64">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            Persona active
+            Active persona
           </DropdownMenuLabel>
           <DropdownMenuItem onClick={() => choose(ALL_PERSONAS)} className="gap-2">
             <Users className="size-3.5" />
-            <span className="flex-1">Toutes les personas</span>
+            <span className="flex-1">All personas</span>
             {selectedId === ALL_PERSONAS && <Check className="size-3.5" />}
           </DropdownMenuItem>
         </DropdownMenuGroup>

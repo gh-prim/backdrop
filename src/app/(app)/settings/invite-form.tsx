@@ -17,7 +17,7 @@ export function InviteForm() {
         name="email"
         type="email"
         required
-        placeholder="email@equipe.local"
+        placeholder="email@team.local"
         className="h-8 w-64"
       />
       <select
@@ -29,14 +29,14 @@ export function InviteForm() {
         <option value="owner">owner</option>
       </select>
       <Button type="submit" size="sm" disabled={pending}>
-        {pending ? "Invitation…" : "Inviter"}
+        {pending ? "Inviting…" : "Invite"}
       </Button>
       {state && !state.ok && (
         <p className="w-full text-xs text-destructive">{state.error}</p>
       )}
       {state?.ok && (
         <p className="w-full text-xs text-muted-foreground">
-          Invitation créée. Copiez le lien ci-dessous et transmettez-le.
+          Invitation created. Copy the link below and pass it along.
         </p>
       )}
     </form>

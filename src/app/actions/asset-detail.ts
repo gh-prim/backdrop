@@ -36,7 +36,7 @@ export async function updateAssetAction(
     rating: formData.get("rating"),
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   try {
@@ -53,8 +53,8 @@ export async function updateAssetAction(
       ok: true,
       message:
         removedFromR2 > 0
-          ? `Enregistré. ${removedFromR2} fichier${removedFromR2 > 1 ? "s" : ""} retiré${removedFromR2 > 1 ? "s" : ""} de R2: un média non SFW ne garde pas d'URL publique.`
-          : "Enregistré.",
+          ? `Saved. ${removedFromR2} file${removedFromR2 > 1 ? "s" : ""} removed from R2: non-SFW media keeps no public URL.`
+          : "Saved.",
     };
   } catch (error) {
     const message = (error as Error).message ?? "";
@@ -62,10 +62,10 @@ export async function updateAssetAction(
       return {
         ok: false,
         error:
-          "Refusé par la base: ce média est utilisé par une publication sur un canal qui n'accepte pas ce rating. Annulez la publication avant de le reclasser.",
+          "Refused by the database: this media is used by a publication on a channel that does not accept this rating. Cancel that publication before reclassifying.",
       };
     }
-    return { ok: false, error: message || "Enregistrement impossible." };
+    return { ok: false, error: message || "Could not save." };
   }
 }
 
@@ -99,17 +99,17 @@ export async function deriveVariantAction(
     where: { id: assetId, persona: { organizationId: ctx.organizationId } },
     select: { id: true },
   });
-  if (!asset) return { ok: false, error: "Asset introuvable." };
+  if (!asset) return { ok: false, error: "Asset not found." };
 
   try {
     await startIngestWorkflow({ assetId, ratio });
   } catch (error) {
     const message = (error as Error).message ?? "";
     if (!message.includes("already started")) {
-      return { ok: false, error: `Dérivation non démarrée: ${message}` };
+      return { ok: false, error: `Derivation did not start: ${message}` };
     }
   }
 
   revalidatePath(`/library/${assetId}`);
-  return { ok: true, message: `Dérivation ${ratio} lancée.` };
+  return { ok: true, message: `${ratio} derivation started.` };
 }

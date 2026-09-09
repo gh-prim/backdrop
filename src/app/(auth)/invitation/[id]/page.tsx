@@ -16,13 +16,13 @@ export default async function InvitationPage({
           <h1 className="text-xl font-black tracking-tight">Backdrop</h1>
           {invitation ? (
             <p className="text-sm text-muted-foreground">
-              Invitation à rejoindre {invitation.organizationName} en tant que{" "}
+              Invitation to join {invitation.organizationName} as{" "}
               <span className="text-foreground">{invitation.role}</span>.
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Cette invitation est invalide, déjà utilisée ou expirée. Demandez-en une
-              nouvelle à un owner.
+              This invitation is invalid, already used or expired. Ask an owner for
+              a new one.
             </p>
           )}
         </div>

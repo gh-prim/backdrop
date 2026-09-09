@@ -33,18 +33,18 @@ export async function createAssetFromUpload(
     where: { id: input.personaId, organizationId: ctx.organizationId },
     select: { id: true },
   });
-  if (!persona) return { ok: false, error: "Persona introuvable." };
+  if (!persona) return { ok: false, error: "Persona not found." };
 
   const extension = extname(input.file.name).toLowerCase();
   if (!ALLOWED_EXTENSIONS.has(extension)) {
     return {
       ok: false,
-      error: `Extension non supportée: ${extension || "(aucune)"}. Attendu: ${[...ALLOWED_EXTENSIONS].join(", ")}.`,
+      error: `Unsupported extension: ${extension || "(none)"}. Expected: ${[...ALLOWED_EXTENSIONS].join(", ")}.`,
     };
   }
 
   const bytes = Buffer.from(await input.file.arrayBuffer());
-  if (bytes.length === 0) return { ok: false, error: "Fichier vide." };
+  if (bytes.length === 0) return { ok: false, error: "Empty file." };
 
   const sha256 = createHash("sha256").update(bytes).digest("hex");
 
@@ -144,7 +144,7 @@ export async function getAssetDetail(ctx: OrgContext, assetId: string) {
 export class AssetInUseError extends Error {
   constructor(count: number) {
     super(
-      `Ce média est utilisé par ${count} publication${count > 1 ? "s" : ""}. Supprimez-les d'abord, ou gardez le média: son historique disparaîtrait avec lui.`,
+      `This media is used by ${count} publication${count > 1 ? "s" : ""}. Delete them first, or keep the media: its history would go with it.`,
     );
     this.name = "AssetInUseError";
   }
@@ -182,7 +182,7 @@ export async function updateAsset(
       variants: { select: { id: true, r2Key: true } },
     },
   });
-  if (!asset) throw new Error("Asset introuvable.");
+  if (!asset) throw new Error("Asset not found.");
 
   await prisma.asset.update({
     where: { id: assetId },
@@ -230,7 +230,7 @@ export async function deleteAsset(
       variants: { select: { id: true, localPath: true, r2Key: true } },
     },
   });
-  if (!asset) throw new Error("Asset introuvable.");
+  if (!asset) throw new Error("Asset not found.");
 
   const usage = await prisma.publicationItem.count({
     where: { variant: { assetId } },

@@ -105,7 +105,7 @@ export function AudioPicker({
       <div className="flex items-center justify-between gap-2">
         <Label className="flex items-center gap-1.5">
           <Music className="size-3.5" />
-          Musique Instagram
+          Instagram music
         </Label>
         {selected && (
           <Button
@@ -116,7 +116,7 @@ export function AudioPicker({
             onClick={() => onSelect(null)}
           >
             <X className="size-3" />
-            Retirer
+            Remove
           </Button>
         )}
       </div>
@@ -131,20 +131,19 @@ export function AudioPicker({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <VolumeSlider
-              label="Volume de la musique"
+              label="Music volume"
               value={selected.audioVolume}
               onChange={(audioVolume) => onSelect({ ...selected, audioVolume })}
             />
             <VolumeSlider
-              label="Volume de la vidéo"
+              label="Video volume"
               value={selected.videoVolume}
               onChange={(videoVolume) => onSelect({ ...selected, videoVolume })}
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            Vidéo à 0 si la musique est déjà incrustée au montage, sinon vous
-            l&apos;entendrez deux fois. Aucune prévisualisation n&apos;existe: ce qui
-            est réglé ici part en production tel quel.
+            Set video to 0 if the music is already baked into the edit, otherwise
+            you will hear it twice. What is set here ships as-is.
           </p>
         </div>
       ) : (
@@ -152,8 +151,8 @@ export function AudioPicker({
           <div className="flex gap-1 rounded-md border p-0.5 text-xs">
             {(
               [
-                ["music", "Musique"],
-                ["original_sound", "Sons originaux"],
+                ["music", "Music"],
+                ["original_sound", "Original sounds"],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -185,7 +184,7 @@ export function AudioPicker({
                   run(query);
                 }
               }}
-              placeholder="Rechercher un titre ou un artiste"
+              placeholder="Search a title or an artist"
               className="h-8"
             />
             <Button
@@ -206,9 +205,9 @@ export function AudioPicker({
           {result?.ok && (
             <p className="text-xs text-muted-foreground">
               {result.trending
-                ? "Tendances du moment"
-                : `${tracks.length} résultat${tracks.length > 1 ? "s" : ""}`}
-              {pending && " — recherche…"}
+                ? "Trending now"
+                : `${tracks.length} result${tracks.length > 1 ? "s" : ""}`}
+              {pending && " — searching…"}
             </p>
           )}
 
@@ -282,7 +281,7 @@ export function AudioPicker({
                       preview(track.audioId);
                     }}
                     className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                    title="Écouter"
+                    title="Play"
                   >
                     <Play className="size-3" />
                   </button>
@@ -309,11 +308,10 @@ export function AudioPicker({
                         className="flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
                       >
                         <ExternalLink className="size-3" />
-                        Écoute impossible ici pour une piste sous licence — ouvrir sur
-                        Instagram
+                        Licensed track: cannot be played here — open on Instagram
                       </a>
                     ) : (
-                      <p className="text-xs text-destructive">Piste indisponible.</p>
+                      <p className="text-xs text-destructive">Track unavailable.</p>
                     )}
                   </div>
                 )}

@@ -319,6 +319,10 @@ Trois emplacements, trois rôles distincts. C'est aussi un garde-fou de sécurit
 
 ### 6.1 Interface
 
+**Interface en anglais.** Le spec, les commentaires de code et les échanges d'équipe restent en français; seul ce que voit l'opérateur est en anglais. Pas de bilingue, pas de catalogue de messages, pas de sélecteur de langue: une seule langue d'interface, remplacée à la source. Le jour où un second idiome devient nécessaire, ce sera une décision à inscrire ici, avec le coût d'extraction des chaînes qu'elle implique.
+
+Les dates sont formatées en `en-GB`: ordre jour/mois et heures sur 24, c'est-à-dire le format le moins ambigu pour une équipe francophone qui lit une interface anglaise.
+
 **Dark mode uniquement.** Pas de thème clair, pas de sélecteur. Les tokens sont définis en variables CSS sous la classe `dark` appliquée sur `<html>`, ce qui laisse la porte ouverte à un thème clair plus tard sans refonte, mais il n'est pas construit et pas maintenu.
 
 **shadcn/ui, composants copiés dans le repo** via le CLI, donc éditables et versionnés avec le reste. Corollaire: on modifie le composant local plutôt que de l'envelopper dans une surcouche. Pas d'autre bibliothèque de composants ajoutée par-dessus.

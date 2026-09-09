@@ -41,11 +41,11 @@ const RATING_RANK: Record<Rating, number> = { SFW: 0, SUGGESTIVE: 1, NSFW: 2 };
  * couche pédagogique du garde-fou de la section 9, dans le bon sens de lecture.
  */
 const STEPS = [
-  { key: "schedule", label: "Programmation" },
-  { key: "name", label: "Nom" },
-  { key: "channels", label: "Canaux" },
-  { key: "media", label: "Médias" },
-  { key: "publish", label: "Légende et envoi" },
+  { key: "schedule", label: "Schedule" },
+  { key: "name", label: "Name" },
+  { key: "channels", label: "Channels" },
+  { key: "media", label: "Media" },
+  { key: "publish", label: "Caption and send" },
 ] as const;
 
 function defaultScheduledAt(): string {
@@ -191,7 +191,7 @@ export function ComposerForm({
           {step === 0 && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="scheduledAtInput">Date et heure</Label>
+                <Label htmlFor="scheduledAtInput">Date and time</Label>
                 <Input
                   id="scheduledAtInput"
                   type="datetime-local"
@@ -207,40 +207,39 @@ export function ComposerForm({
                   checked={publishNow}
                   onChange={(event) => setPublishNow(event.target.checked)}
                 />
-                Publier tout de suite
+                Publish right away
               </label>
               <p className="text-xs text-muted-foreground">
-                L&apos;horloge est tenue par l&apos;application. Une publication dont
-                l&apos;échéance est dépassée de plus que la tolérance ne part pas: elle
-                attend votre décision.
+                The clock stays on the application side. A publication running later
+                than the tolerance window does not go out: it waits for your call.
               </p>
             </div>
           )}
 
           {step === 1 && (
             <div className="space-y-1.5">
-              <Label htmlFor="nameInput">Nom de la publication</Label>
+              <Label htmlFor="nameInput">Publication name</Label>
               <Input
                 id="nameInput"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Séance yoga parc — septembre"
+                placeholder="Park yoga session — September"
                 className="h-8 w-full max-w-lg"
                 autoFocus
               />
               <p className="text-xs text-muted-foreground">
-                Libellé interne, jamais publié. Il relie entre elles les publications
-                sœurs d&apos;un même envoi multi-canal.
+                Internal label, never published. It ties together the sibling
+                publications of one multi-channel send.
               </p>
             </div>
           )}
 
           {step === 2 && (
             <div className="space-y-3">
-              <Label>Canaux — {personaName}</Label>
+              <Label>Channels — {personaName}</Label>
               {channels.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Aucun canal connecté pour cette persona.
+                  No channel connected for this persona.
                 </p>
               )}
               <div className="flex flex-wrap gap-2">
@@ -268,8 +267,8 @@ export function ComposerForm({
               </div>
               {chosenChannels.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Une publication distincte sera créée par canal: l&apos;échec de
-                  l&apos;une ne fait pas tomber les autres.
+                  One publication is created per channel: a failure on one does not
+                  bring down the others.
                 </p>
               )}
             </div>
@@ -291,14 +290,14 @@ export function ComposerForm({
                     }}
                     className="h-8 rounded-md border bg-transparent px-2 text-sm"
                   >
-                    <option value="SINGLE">Post simple</option>
-                    <option value="CAROUSEL">Carrousel</option>
+                    <option value="SINGLE">Single post</option>
+                    <option value="CAROUSEL">Carousel</option>
                     <option value="REEL">Reel</option>
                   </select>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {selected.length} sélectionné{selected.length > 1 ? "s" : ""}
-                  {kind === "CAROUSEL" && " — jusqu'à 10, dans l'ordre choisi"}
+                  {selected.length} selected
+                  {kind === "CAROUSEL" && " — up to 10, in the order you pick"}
                 </span>
               </div>
 
@@ -320,11 +319,11 @@ export function ComposerForm({
                       }}
                     />
                     <span>
-                      Ajouter une musique
+                      Add music
                       <span className="block text-xs text-muted-foreground">
-                        La photo devient un Reel: elle sera rendue en vidéo de 8
-                        secondes, et Instagram fournira la piste. Une photo publiée
-                        telle quelle ne peut pas porter de musique.
+                        The photo becomes a Reel: it will be rendered as an 8-second
+                        video, and Instagram supplies the track. A photo published as
+                        such cannot carry music.
                       </span>
                     </span>
                   </label>
@@ -336,11 +335,10 @@ export function ComposerForm({
                 <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                   <span>
-                    {blockedCount} média{blockedCount > 1 ? "s" : ""} indisponible
-                    {blockedCount > 1 ? "s" : ""}:{" "}
-                    {restrictingChannels.map((c) => c.platform).join(", ")} n&apos;accepte
-                    {restrictingChannels.length > 1 ? "nt" : ""} que du {allowedRating}.
-                    Retirez ce canal à l&apos;étape précédente pour y accéder.
+                    {blockedCount} media unavailable:{" "}
+                    {restrictingChannels.map((c) => c.platform).join(", ")} only accepts{" "}
+                    {allowedRating}. Remove that channel at the previous step to reach
+                    them.
                   </span>
                 </p>
               )}
@@ -355,14 +353,14 @@ export function ComposerForm({
 
               {kind === "CAROUSEL" && (
                 <p className="text-xs text-muted-foreground">
-                  Un carrousel ne peut pas porter de musique: l&apos;API n&apos;expose
-                  aucun paramètre audio en dehors des Reels.
+                  A carousel cannot carry music: the API exposes no audio parameter
+                  outside Reels.
                 </p>
               )}
 
               {variants.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Aucun Variant dérivé pour cette persona. Passez par la Library.
+                  No variant derived for this persona yet. Go through the Library.
                 </p>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-4 lg:grid-cols-6">
@@ -385,7 +383,7 @@ export function ComposerForm({
                         }}
                         title={
                           blocked
-                            ? `Média ${variant.rating}: interdit sur ${restrictingChannels.map((c) => c.platform).join(", ")}`
+                            ? `${variant.rating} media: blocked on ${restrictingChannels.map((c) => c.platform).join(", ")}`
                             : undefined
                         }
                         className={cn(
@@ -409,7 +407,7 @@ export function ComposerForm({
                         )}
                         {!variant.hasPublicUrl && !blocked && (
                           <span className="absolute bottom-1 left-1 rounded bg-destructive px-1 text-[9px] text-destructive-foreground">
-                            pas sur R2
+                            not on R2
                           </span>
                         )}
                       </div>
@@ -423,7 +421,7 @@ export function ComposerForm({
           {step === 4 && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="captionInput">Légende</Label>
+                <Label htmlFor="captionInput">Caption</Label>
                 <textarea
                   id="captionInput"
                   name="caption"
@@ -432,7 +430,7 @@ export function ComposerForm({
                   value={caption}
                   onChange={(event) => setCaption(event.target.value)}
                   className="w-full rounded-md border bg-transparent p-2 text-sm"
-                  placeholder="2200 caractères maximum sur Instagram."
+                  placeholder="2200 characters maximum on Instagram."
                 />
                 <p className="text-xs text-muted-foreground">
                   {caption.length} / 2200
@@ -440,36 +438,36 @@ export function ComposerForm({
               </div>
 
               <dl className="grid gap-x-6 gap-y-1 border-t pt-3 text-xs sm:grid-cols-2">
-                <Recap label="Nom" value={name} />
+                <Recap label="Name" value={name} />
                 <Recap
-                  label="Programmation"
+                  label="Schedule"
                   value={
                     publishNow
-                      ? "immédiate"
-                      : new Date(scheduledAt).toLocaleString("fr-FR", {
+                      ? "immediate"
+                      : new Date(scheduledAt).toLocaleString("en-GB", {
                           dateStyle: "short",
                           timeStyle: "short",
                         })
                   }
                 />
                 <Recap
-                  label="Canaux"
+                  label="Channels"
                   value={chosenChannels.map((c) => c.platform).join(", ")}
                 />
                 <Recap
                   label="Type"
                   value={
                     kind === "REEL" && !selectionIsVideo
-                      ? "Reel (photo rendue en vidéo)"
+                      ? "Reel (photo rendered as video)"
                       : kind
                   }
                 />
-                <Recap label="Médias" value={`${selected.length}`} />
+                <Recap label="Media" value={`${selected.length}`} />
                 {audio && (
-                  <Recap label="Musique" value={`${audio.title} — ${audio.artist}`} />
+                  <Recap label="Music" value={`${audio.title} — ${audio.artist}`} />
                 )}
                 <Recap
-                  label="Publications créées"
+                  label="Publications created"
                   value={`${chosenChannels.length}`}
                 />
               </dl>
@@ -489,7 +487,7 @@ export function ComposerForm({
           onClick={() => setStep((s) => s - 1)}
         >
           <ChevronLeft className="size-4" />
-          Retour
+          Back
         </Button>
 
         {!isLast ? (
@@ -498,7 +496,7 @@ export function ComposerForm({
             disabled={!stepValid}
             onClick={() => setStep((s) => s + 1)}
           >
-            Suivant
+            Next
             <ChevronRight className="size-4" />
           </Button>
         ) : (
@@ -508,11 +506,7 @@ export function ComposerForm({
             value={publishNow ? "1" : undefined}
             disabled={pending || selected.length === 0 || channelIds.length === 0}
           >
-            {pending
-              ? "Envoi…"
-              : publishNow
-                ? "Publier tout de suite"
-                : "Programmer"}
+            {pending ? "Sending…" : publishNow ? "Publish now" : "Schedule"}
           </Button>
         )}
       </div>

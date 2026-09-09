@@ -53,7 +53,7 @@ export function UserMenu({
           }}
         >
           <LogOut className="size-3.5" />
-          Se déconnecter
+          Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

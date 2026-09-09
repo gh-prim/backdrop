@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 
 function formatDate(date: Date) {
-  return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  return date.toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
 }
 
 export default async function DashboardPage() {
@@ -40,11 +40,11 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={selectedId === ALL_PERSONAS ? "Toutes les personas" : (scoped[0]?.name ?? "")}
-        description={`${upcoming.length} à venir · ${failed.length} en échec · ${missed.length} manquée${missed.length > 1 ? "s" : ""}`}
+        title={selectedId === ALL_PERSONAS ? "All personas" : (scoped[0]?.name ?? "")}
+        description={`${upcoming.length} upcoming · ${failed.length} failed · ${missed.length} missed`}
         actions={
           <Button size="sm" render={<Link href="/composer" />}>
-            Nouvelle publication
+            New publication
           </Button>
         }
       />
@@ -52,11 +52,11 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Publications à venir</CardTitle>
+            <CardTitle className="text-sm">Upcoming</CardTitle>
           </CardHeader>
           <CardContent>
             {upcoming.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Rien de programmé.</p>
+              <p className="text-xs text-muted-foreground">Nothing scheduled.</p>
             ) : (
               <ul className="divide-y text-sm">
                 {upcoming.map((publication) => (
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">À traiter</CardTitle>
+            <CardTitle className="text-sm">Needs attention</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <Link
@@ -97,14 +97,14 @@ export default async function DashboardPage() {
               >
                 {failed.length}
               </span>
-              <span className="text-xs text-muted-foreground">échec(s)</span>
+              <span className="text-xs text-muted-foreground">failed</span>
             </Link>
             <Link
               href="/publications"
               className="flex items-baseline gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent"
             >
               <span className="text-3xl font-black">{missed.length}</span>
-              <span className="text-xs text-muted-foreground">manquée(s) à trancher</span>
+              <span className="text-xs text-muted-foreground">missed, awaiting a call</span>
             </Link>
           </CardContent>
         </Card>
@@ -128,7 +128,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {personaChannels.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Aucun canal connecté.</p>
+                  <p className="text-xs text-muted-foreground">No channel connected.</p>
                 ) : (
                   <ul className="space-y-1">
                     {personaChannels.map((channel) => (
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
                   </ul>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {personaPublications.filter((p) => p.status === "PUBLISHED").length} publiée(s)
+                  {personaPublications.filter((p) => p.status === "PUBLISHED").length} published
                 </p>
               </CardContent>
             </Card>

@@ -37,7 +37,7 @@ export function InstagramForm({ personas }: { personas: PersonaOption[] }) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="pageId">Page Facebook (optionnel)</Label>
+          <Label htmlFor="pageId">Facebook Page (optional)</Label>
           <Input id="pageId" name="pageId" className="h-8 w-52" />
         </div>
       </div>
@@ -53,20 +53,20 @@ export function InstagramForm({ personas }: { personas: PersonaOption[] }) {
           className="h-8 w-full max-w-2xl"
         />
         <p className="text-xs text-muted-foreground">
-          Colle le token du Graph API Explorer, même de courte durée: il est échangé
-          contre un long-lived de 60 jours à la connexion, puis chiffré au repos. Il
-          n&apos;est jamais réaffiché, ni ici, ni ailleurs, ni pour un owner.
+          Paste the token from the Graph API Explorer, even a short-lived one: it is
+          exchanged for a 60-day long-lived token on connect, then encrypted at rest.
+          It is never shown again, here or anywhere, not even to an owner.
         </p>
       </div>
 
       <Button type="submit" size="sm" disabled={pending || personas.length === 0}>
-        {pending ? "Connexion…" : "Connecter Instagram"}
+        {pending ? "Connecting…" : "Connect Instagram"}
       </Button>
 
       {state && !state.ok && <p className="text-xs text-destructive">{state.error}</p>}
       {state?.ok && (
         <p className="text-xs text-muted-foreground">
-          Canal connecté et vérifié: le token répond pour cet ig_user_id.
+          Channel connected and verified: the token answers for this ig_user_id.
         </p>
       )}
     </form>

@@ -44,15 +44,14 @@ export function UploadDialog({
     >
       <DialogTrigger render={<Button size="sm" />}>
         <Upload className="size-4" />
-        Uploader
+        Upload
       </DialogTrigger>
 
       <DialogContent className="w-[92vw] sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Uploader des médias</DialogTitle>
+          <DialogTitle>Upload media</DialogTitle>
           <DialogDescription>
-            Le rating choisi ici est définitif: il commande les canaux autorisés et
-            le passage par R2.
+            The rating chosen here drives allowed channels and the push to R2.
           </DialogDescription>
         </DialogHeader>
 

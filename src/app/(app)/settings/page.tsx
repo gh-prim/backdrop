@@ -24,13 +24,13 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        title="Réglages"
-        description="Membres, personas et canaux de l'organisation."
+        title="Settings"
+        description="Members, personas and channels for this organization."
       />
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Membres</CardTitle>
+          <CardTitle className="text-sm">Members</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <ul className="divide-y text-sm">
@@ -51,8 +51,8 @@ export default async function SettingsPage() {
           {isOwner ? (
             <div className="space-y-3 border-t pt-4">
               <p className="text-xs text-muted-foreground">
-                Il n&apos;y a pas de route publique d&apos;inscription. Un compte ne naît que
-                d&apos;une invitation, dont le lien se transmet à la main.
+                There is no public sign-up route. Accounts only come from an
+                invitation, whose link you pass along yourself.
               </p>
               <InviteForm />
               {invitations.length > 0 && (
@@ -65,7 +65,7 @@ export default async function SettingsPage() {
             </div>
           ) : (
             <p className="border-t pt-4 text-xs text-muted-foreground">
-              Seul un owner peut inviter ou retirer des membres.
+              Only an owner can invite or remove members.
             </p>
           )}
         </CardContent>
@@ -85,7 +85,7 @@ export default async function SettingsPage() {
                   <span className="text-muted-foreground">@{persona.handle}</span>
                   <span className="ml-auto flex gap-1">
                     {personaChannels.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">aucun canal</span>
+                      <span className="text-xs text-muted-foreground">no channel</span>
                     ) : (
                       personaChannels.map((channel) => (
                         <Badge
@@ -102,7 +102,7 @@ export default async function SettingsPage() {
               );
             })}
             {personas.length === 0 && (
-              <li className="py-2 text-xs text-muted-foreground">Aucune persona.</li>
+              <li className="py-2 text-xs text-muted-foreground">No personas yet.</li>
             )}
           </ul>
 
@@ -116,7 +116,7 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Canaux</CardTitle>
+          <CardTitle className="text-sm">Channels</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <ul className="divide-y text-sm">
@@ -130,15 +130,15 @@ export default async function SettingsPage() {
                   max {channel.maxRating}
                 </Badge>
                 <span className="ml-auto text-xs text-muted-foreground">
-                  {channel.state === "connected" && `connecté · expire dans ${channel.expiresInDays} j`}
-                  {channel.state === "expiring" && `à reconnecter sous ${channel.expiresInDays} j`}
-                  {channel.state === "expired" && "expiré"}
-                  {channel.state === "unknown" && "état inconnu"}
+                  {channel.state === "connected" && `connected · expires in ${channel.expiresInDays} d`}
+                  {channel.state === "expiring" && `reconnect within ${channel.expiresInDays} d`}
+                  {channel.state === "expired" && "expired"}
+                  {channel.state === "unknown" && "unknown state"}
                 </span>
               </li>
             ))}
             {channels.length === 0 && (
-              <li className="py-2 text-xs text-muted-foreground">Aucun canal connecté.</li>
+              <li className="py-2 text-xs text-muted-foreground">No channel connected.</li>
             )}
           </ul>
 
@@ -146,13 +146,13 @@ export default async function SettingsPage() {
             <div className="border-t pt-4">
               <InstagramForm personas={personas} />
               <p className="mt-3 text-xs text-muted-foreground">
-                Telegram arrive en phase 2, Fanvue en phase 4.
+                Telegram lands in phase 2, Fanvue in phase 4.
               </p>
             </div>
           ) : (
             <p className="border-t pt-4 text-xs text-muted-foreground">
-              Seul un owner peut configurer un ChannelAccount. Les credentials ne sont
-              jamais affichés, quel que soit le rôle.
+              Only an owner can configure a ChannelAccount. Credentials are never
+              shown, whatever the role.
             </p>
           )}
         </CardContent>

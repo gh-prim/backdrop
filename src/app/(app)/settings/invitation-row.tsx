@@ -28,7 +28,7 @@ export function InvitationRow({
       </Badge>
       {invitation.expired && (
         <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
-          expirée
+          expired
         </Badge>
       )}
 
@@ -44,7 +44,7 @@ export function InvitationRow({
           }}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          {copied ? "Copié" : "Copier le lien"}
+          {copied ? "Copied" : "Copy link"}
         </Button>
         <Button
           size="sm"

@@ -16,7 +16,7 @@ import type { OrgContext } from "@/lib/session";
 export class StaleVersionError extends Error {
   constructor() {
     super(
-      "Cette publication a été modifiée par quelqu'un d'autre entre-temps. Rechargez la page avant de réenregistrer.",
+      "Someone else changed this publication in the meantime. Reload the page before saving again.",
     );
     this.name = "StaleVersionError";
   }
@@ -116,7 +116,7 @@ export async function createPublication(
   });
 
   if (channels.length !== input.channelAccountIds.length) {
-    throw new Error("Canal introuvable dans cette organisation.");
+    throw new Error("Channel not found in this organization.");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -179,7 +179,7 @@ export async function updateScheduledPublication(
     },
     select: { id: true, status: true, channelAccount: { select: { platform: true } } },
   });
-  if (!publication) throw new Error("Publication introuvable dans cette organisation.");
+  if (!publication) throw new Error("Publication not found in this organization.");
 
   const updated = await prisma.publication.updateMany({
     where: { id: input.publicationId, version: input.expectedVersion },
@@ -211,7 +211,7 @@ export async function requeueMissedPublication(
     },
     select: { id: true, channelAccount: { select: { platform: true } } },
   });
-  if (!publication) throw new Error("Publication manquée introuvable.");
+  if (!publication) throw new Error("Missed publication not found.");
 
   await prisma.publication.update({
     where: { id: publicationId },

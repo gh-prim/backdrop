@@ -13,8 +13,8 @@ import { UsageList } from "./usage-list";
 
 function humanSize(bytes: number | null) {
   if (!bytes) return "—";
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -42,15 +42,15 @@ export default async function AssetPage({
       "Dimensions",
       asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—",
     ],
-    ["Poids", humanSize(asset.sizeBytes)],
-    ["Durée", asset.durationMs ? `${(asset.durationMs / 1000).toFixed(1)} s` : "—"],
+    ["Size", humanSize(asset.sizeBytes)],
+    ["Duration", asset.durationMs ? `${(asset.durationMs / 1000).toFixed(1)} s` : "—"],
     ["Type", asset.mimeType ?? "—"],
     [
-      "Ajouté le",
-      asset.createdAt.toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" }),
+      "Added",
+      asset.createdAt.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }),
     ],
-    ["Par", asset.createdBy.name],
-    ["Empreinte", `${asset.sha256.slice(0, 16)}…`],
+    ["By", asset.createdBy.name],
+    ["Checksum", `${asset.sha256.slice(0, 16)}…`],
   ];
 
   return (
@@ -66,7 +66,7 @@ export default async function AssetPage({
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <h1 className="text-sm font-bold">
-          {asset.name || asset.description?.slice(0, 60) || "Média sans nom"}
+          {asset.name || asset.description?.slice(0, 60) || "Untitled media"}
         </h1>
         <Badge
           variant={asset.rating === "SFW" ? "secondary" : "destructive"}
@@ -76,7 +76,7 @@ export default async function AssetPage({
         </Badge>
         <span className="ml-auto text-xs text-muted-foreground">
           {asset.variants.length} variant{asset.variants.length > 1 ? "s" : ""} ·{" "}
-          {asset.usages.length} utilisation{asset.usages.length > 1 ? "s" : ""}
+          {asset.usages.length} use{asset.usages.length > 1 ? "s" : ""}
         </span>
       </div>
 
@@ -85,9 +85,9 @@ export default async function AssetPage({
           {/* Onglets pleine largeur en style souligné: ils tiennent lieu de
               navigation de la fiche, pas de petit sélecteur secondaire. */}
           <TabsList variant="line" className="w-full border-b">
-            <TabsTrigger value="general">Général</TabsTrigger>
-            <TabsTrigger value="variants">Variantes</TabsTrigger>
-            <TabsTrigger value="usages">Utilisations</TabsTrigger>
+            <TabsTrigger value="general">Overview</TabsTrigger>
+            <TabsTrigger value="variants">Variants</TabsTrigger>
+            <TabsTrigger value="usages">Usage</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="min-h-0 overflow-hidden">
@@ -131,7 +131,7 @@ export default async function AssetPage({
         <aside className="min-h-0 space-y-4 overflow-y-auto pr-1">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Propriétés</CardTitle>
+              <CardTitle className="text-sm">Properties</CardTitle>
             </CardHeader>
             <CardContent>
               <PropertiesForm
@@ -146,7 +146,7 @@ export default async function AssetPage({
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Métadonnées</CardTitle>
+              <CardTitle className="text-sm">Metadata</CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="space-y-1.5 text-xs">

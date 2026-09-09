@@ -7,7 +7,7 @@ import { cancelInvitation, createInvitation } from "@/lib/invitations";
 import { ORG_ROLES } from "@/lib/auth";
 
 const inviteSchema = z.object({
-  email: z.email("Adresse email invalide."),
+  email: z.email("Invalid email address."),
   role: z.enum(ORG_ROLES),
 });
 
@@ -23,21 +23,21 @@ export async function inviteMemberAction(
     role: formData.get("role"),
   });
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
   try {
     await createInvitation(ctx, parsed.data.email, parsed.data.role);
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Échec." };
+    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 
-  revalidatePath("/reglages");
+  revalidatePath("/settings");
   return { ok: true };
 }
 
 export async function cancelInvitationAction(invitationId: string) {
   const ctx = await requireOwner();
   await cancelInvitation(ctx, invitationId);
-  revalidatePath("/reglages");
+  revalidatePath("/settings");
 }

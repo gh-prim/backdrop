@@ -66,7 +66,7 @@ export function AssetOriginal({
             className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-sm"
           >
             <EyeOff className="size-5" />
-            Révéler
+            Reveal
           </button>
         )}
       </CardContent>

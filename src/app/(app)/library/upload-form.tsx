@@ -23,30 +23,30 @@ const RATINGS = [
   {
     value: "SFW",
     label: "SFW",
-    consequence: "Publiable sur Instagram. Poussé sur R2.",
+    consequence: "Publishable on Instagram. Pushed to R2.",
   },
   {
     value: "SUGGESTIVE",
-    label: "Suggestif",
-    consequence: "Interdit sur Instagram. Reste sur le volume local.",
+    label: "Suggestive",
+    consequence: "Blocked on Instagram. Stays on the local volume.",
   },
   {
     value: "NSFW",
     label: "NSFW",
-    consequence: "Interdit sur Instagram. Reste sur le volume local.",
+    consequence: "Blocked on Instagram. Stays on the local volume.",
   },
 ] as const;
 
 type QueueItem = {
   file: File;
   previewUrl: string | null;
-  status: "en attente" | "envoi" | "fait" | "échec";
+  status: "queued" | "uploading" | "done" | "failed";
   message?: string;
 };
 
 function humanSize(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function UploadForm({
@@ -84,7 +84,7 @@ export function UploadForm({
       ...Array.from(files).map((file) => ({
         file,
         previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-        status: "en attente" as const,
+        status: "queued" as const,
       })),
     ]);
   }
@@ -99,10 +99,10 @@ export function UploadForm({
     setRunning(true);
 
     for (const [index, item] of queue.entries()) {
-      if (item.status === "fait") continue;
+      if (item.status === "done") continue;
 
       setQueue((current) =>
-        current.map((entry, i) => (i === index ? { ...entry, status: "envoi" } : entry)),
+        current.map((entry, i) => (i === index ? { ...entry, status: "uploading" } : entry)),
       );
 
       const formData = new FormData();
@@ -118,7 +118,7 @@ export function UploadForm({
           i === index
             ? {
                 ...entry,
-                status: result.ok ? "fait" : "échec",
+                status: result.ok ? "done" : "failed",
                 message: result.ok ? result.message : result.error,
               }
             : entry,
@@ -130,7 +130,7 @@ export function UploadForm({
     onUploaded?.();
   }
 
-  const pending = queue.filter((item) => item.status !== "fait").length;
+  const pending = queue.filter((item) => item.status !== "done").length;
 
   return (
     <div className="space-y-4">
@@ -153,10 +153,10 @@ export function UploadForm({
       >
         <Upload className="size-7 text-muted-foreground" />
         <p className="text-base font-medium">
-          Déposez des fichiers, ou cliquez pour parcourir
+          Drop files here, or click to browse
         </p>
         <p className="text-xs text-muted-foreground">
-          JPEG, PNG, MP4, MOV — 50 Mo par fichier
+          JPEG, PNG, MP4, MOV — 50 MB per file
         </p>
         <input
           ref={inputRef}
@@ -199,15 +199,15 @@ export function UploadForm({
                 </p>
               </div>
 
-              {item.status === "envoi" && (
+              {item.status === "uploading" && (
                 <Loader2 className="size-4 animate-spin text-muted-foreground" />
               )}
-              {item.status !== "envoi" && (
+              {item.status !== "uploading" && (
                 <Badge
                   variant={
-                    item.status === "fait"
+                    item.status === "done"
                       ? "secondary"
-                      : item.status === "échec"
+                      : item.status === "failed"
                         ? "destructive"
                         : "outline"
                   }
@@ -217,7 +217,7 @@ export function UploadForm({
                 </Badge>
               )}
 
-              {!running && item.status !== "fait" && (
+              {!running && item.status !== "done" && (
                 <button
                   type="button"
                   onClick={() =>
@@ -251,7 +251,7 @@ export function UploadForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Ratios à dériver</Label>
+          <Label>Ratios to derive</Label>
           <div className="flex h-8 items-center gap-3">
             {RATIOS.map((ratio) => (
               <label key={ratio} className="flex items-center gap-1.5 text-sm">
@@ -273,7 +273,7 @@ export function UploadForm({
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
-          <Label>Rating — définitif</Label>
+          <Label>Rating</Label>
           <div className="grid gap-2 sm:grid-cols-3">
             {RATINGS.map((option) => (
               <button
@@ -295,8 +295,8 @@ export function UploadForm({
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Il ne pourra plus être modifié: corriger un rating impose de recréer
-            l&apos;Asset.
+            It drives allowed channels and the push to R2. Changing it later pulls
+            the file back out of R2.
           </p>
         </div>
       </div>
@@ -310,22 +310,22 @@ export function UploadForm({
           {running ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Envoi…
+              Uploading…
             </>
           ) : (
             <>
               <ImageIcon className="size-4" />
-              Uploader {pending > 0 && `(${pending})`}
+              Upload {pending > 0 && `(${pending})`}
             </>
           )}
         </Button>
-        {queue.some((item) => item.status === "fait") && !running && (
+        {queue.some((item) => item.status === "done") && !running && (
           <Button
             type="button"
             variant="ghost"
-            onClick={() => setQueue((current) => current.filter((i) => i.status !== "fait"))}
+            onClick={() => setQueue((current) => current.filter((i) => i.status !== "done"))}
           >
-            Vider les terminés
+            Clear completed
           </Button>
         )}
       </div>

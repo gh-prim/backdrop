@@ -24,11 +24,11 @@ export type AssetCard = {
   variants: { id: string; ratio: string; onR2: boolean }[];
 };
 
-const RATING_FILTERS = ["Tous", "SFW", "SUGGESTIVE", "NSFW"] as const;
+const RATING_FILTERS = ["All", "SFW", "SUGGESTIVE", "NSFW"] as const;
 const TYPE_FILTERS = [
-  { key: "all", label: "Tous types" },
+  { key: "all", label: "All types" },
   { key: "image", label: "Images" },
-  { key: "video", label: "Vidéos" },
+  { key: "video", label: "Videos" },
 ] as const;
 
 const MIN_COLUMNS = 2;
@@ -36,7 +36,7 @@ const MAX_COLUMNS = 8;
 
 export function AssetGrid({ assets }: { assets: AssetCard[] }) {
   const [query, setQuery] = useState("");
-  const [ratingFilter, setRatingFilter] = useState<string>("Tous");
+  const [ratingFilter, setRatingFilter] = useState<string>("All");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [instagramReady, setInstagramReady] = useState(false);
   const [neverUsed, setNeverUsed] = useState(false);
@@ -51,7 +51,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
     const needle = query.trim().toLowerCase();
 
     return assets.filter((asset) => {
-      if (ratingFilter !== "Tous" && asset.rating !== ratingFilter) return false;
+      if (ratingFilter !== "All" && asset.rating !== ratingFilter) return false;
       if (typeFilter === "image" && asset.isVideo) return false;
       if (typeFilter === "video" && !asset.isVideo) return false;
       if (neverUsed && asset.usageCount > 0) return false;
@@ -76,7 +76,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
   }, [assets, query, ratingFilter, typeFilter, instagramReady, neverUsed]);
 
   const activeFilters =
-    (ratingFilter !== "Tous" ? 1 : 0) +
+    (ratingFilter !== "All" ? 1 : 0) +
     (typeFilter !== "all" ? 1 : 0) +
     (instagramReady ? 1 : 0) +
     (neverUsed ? 1 : 0) +
@@ -84,7 +84,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
 
   function reset() {
     setQuery("");
-    setRatingFilter("Tous");
+    setRatingFilter("All");
     setTypeFilter("all");
     setInstagramReady(false);
     setNeverUsed(false);
@@ -99,7 +99,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Rechercher: description, persona, auteur, ratio"
+              placeholder="Search description, persona, author, ratio"
               className="h-8 pl-8"
             />
           </div>
@@ -107,7 +107,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
           {/* Densité d'affichage: de deux miniatures par ligne pour vérifier un
               cadrage, à huit pour balayer une grande bibliothèque (6.1). */}
           <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            Colonnes
+            Columns
             <input
               type="range"
               min={MIN_COLUMNS}
@@ -163,7 +163,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
               checked={instagramReady}
               onChange={(event) => setInstagramReady(event.target.checked)}
             />
-            Prêt pour Instagram
+            Instagram-ready
           </label>
 
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
@@ -172,7 +172,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
               checked={neverUsed}
               onChange={(event) => setNeverUsed(event.target.checked)}
             />
-            Jamais utilisé
+            Never used
           </label>
 
           {activeFilters > 0 && (
@@ -182,12 +182,12 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
               className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="size-3" />
-              Réinitialiser
+              Reset
             </button>
           )}
 
           <span className="ml-auto text-xs text-muted-foreground">
-            {filtered.length} sur {assets.length}
+            {filtered.length} of {assets.length}
           </span>
         </div>
       </div>
@@ -196,8 +196,8 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             {assets.length === 0
-              ? "Aucun Asset. Le bouton Uploader ouvre la zone de dépôt: les Variants sont dérivés automatiquement, et poussés sur R2 uniquement si l'Asset est SFW."
-              : "Aucun Asset ne correspond à ces filtres."}
+              ? "No assets yet. The Upload button opens the drop zone: variants are derived automatically, and pushed to R2 only when the asset is SFW."
+              : "No asset matches these filters."}
           </CardContent>
         </Card>
       ) : (
@@ -226,7 +226,7 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
                   ) : (
                     <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-muted/40 text-xs text-muted-foreground">
                       <Loader2 className="size-4 animate-spin" />
-                      {!dense && "Dérivation en cours"}
+                      {!dense && "Deriving…"}
                     </div>
                   )}
                 </Link>

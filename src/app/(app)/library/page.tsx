@@ -22,7 +22,7 @@ export default async function LibraryPage() {
     <div className="space-y-6">
       <PageHeader
         title="Library"
-        description="Le rating choisi à l'upload est définitif: il commande les canaux autorisés et le passage par R2."
+        description="Ratings drive which channels are allowed and whether a file reaches R2."
         actions={
           <>
             <BlurPreferenceToggle />

@@ -63,7 +63,7 @@ export async function createInvitation(
     where: { organizationId: ctx.organizationId, user: { email: normalized } },
   });
   if (existingMember) {
-    throw new Error("Cette adresse est déjà membre de l'organisation.");
+    throw new Error("This address is already a member of the organization.");
   }
 
   // Une seule invitation vivante par adresse: la précédente est remplacée.
@@ -142,7 +142,7 @@ export async function acceptInvitation(
 ) {
   const invitation = await getUsableInvitation(invitationId);
   if (!invitation) {
-    throw new Error("Invitation invalide ou expirée.");
+    throw new Error("Invalid or expired invitation.");
   }
 
   const ctx = await auth.$context;

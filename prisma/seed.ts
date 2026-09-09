@@ -43,7 +43,7 @@ async function main() {
       password: await ctx.password.hash(OWNER_PASSWORD),
     });
     user = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
-    console.log(`utilisateur créé: ${OWNER_EMAIL} / ${OWNER_PASSWORD}`);
+    console.log(`user created: ${OWNER_EMAIL} / ${OWNER_PASSWORD}`);
   }
 
   const member = await prisma.member.findFirst({
@@ -75,7 +75,7 @@ async function main() {
     }
   }
 
-  console.log(`organisation: ${organization.name} (${organization.slug})`);
+  console.log(`organization: ${organization.name} (${organization.slug})`);
   console.log(`owner: ${OWNER_EMAIL}`);
 }
 
