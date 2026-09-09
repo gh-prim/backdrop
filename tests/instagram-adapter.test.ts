@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   InstagramAdapter,
   type GraphFetch,
@@ -37,6 +37,31 @@ const credentials: InstagramCredentials = {
 };
 
 describe("adapter Instagram", () => {
+  it("construit des URL absolues même avec une surcharge de base vide", async () => {
+    // Régression: Docker Compose transmet une variable non définie comme
+    // chaîne vide. Avec `??`, la base devenait vide, les URL relatives, et
+    // chaque appel échouait sur un « Invalid URL » qui ne désignait pas sa
+    // cause. La constante étant évaluée à l'import, le module doit être
+    // rechargé pour que le test prouve quoi que ce soit.
+    const previous = process.env.META_GRAPH_BASE;
+    process.env.META_GRAPH_BASE = "";
+    vi.resetModules();
+    try {
+      const fresh = await import("@/lib/channels/instagram");
+      const seen: string[] = [];
+      const adapter = new fresh.InstagramAdapter(credentials, async (url) => {
+        seen.push(url);
+        return { ok: true, status: 200, json: async () => ({ data: [] }) };
+      });
+      await adapter.checkQuota();
+      expect(seen[0]).toMatch(/^https:\/\/graph\.facebook\.com\//);
+    } finally {
+      process.env.META_GRAPH_BASE = previous;
+      vi.resetModules();
+    }
+  });
+
+
   it("déclare des capacités qui interdisent le NSFW", () => {
     const { http } = fakeGraph([{}]);
     const capabilities = new InstagramAdapter(credentials, http).capabilities();

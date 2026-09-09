@@ -5,6 +5,7 @@ import {
   type PublishMetrics,
   type QuotaStatus,
 } from "./types";
+import { envOr } from "@/lib/env";
 
 /**
  * Instagram API with Facebook Login (4.1).
@@ -14,14 +15,19 @@ import {
  * Rien ici ne doit dépendre d'une permission qui exigerait une review.
  */
 
-export const GRAPH_VERSION = process.env.META_GRAPH_VERSION ?? "v25.0";
+export const GRAPH_VERSION = envOr("META_GRAPH_VERSION", "v25.0");
 
 /**
  * Base de l'API Graph. Surchargeable pour pointer un double local et exercer
  * toute la chaîne sans compte Instagram réel (scripts/dev-graph-stub.ts).
  * En production, la valeur par défaut est la seule correcte.
+ *
+ * `||` et non `??`: Docker Compose transmet une variable non définie comme
+ * **chaîne vide**, que `??` laisserait passer. La base deviendrait vide, les
+ * URL relatives, et chaque appel échouerait sur un « Invalid URL » qui ne
+ * désigne pas sa cause.
  */
-const GRAPH_BASE = process.env.META_GRAPH_BASE ?? "https://graph.facebook.com";
+const GRAPH_BASE = envOr("META_GRAPH_BASE", "https://graph.facebook.com");
 
 export type InstagramCredentials = {
   /** ig_user_id, l'identifiant du compte professionnel. */

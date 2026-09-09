@@ -8,6 +8,7 @@ import { Rating } from "@prisma/client";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "../../src/lib/db";
 import { objectStorageClient } from "../../src/lib/storage";
+import { envOr } from "../../src/lib/env";
 
 const run = promisify(execFile);
 
@@ -19,7 +20,7 @@ const run = promisify(execFile);
  * c'est le second garde-fou anti-NSFW, et il est appliqué ici, une fois.
  */
 
-const MEDIA_ROOT = resolve(process.env.MEDIA_ROOT ?? "./media");
+const MEDIA_ROOT = resolve(envOr("MEDIA_ROOT", "./media"));
 
 /** Les chemins en base sont relatifs, pour rester valides hôte et conteneur. */
 export function absolutePath(relativePath: string): string {

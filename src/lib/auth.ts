@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization } from "better-auth/plugins/organization";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "./db";
+import { envOr } from "./env";
 
 /**
  * Authentification locale, email et mot de passe (spec 1 et 7.4).
@@ -17,7 +18,7 @@ import { prisma } from "./db";
 export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: envOr("BETTER_AUTH_URL", "http://localhost:3000"),
 
   emailAndPassword: {
     enabled: true,

@@ -47,3 +47,38 @@ describe("client de stockage objet", () => {
     expect(objectStorageClient()).toBeNull();
   });
 });
+
+describe("lecture d'environnement", () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it("traite la chaîne vide comme une absence", async () => {
+    const { envOr, envOrNull, envNumberOr } = await import("@/lib/env");
+    process.env.BACKDROP_TEST_VALUE = "";
+    expect(envOr("BACKDROP_TEST_VALUE", "défaut")).toBe("défaut");
+    expect(envOrNull("BACKDROP_TEST_VALUE")).toBeNull();
+    expect(envNumberOr("BACKDROP_TEST_VALUE", 45)).toBe(45);
+  });
+
+  it("traite les espaces seuls comme une absence", async () => {
+    const { envOr } = await import("@/lib/env");
+    process.env.BACKDROP_TEST_VALUE = "   ";
+    expect(envOr("BACKDROP_TEST_VALUE", "défaut")).toBe("défaut");
+  });
+
+  it("rend la valeur quand elle est renseignée", async () => {
+    const { envOr, envNumberOr } = await import("@/lib/env");
+    process.env.BACKDROP_TEST_VALUE = " voilà ";
+    expect(envOr("BACKDROP_TEST_VALUE", "défaut")).toBe("voilà");
+    process.env.BACKDROP_TEST_NUMBER = "12";
+    expect(envNumberOr("BACKDROP_TEST_NUMBER", 45)).toBe(12);
+  });
+
+  it("retombe sur le défaut quand le nombre est illisible", async () => {
+    const { envNumberOr } = await import("@/lib/env");
+    process.env.BACKDROP_TEST_NUMBER = "quarante-cinq";
+    expect(envNumberOr("BACKDROP_TEST_NUMBER", 45)).toBe(45);
+  });
+});

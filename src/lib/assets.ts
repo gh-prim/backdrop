@@ -7,6 +7,7 @@ import { Rating } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { deleteObjects } from "@/lib/storage";
 import type { OrgContext } from "@/lib/session";
+import { envOr } from "@/lib/env";
 
 /**
  * Ingestion d'un Asset.
@@ -16,7 +17,7 @@ import type { OrgContext } from "@/lib/session";
  * valides aussi bien sur l'hôte que dans le conteneur.
  */
 
-const MEDIA_ROOT = resolve(process.env.MEDIA_ROOT ?? "./media");
+const MEDIA_ROOT = resolve(envOr("MEDIA_ROOT", "./media"));
 
 const ALLOWED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".mp4", ".mov"]);
 

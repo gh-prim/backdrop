@@ -1,4 +1,5 @@
 import { S3Client, DeleteObjectsCommand } from "@aws-sdk/client-s3";
+import { envOrNull } from "@/lib/env";
 
 /**
  * Accès au stockage objet (R2, ou tout équivalent S3).
@@ -7,12 +8,6 @@ import { S3Client, DeleteObjectsCommand } from "@aws-sdk/client-s3";
  * Backblaze B2 décrite dans docs/findings/storage-tos.md se réduit alors à
  * changer des variables d'environnement, pas du code.
  */
-/** Surcharge d'endpoint, en traitant la chaîne vide comme une absence. */
-function endpointOverride(): string | null {
-  const value = process.env.R2_ENDPOINT?.trim();
-  return value ? value : null;
-}
-
 export function objectStorageClient(): S3Client | null {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -24,7 +19,7 @@ export function objectStorageClient(): S3Client | null {
   // serait alors une chaîne vide jugée valide, et le client ne serait jamais
   // construit — panne silencieuse qui a coûté trois publications.
   const endpoint =
-    endpointOverride() ||
+    envOrNull("R2_ENDPOINT") ||
     (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : null);
   if (!endpoint) return null;
 
@@ -34,7 +29,7 @@ export function objectStorageClient(): S3Client | null {
     credentials: { accessKeyId, secretAccessKey },
     // Indispensable hors Cloudflare: MinIO et consorts servent le bucket en
     // préfixe de chemin, pas en sous-domaine.
-    forcePathStyle: Boolean(endpointOverride()),
+    forcePathStyle: Boolean(envOrNull("R2_ENDPOINT")),
   });
 }
 
