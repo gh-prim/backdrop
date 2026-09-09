@@ -1,7 +1,7 @@
 import { requireOrgContext } from "@/lib/session";
 import { getSelectedPersonaId, listPersonas } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
-import { prisma } from "@/lib/db";
+import { listChannelStatus } from "@/lib/channels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -11,11 +11,8 @@ export default async function DashboardPage() {
   const selectedId = await getSelectedPersonaId(personas);
   const scoped = selectedId === ALL_PERSONAS ? personas : personas.filter((p) => p.id === selectedId);
 
-  // Scope serveur: toujours l'organisation de la session (9.6).
-  const channels = await prisma.channelAccount.findMany({
-    where: { persona: { organizationId: ctx.organizationId } },
-    select: { id: true, personaId: true, platform: true, maxRating: true, tokenExpiresAt: true },
-  });
+  // Projection sûre: aucun credential ne descend jusqu'au client (9.7).
+  const channels = await listChannelStatus(ctx);
 
   return (
     <div className="space-y-4">
