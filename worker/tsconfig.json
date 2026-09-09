@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2022",
+    "noEmit": true,
+    "jsx": "preserve"
+  },
+  "include": ["./**/*.ts", "../src/lib/**/*.ts", "../src/temporal/**/*.ts"]
+}

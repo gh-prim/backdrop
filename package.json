@@ -10,13 +10,20 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "worker": "tsx worker/index.ts",
+    "worker:schedules": "tsx worker/schedules.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1128.0",
     "@base-ui/react": "^1.8.0",
     "@hookform/resolvers": "^5.9.1",
     "@prisma/client": "^6.19.3",
     "@tanstack/react-table": "^9.2.4",
+    "@temporalio/activity": "^1.23.0",
+    "@temporalio/client": "^1.23.0",
+    "@temporalio/worker": "^1.23.0",
+    "@temporalio/workflow": "^1.23.0",
     "better-auth": "^1.7.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
@@ -54,7 +61,10 @@
       "esbuild",
       "@prisma/engines",
       "prisma",
-      "@prisma/client"
+      "@prisma/client",
+      "@swc/core",
+      "protobufjs",
+      "better-sqlite3"
     ]
   }
 }

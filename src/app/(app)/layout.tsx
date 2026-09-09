@@ -7,6 +7,8 @@ import { UserMenu } from "@/components/user-menu";
 const NAV = [
   { href: "/", label: "Dashboard" },
   { href: "/library", label: "Library" },
+  { href: "/composer", label: "Composer" },
+  { href: "/publications", label: "Publications" },
   { href: "/calendrier", label: "Calendrier" },
   { href: "/reglages", label: "Réglages" },
 ];
