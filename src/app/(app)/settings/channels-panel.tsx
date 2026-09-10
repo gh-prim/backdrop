@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { PlusIcon } from "lucide-react";
+import { useActionState, useEffect, useState } from "react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
+import { deleteChannelAction, type ActionResult } from "@/app/actions/channels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -77,6 +78,7 @@ export function ChannelsPanel({
 }) {
   const [picking, setPicking] = useState(false);
   const [connecting, setConnecting] = useState<Platform | null>(null);
+  const [deleting, setDeleting] = useState<ChannelTile | null>(null);
 
   return (
     <div className="space-y-4">
@@ -107,6 +109,8 @@ export function ChannelsPanel({
             key={channel.id}
             channel={channel}
             personaName={personaNames[channel.personaId] ?? "unknown persona"}
+            canDelete={isOwner}
+            onDelete={() => setDeleting(channel)}
           />
         ))}
 
@@ -163,6 +167,12 @@ export function ChannelsPanel({
         </DialogContent>
       </Dialog>
 
+      <DeleteChannelDialog
+        channel={deleting}
+        personaName={deleting ? personaNames[deleting.personaId] ?? "" : ""}
+        onClose={() => setDeleting(null)}
+      />
+
       <Dialog
         open={connecting !== null}
         onOpenChange={(open) => !open && setConnecting(null)}
@@ -194,12 +204,16 @@ export function ChannelsPanel({
 function ChannelCard({
   channel,
   personaName,
+  canDelete,
+  onDelete,
 }: {
   channel: ChannelTile;
   personaName: string;
+  canDelete: boolean;
+  onDelete: () => void;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border p-3">
+    <div className="group/tile flex items-start gap-3 rounded-lg border p-3">
       <PlatformLogo platform={channel.platform} className="size-8 shrink-0" />
 
       <div className="min-w-0 flex-1 space-y-1">
@@ -214,7 +228,93 @@ function ChannelCard({
           </Badge>
         </div>
       </div>
+
+      {canDelete && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Remove ${channel.platform.toLowerCase()} for ${personaName}`}
+          // Discret au repos: supprimer un canal n'est pas une action
+          // courante, et un bouton toujours visible finit par être cliqué.
+          className="opacity-0 transition-opacity group-hover/tile:opacity-100 focus-visible:opacity-100"
+          onClick={onDelete}
+        >
+          <Trash2Icon />
+        </Button>
+      )}
     </div>
+  );
+}
+
+/**
+ * Suppression d'un canal.
+ *
+ * Nommer la persona et la plateforme dans la question, plutôt qu'un « êtes-vous
+ * sûr ? » générique: c'est ce qui distingue une confirmation utile d'un réflexe.
+ */
+function DeleteChannelDialog({
+  channel,
+  personaName,
+  onClose,
+}: {
+  channel: ChannelTile | null;
+  personaName: string;
+  onClose: () => void;
+}) {
+  const [state, action, pending] = useActionState<ActionResult | null, FormData>(
+    deleteChannelAction,
+    null,
+  );
+
+  useEffect(() => {
+    if (state?.ok) onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  const isTelegram = channel?.platform === "TELEGRAM";
+
+  return (
+    <Dialog open={channel !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            Remove {channel ? channel.platform.charAt(0) + channel.platform.slice(1).toLowerCase() : ""} for{" "}
+            {personaName}?
+          </DialogTitle>
+          <DialogDescription>
+            {isTelegram
+              ? "The session is closed and its encrypted database erased on the worker. The account itself stays untouched on Telegram."
+              : "Scheduled publications on this channel will no longer be sent."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form action={action} className="space-y-3">
+          <input type="hidden" name="channelAccountId" value={channel?.id ?? ""} />
+
+          {isTelegram && (
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" name="removeApiKeys" className="mt-0.5" />
+              <span>
+                Also remove this persona&apos;s api_id and api_hash, to start over from
+                scratch.
+              </span>
+            </label>
+          )}
+
+          {state?.ok === false && <p className="text-xs text-destructive">{state.error}</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="destructive" size="sm" className="h-8" disabled={pending}>
+              {pending ? "Removing…" : "Remove"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

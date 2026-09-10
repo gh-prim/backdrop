@@ -93,3 +93,107 @@ def test_reprise_et_connexion_n_ont_pas_la_meme_patience():
     from backdrop_telegram.tdlib import client
 
     assert client.RESUME_TIMEOUT < client.LOGIN_TIMEOUT
+
+
+@pytest.mark.asyncio
+async def test_la_fermeture_n_annule_pas_l_appelant():
+    """
+    aiotdlib annule sa boucle d'updates puis l'attend, ce qui propage un
+    CancelledError dans l'appelant. Il tuait l'activité de login au moment
+    exact où elle fermait le client qu'elle venait remplacer.
+
+    `except Exception` ne suffit pas: depuis Python 3.8, CancelledError dérive
+    de BaseException.
+    """
+    import asyncio
+    from types import SimpleNamespace
+
+    from aiotdlib.api import API
+
+    from backdrop_telegram.tdlib.client import PersonaTelegram
+
+    class _Raw:
+        def __init__(self):
+            self._handler = None
+
+        def add_event_handler(self, handler, _update_type):
+            self._handler = handler
+
+        @property
+        def api(self):
+            raw = self
+
+            class _Api:
+                @staticmethod
+                async def close():
+                    # TDLib confirme la fermeture par un événement, que le
+                    # client attend avant de rendre la main.
+                    state = SimpleNamespace(ID=API.Types.AUTHORIZATION_STATE_CLOSED)
+                    await raw._handler(
+                        raw, SimpleNamespace(authorization_state=state)
+                    )
+
+            return _Api
+
+        async def stop(self):
+            raise asyncio.CancelledError
+
+    client = PersonaTelegram.__new__(PersonaTelegram)
+    client.raw = _Raw()
+    client._closed = False
+
+    # Ne doit ni lever, ni traîner: l'appelant survit et repart aussitôt.
+    await asyncio.wait_for(client.close(), timeout=5)
+    assert client._closed is True
+
+
+@pytest.mark.asyncio
+async def test_une_reprise_n_engage_jamais_de_connexion():
+    """
+    Rouvrir une session révoquée ne doit pas envoyer de code.
+
+    Sans garde-fou, chaque redémarrage du worker en enverrait un que personne
+    n'attend, et le quota Telegram — qui se compte — finirait par bloquer les
+    connexions légitimes.
+    """
+    from backdrop_telegram.tdlib.client import LoginAbandoned, _AuthClient
+
+    client = _AuthClient.__new__(_AuthClient)
+    client.code_provider = None
+
+    with pytest.raises(LoginAbandoned):
+        await client._set_authentication_phone_number()
+
+
+@pytest.mark.asyncio
+async def test_un_demarrage_echoue_referme_le_client():
+    """
+    Un client laissé vivant après un démarrage raté retient le verrou de son
+    répertoire TDLib, et la persona devient impossible à reconnecter jusqu'au
+    redémarrage du worker. C'est exactement ce qui bloquait le login après une
+    réouverture échouée.
+    """
+    import asyncio
+
+    from backdrop_telegram.tdlib.client import PersonaTelegram
+
+    closed = asyncio.Event()
+
+    class _Raw:
+        async def start(self):
+            raise RuntimeError("échec quelconque")
+
+    client = PersonaTelegram.__new__(PersonaTelegram)
+    client.raw = _Raw()
+    client._closed = False
+
+    async def _close():
+        closed.set()
+        client._closed = True
+
+    client.close = _close
+
+    with pytest.raises(RuntimeError):
+        await client.start()
+
+    assert closed.is_set()

@@ -64,7 +64,14 @@ class PersonaPool:
             client = PersonaTelegram(
                 persona_id=persona_id, api_id=api_id, api_hash=api_hash, phone=phone
             )
-            account = await client.start(**start_kwargs)
+            try:
+                account = await client.start(**start_kwargs)
+            except BaseException:
+                # Ceinture et bretelles: le pool ne doit jamais laisser
+                # derrière lui un client qui retiendrait le verrou du
+                # répertoire de la persona.
+                await client.close()
+                raise
             if self._on_message is not None:
                 client.on_message(self._on_message)
 

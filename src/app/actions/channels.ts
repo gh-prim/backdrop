@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { requireOwner } from "@/lib/session";
 import { encryptCredentials } from "@/lib/crypto";
 import { InstagramAdapter } from "@/lib/channels/instagram";
+import { disconnectTelegramSession } from "@/temporal/client";
 import { ChannelError } from "@/lib/channels/types";
 
 const schema = z.object({
@@ -120,5 +121,58 @@ export async function connectInstagramAccountAction(
 
   revalidatePath("/settings");
   revalidatePath("/");
+  return { ok: true };
+}
+
+
+/**
+ * Supprime un ChannelAccount (7.4: réservé à `owner`).
+ *
+ * Pour Telegram, la ligne en base ne suffit pas: le worker détient une session
+ * ouverte et une base chiffrée sur disque. Elles sont fermées et effacées
+ * **avant** la suppression, sinon le prochain démarrage rouvrirait une persona
+ * qu'on croit supprimée, et une reconnexion retomberait sur l'ancien compte.
+ *
+ * `removeApiKeys` efface en plus le couple api_id / api_hash de la persona,
+ * pour repartir vraiment de zéro.
+ */
+export async function deleteChannelAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const ctx = await requireOwner();
+  const channelAccountId = String(formData.get("channelAccountId") ?? "");
+  const removeApiKeys = formData.get("removeApiKeys") === "on";
+  if (!channelAccountId) return { ok: false, error: "Channel not found." };
+
+  const channel = await prisma.channelAccount.findFirst({
+    // Scope serveur: l'organisation vient de la session (9.6).
+    where: { id: channelAccountId, persona: { organizationId: ctx.organizationId } },
+    select: { id: true, platform: true, personaId: true },
+  });
+  if (!channel) return { ok: false, error: "Channel not found." };
+
+  if (channel.platform === Platform.TELEGRAM) {
+    try {
+      await disconnectTelegramSession(channel.personaId);
+    } catch (error) {
+      return {
+        ok: false,
+        error: `Session not released by the Telegram worker: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  await prisma.channelAccount.delete({ where: { id: channel.id } });
+
+  if (removeApiKeys && channel.platform === Platform.TELEGRAM) {
+    await prisma.telegramApp
+      .delete({ where: { personaId: channel.personaId } })
+      .catch(() => {
+        // Absentes: rien à signaler, le résultat voulu est atteint.
+      });
+  }
+
+  revalidatePath("/settings");
   return { ok: true };
 }

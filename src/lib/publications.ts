@@ -83,6 +83,14 @@ export type CreatePublicationInput = {
   audioId?: string | null;
   audioVolume?: number | null;
   videoVolume?: number | null;
+  /** Telegram: channel ou conversation de destination. */
+  telegramChatId?: string | null;
+  telegramTargetLabel?: string | null;
+  /**
+   * Telegram: prix en Stars. N'a de sens que sur un channel qui autorise le
+   * paid media — TDLib refuse `inputMessagePaidMedia` ailleurs (4.2.6).
+   */
+  starPrice?: number | null;
 };
 
 /**
@@ -135,6 +143,21 @@ export async function createPublication(
           audioId: input.audioId ?? null,
           audioVolume: input.audioVolume ?? null,
           videoVolume: input.videoVolume ?? null,
+          // Telegram: destination et prix, ignorés par les autres canaux.
+          // Le libellé est figé maintenant — un channel renommé ou quitté ne
+          // doit pas rendre une publication passée illisible.
+          targetChatId:
+            channel.platform === Platform.TELEGRAM
+              ? (input.telegramChatId ?? null)
+              : null,
+          targetLabel:
+            channel.platform === Platform.TELEGRAM
+              ? (input.telegramTargetLabel ?? null)
+              : null,
+          starPrice:
+            channel.platform === Platform.TELEGRAM
+              ? (input.starPrice ?? null)
+              : null,
         },
         select: { id: true },
       });

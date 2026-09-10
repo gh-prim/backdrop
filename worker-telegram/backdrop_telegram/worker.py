@@ -26,9 +26,22 @@ import logging
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from backdrop_telegram import config, db, inbox, login_activities
+from backdrop_telegram import (
+    config,
+    db,
+    disconnect_activities,
+    inbox,
+    login_activities,
+    publish_activities,
+    targets_activities,
+)
 from backdrop_telegram.tdlib import gateway, pool
-from backdrop_telegram.workflows import TelegramLogin
+from backdrop_telegram.workflows import (
+    PublishTelegram,
+    TelegramDisconnect,
+    TelegramLogin,
+    TelegramTargets,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -78,12 +91,18 @@ async def main() -> None:
     worker = Worker(
         client,
         task_queue=config.TASK_QUEUE,
-        workflows=[TelegramLogin],
+        workflows=[TelegramLogin, TelegramDisconnect, TelegramTargets, PublishTelegram],
         activities=[
             login_activities.request_login_code,
             login_activities.submit_login_code,
             login_activities.submit_login_password,
             login_activities.abandon_login,
+            disconnect_activities.disconnect_telegram,
+            targets_activities.list_telegram_targets,
+            publish_activities.send_telegram_publication,
+            publish_activities.load_telegram_publication,
+            publish_activities.mark_telegram_published,
+            publish_activities.mark_telegram_failed,
         ],
         max_concurrent_activities=8,
     )

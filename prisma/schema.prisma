@@ -199,8 +199,14 @@ model Publication {
   copy             String    @default("")
   scheduledAt      DateTime
   status           PubStatus @default(DRAFT)
-  /// Telegram paid media, en Stars.
+  /// Telegram paid media, en Stars. Réservé aux channels: TDLib refuse
+  /// `inputMessagePaidMedia` ailleurs (4.2.6, tranché le 2026-09-10).
   starPrice        Int?
+  /// Telegram: destination de l'envoi, channel ou conversation privée.
+  targetChatId     String?
+  /// Libellé de la destination, figé à la composition. Un channel renommé ou
+  /// quitté ne doit pas rendre une publication passée illisible.
+  targetLabel      String?
   /// Fanvue, cents USD, minimum 300. Jamais additionné avec starPrice.
   priceCents       Int?
   /// Fanvue: subscribers | followers-and-subscribers

@@ -3,6 +3,7 @@ import {
   Connection,
   ScheduleOverlapPolicy,
   WorkflowExecutionAlreadyStartedError,
+  WorkflowIdReusePolicy,
 } from "@temporalio/client";
 import {
   PROGRESS_QUERY,
@@ -13,7 +14,10 @@ import {
   TELEGRAM_CODE_SIGNAL,
   TELEGRAM_LOGIN_STATE_QUERY,
   TELEGRAM_PASSWORD_SIGNAL,
+  telegramDisconnectWorkflowId,
   telegramLoginWorkflowId,
+  telegramTargetsWorkflowId,
+  type TelegramTarget,
   type TelegramLoginState,
   TASK_QUEUE,
   ingestWorkflowId,
@@ -356,4 +360,101 @@ export async function cancelTelegramLogin(loginId: string): Promise<void> {
     .catch(() => {
       // Déjà terminé: rien à signaler.
     });
+}
+
+/**
+ * Ferme la session Telegram d'une persona et efface sa base côté worker.
+ *
+ * Attend le résultat: supprimer la ligne en base avant que le worker n'ait
+ * lâché le répertoire laisserait une persona « supprimée » que le prochain
+ * démarrage rouvrirait.
+ */
+export async function disconnectTelegramSession(personaId: string): Promise<void> {
+  const client = await temporalClient();
+  const handle = await client.workflow.start("telegramDisconnect", {
+    workflowId: telegramDisconnectWorkflowId(personaId),
+    taskQueue: TASK_QUEUE.telegram,
+    args: [{ personaId }],
+    workflowExecutionTimeout: "2 minutes",
+  });
+  await handle.result();
+}
+
+/**
+ * Destinations Telegram d'une persona, lues par le composeur.
+ *
+ * Passe par un workflow parce que seul le worker Python parle à TDLib. Court,
+ * synchrone, et jeté aussitôt: il ne s'agit que de remplir un menu.
+ */
+export async function listTelegramTargets(
+  personaId: string,
+): Promise<TelegramTarget[]> {
+  const client = await temporalClient();
+  const handle = await client.workflow.start("telegramTargets", {
+    workflowId: telegramTargetsWorkflowId(personaId),
+    taskQueue: TASK_QUEUE.telegram,
+    args: [{ personaId }],
+    workflowExecutionTimeout: "3 minutes",
+    // Une lecture rejouée n'a aucun effet de bord: reprendre la plus récente
+    // plutôt que d'échouer sur un doublon.
+    workflowIdReusePolicy: WorkflowIdReusePolicy.TERMINATE_IF_RUNNING,
+  });
+  const result = (await handle.result()) as { targets: TelegramTarget[] };
+  return result.targets;
+}
+
+/**
+ * Programme une publication Telegram par un Schedule à déclenchement unique,
+ * comme pour Instagram — seule la task queue change.
+ */
+export async function scheduleTelegramPublication(
+  publicationId: string,
+  at: Date,
+): Promise<void> {
+  const client = await temporalClient();
+  await unschedulePublication(publicationId);
+
+  await client.schedule.create({
+    scheduleId: publishScheduleId(publicationId),
+    spec: {
+      calendars: [
+        {
+          year: at.getUTCFullYear(),
+          month: MONTHS[at.getUTCMonth()],
+          dayOfMonth: at.getUTCDate(),
+          hour: at.getUTCHours(),
+          minute: at.getUTCMinutes(),
+          second: at.getUTCSeconds(),
+        },
+      ],
+      timezone: "UTC",
+    },
+    action: {
+      type: "startWorkflow",
+      workflowType: "publishTelegram",
+      workflowId: publishWorkflowId(publicationId),
+      taskQueue: TASK_QUEUE.telegram,
+      args: [{ publicationId }],
+    },
+    policies: { overlap: ScheduleOverlapPolicy.SKIP },
+    // La garantie qui remplace l'unicité du workflowId: Temporal suffixe
+    // l'identifiant par l'horodatage de l'occurrence.
+    state: { remainingActions: 1 },
+  });
+}
+
+/** Démarre la publication Telegram, à la programmation (7.6). */
+export async function startTelegramPublishWorkflow(
+  publicationId: string,
+): Promise<void> {
+  const client = await temporalClient();
+  try {
+    await client.workflow.start("publishTelegram", {
+      workflowId: publishWorkflowId(publicationId),
+      taskQueue: TASK_QUEUE.telegram,
+      args: [{ publicationId }],
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  }
 }

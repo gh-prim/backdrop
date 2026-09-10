@@ -13,6 +13,7 @@ import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
 import { HashtagPanel } from "@/components/hashtag-panel";
 import { PublishProgressDialog } from "@/components/publish-progress-dialog";
 import { cn } from "cn";
+import { TelegramTargetPicker } from "./telegram-target";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
 
@@ -69,6 +70,8 @@ export function ComposerForm({
   const [step, setStep] = useState(0);
 
   const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [starPrice, setStarPrice] = useState("");
   const [publishNow, setPublishNow] = useState(false);
   const [name, setName] = useState("");
   const [channelIds, setChannelIds] = useState<string[]>([]);
@@ -104,6 +107,9 @@ export function ComposerForm({
   const chosenChannels = channels.filter((channel) => channelIds.includes(channel.id));
 
   /** Le catalogue audio est interrogé avec les credentials du compte choisi. */
+  const telegramChannel = chosenChannels.find(
+    (channel) => channel.platform === "TELEGRAM",
+  );
   const instagramChannel = chosenChannels.find(
     (channel) => channel.platform === "INSTAGRAM",
   );
@@ -318,6 +324,17 @@ export function ComposerForm({
                   );
                 })}
               </div>
+              {telegramChannel && (
+                <TelegramTargetPicker
+                  channelAccountId={telegramChannel.id}
+                  chatId={telegramChatId}
+                  onChatIdChange={(id) => setTelegramChatId(id)}
+                  starPrice={starPrice}
+                  onStarPriceChange={setStarPrice}
+                  mediaCount={selected.length}
+                />
+              )}
+
               {chosenChannels.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   One publication is created per channel: a failure on one does not

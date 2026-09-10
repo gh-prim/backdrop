@@ -14,7 +14,9 @@ import {
   cancelPublishWorkflow,
   rescheduleWorkflow,
   schedulePublication,
+  scheduleTelegramPublication,
   startPublishWorkflow,
+  startTelegramPublishWorkflow,
   unschedulePublication,
 } from "@/temporal/client";
 
@@ -29,6 +31,11 @@ const createSchema = z.object({
   caption: z.string().max(2200, "2200 characters maximum on Instagram."),
   scheduledAt: z.coerce.date(),
   variantIds: z.array(z.string().min(1)).min(1, "At least one media."),
+  telegramChatId: z.string().optional(),
+  telegramTargetLabel: z.string().optional(),
+  // Telegram plafonne le prix d'un message payant; la borne exacte vient de
+  // `paid_media_message_star_count_max`, que le serveur annonce à 25000.
+  starPrice: z.coerce.number().int().min(1).max(25000).optional(),
   audioId: z.string().optional(),
   audioVolume: z.coerce.number().int().min(0).max(100).optional(),
   videoVolume: z.coerce.number().int().min(0).max(100).optional(),
@@ -52,6 +59,10 @@ export async function schedulePublicationAction(
     caption: String(formData.get("caption") ?? ""),
     scheduledAt: publishNow ? new Date() : formData.get("scheduledAt"),
     variantIds: formData.getAll("variantIds").map(String),
+    telegramChatId: String(formData.get("telegramChatId") ?? "").trim() || undefined,
+    telegramTargetLabel:
+      String(formData.get("telegramTargetLabel") ?? "").trim() || undefined,
+    starPrice: String(formData.get("starPrice") ?? "").trim() || undefined,
     audioId: String(formData.get("audioId") ?? "").trim() || undefined,
     audioVolume: String(formData.get("audioVolume") ?? "").trim() || undefined,
     videoVolume: String(formData.get("videoVolume") ?? "").trim() || undefined,
@@ -96,8 +107,16 @@ export async function schedulePublicationAction(
   const notStarted: string[] = [];
   for (const publication of created) {
     try {
-      if (publishNow) await startPublishWorkflow(publication);
-      else await schedulePublication(publication, parsed.data.scheduledAt);
+      if (publication.platform === "TELEGRAM") {
+        // Telegram a sa propre task queue et son propre workflow: le worker
+        // Python est le seul à parler TDLib (7.3).
+        if (publishNow) await startTelegramPublishWorkflow(publication.id);
+        else await scheduleTelegramPublication(publication.id, parsed.data.scheduledAt);
+      } else if (publishNow) {
+        await startPublishWorkflow(publication);
+      } else {
+        await schedulePublication(publication, parsed.data.scheduledAt);
+      }
     } catch (error) {
       notStarted.push(`${publication.platform}: ${(error as Error).message}`);
     }

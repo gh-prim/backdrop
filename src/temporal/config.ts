@@ -111,3 +111,23 @@ export type TelegramLoginState = {
     telegramUserId: number;
   } | null;
 };
+
+/** Déconnexion d'une persona Telegram, déclenchée par la suppression du canal. */
+export function telegramDisconnectWorkflowId(personaId: string): string {
+  return `tg-disconnect:${personaId}`;
+}
+
+export function telegramTargetsWorkflowId(personaId: string): string {
+  return `tg-targets:${personaId}`;
+}
+
+export type TelegramTarget = {
+  chatId: string;
+  title: string;
+  kind: "channel" | "group" | "user";
+  /**
+   * Les Stars n'existent que dans un channel qui les autorise. TDLib refuse
+   * `inputMessagePaidMedia` partout ailleurs (4.2.6).
+   */
+  paidMediaAllowed: boolean;
+};

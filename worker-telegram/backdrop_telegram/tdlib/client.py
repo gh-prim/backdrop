@@ -62,6 +62,25 @@ class _AuthClient(AioClient):
     code_provider: Optional[CodeProvider] = None
     password_provider: Optional[PasswordProvider] = None
 
+    async def _set_authentication_phone_number(self):
+        """
+        Refuse d'engager une connexion quand personne ne l'a demandée.
+
+        Sans ce garde-fou, rouvrir une session révoquée — worker qui redémarre
+        après que l'opérateur a fermé la session côté Telegram — enverrait un
+        code que personne n'attend, à chaque redémarrage, en consommant un
+        quota qui se compte et finit par bloquer les connexions légitimes.
+
+        La reprise d'une base valide ne passe jamais ici: TDLib va directement
+        à `authorizationStateReady`.
+        """
+        if self.code_provider is None:
+            raise LoginAbandoned(
+                "Session Telegram non autorisée: reconnecter la persona depuis "
+                "l'application."
+            )
+        return await super()._set_authentication_phone_number()
+
     async def _auth_get_code(self, *, code_type: str = "SMS") -> str:
         if self.code_provider is None:
             raise LoginAbandoned("Aucune source de code fournie.")
@@ -140,6 +159,14 @@ class PersonaTelegram:
                 if code_provider is not None
                 else "Base TDLib illisible ou compte non autorisé: reconnecter la persona."
             ) from error
+        except BaseException:
+            # Fermer quelle que soit la cause: un démarrage échoué laisse
+            # sinon un client vivant qui retient le verrou du répertoire, et
+            # la persona devient impossible à reconnecter jusqu'au
+            # redémarrage du worker. `except BaseException` est délibéré —
+            # une annulation doit refermer elle aussi.
+            await self.close()
+            raise
         return await self.me()
 
     async def close(self) -> None:
@@ -163,13 +190,30 @@ class PersonaTelegram:
 
         self.raw.add_event_handler(on_state, API.Types.UPDATE_AUTHORIZATION_STATE)
 
+        current = asyncio.current_task()
+
         try:
             await self.raw.api.close()
             await asyncio.wait_for(closed, timeout=15)
         except Exception as error:  # noqa: BLE001 — la fermeture ne doit jamais lever
             logger.warning("fermeture TDLib imparfaite: %s", error)
-        finally:
+
+        try:
             await self.raw.stop()
+        except asyncio.CancelledError:
+            # aiotdlib annule sa propre boucle d'updates puis l'attend. Le
+            # CancelledError de SA tâche remonte alors dans NOTRE coroutine et
+            # annule l'appelant — concrètement, l'activité de login mourait en
+            # fermant le client qu'elle voulait remplacer.
+            #
+            # On ne le laisse passer que si nous avons réellement été annulés,
+            # pour ne pas rendre cette coroutine insensible à une vraie
+            # annulation.
+            if current is not None and current.cancelling() > 0:
+                raise
+            logger.debug("annulation interne d'aiotdlib absorbée à la fermeture")
+        except Exception as error:  # noqa: BLE001
+            logger.warning("arrêt du client imparfait: %s", error)
 
     async def __aenter__(self) -> "PersonaTelegram":
         await self.start()

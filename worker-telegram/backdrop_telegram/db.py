@@ -146,3 +146,92 @@ async def list_telegram_personas() -> list[dict[str, Any]]:
             }
         )
     return personas
+
+
+MEDIA_ROOT = None
+
+
+def media_root():
+    """Racine des médias, partagée avec le worker Node (section 5)."""
+    import os
+    from pathlib import Path
+
+    return Path(os.environ.get("MEDIA_ROOT", "").strip() or "./media").resolve()
+
+
+async def load_publication_plan(publication_id: str) -> dict[str, Any]:
+    """
+    Plan d'envoi d'une publication Telegram.
+
+    Les chemins sont résolus ici, côté worker: le workflow ne transporte que
+    des identifiants, et un chemin absolu dans son historique n'aurait aucun
+    sens sur une autre machine.
+    """
+    async with await connect() as conn:
+        row = await (
+            await conn.execute(
+                'select p.id, p.status, p.kind, p.copy, p."starPrice", '
+                'p."targetChatId", p."targetLabel", p."scheduledAt", '
+                'c."personaId", c."scheduleToleranceMinutes" '
+                'from "Publication" p '
+                'join "ChannelAccount" c on c.id = p."channelAccountId" '
+                "where p.id = %s and c.platform = 'TELEGRAM'",
+                (publication_id,),
+            )
+        ).fetchone()
+
+        if row is None:
+            raise RuntimeError(f"Publication Telegram introuvable: {publication_id}")
+
+        items = await (
+            await conn.execute(
+                'select v."localPath", a."mimeType", a.width, a.height '
+                'from "PublicationItem" i '
+                'join "Variant" v on v.id = i."variantId" '
+                'join "Asset" a on a.id = v."assetId" '
+                'where i."publicationId" = %s order by i.position',
+                (publication_id,),
+            )
+        ).fetchall()
+
+    root = media_root()
+    return {
+        "publicationId": row["id"],
+        "status": row["status"],
+        "caption": row["copy"],
+        "starPrice": row["starPrice"],
+        "chatId": row["targetChatId"],
+        "targetLabel": row["targetLabel"],
+        "personaId": row["personaId"],
+        "scheduledAt": row["scheduledAt"].isoformat(),
+        "toleranceMinutes": row["scheduleToleranceMinutes"],
+        "media": [
+            {
+                "path": str(root / item["localPath"]),
+                # Le type MIME fait foi: l'Asset ne porte pas de drapeau vidéo,
+                # et se fier à l'extension du fichier serait fragile.
+                "isVideo": (item["mimeType"] or "").startswith("video/"),
+                "width": item["width"],
+                "height": item["height"],
+            }
+            for item in items
+        ],
+    }
+
+
+async def mark_publication_published(publication_id: str, remote_id: str) -> None:
+    async with await connect() as conn:
+        await conn.execute(
+            'update "Publication" set status = \'PUBLISHED\', "remoteId" = %s, '
+            '"publishedAt" = %s, "updatedAt" = %s where id = %s',
+            (remote_id, datetime.now(timezone.utc), datetime.now(timezone.utc), publication_id),
+        )
+
+
+async def mark_publication_failed(publication_id: str, reason: str) -> None:
+    async with await connect() as conn:
+        await conn.execute(
+            'update "Publication" set status = \'FAILED\', "failureReason" = %s, '
+            '"updatedAt" = %s where id = %s',
+            (reason[:500], datetime.now(timezone.utc), publication_id),
+        )
