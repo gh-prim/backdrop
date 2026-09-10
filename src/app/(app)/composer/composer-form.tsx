@@ -857,9 +857,11 @@ export function ComposerForm({
                   onPriceChange={setFanvuePrice}
                   previewVariantId={fanvuePreview}
                   onPreviewChange={setFanvuePreview}
-                  selectedVariants={selected
-                    .map((id) => variants.find((variant) => variant.id === id))
-                    .filter((variant): variant is VariantOption => Boolean(variant))
+                  // Le teaser ne peut pas être un média de l'envoi: ceux-là
+                  // sont verrouillés, et le donner en aperçu reviendrait à le
+                  // vendre et à l'offrir en même temps.
+                  teaserCandidates={variants
+                    .filter((variant) => !selected.includes(variant.id))
                     .map((variant) => ({
                       id: variant.id,
                       rating: variant.rating,

@@ -26,10 +26,16 @@ const AUDIENCES = [
 /**
  * Réglages propres à Fanvue.
  *
- * Trois choix, et un seul est obligatoire: l'audience. Le prix et le teaser
- * vont ensemble — c'est le rail de monétisation natif de la plateforme, un
- * post verrouillé avec son aperçu gratuit — et l'un sans l'autre ne veut rien
- * dire, ce que le panneau refuse plutôt que de le laisser filer.
+ * Trois choix, et un seul est obligatoire: l'audience.
+ *
+ * Le prix vaut pour **le post entier**, pas par image: l'API n'a qu'un champ
+ * `price`, et tous les `mediaUuids` sont verrouillés ensemble. Vendre une
+ * photo à l'unité, c'est donc un post par photo — ou un lien média, qui est un
+ * autre objet.
+ *
+ * Le teaser est une image **hors de l'envoi**: celles du post sont
+ * verrouillées, et désigner l'une d'elles comme aperçu gratuit la donnerait et
+ * la vendrait à la fois. On propose donc le reste de la bibliothèque.
  */
 export function FanvuePanel({
   audience,
@@ -38,7 +44,7 @@ export function FanvuePanel({
   onPriceChange,
   previewVariantId,
   onPreviewChange,
-  selectedVariants,
+  teaserCandidates,
 }: {
   audience: string;
   onAudienceChange: (value: string) => void;
@@ -47,8 +53,8 @@ export function FanvuePanel({
   onPriceChange: (value: string) => void;
   previewVariantId: string | null;
   onPreviewChange: (variantId: string | null) => void;
-  /** Médias de l'envoi, parmi lesquels choisir le teaser. */
-  selectedVariants: { id: string; rating: string; ratio: string }[];
+  /** Médias **hors** de l'envoi: le teaser est ce qu'on montre, pas ce qu'on vend. */
+  teaserCandidates: { id: string; rating: string; ratio: string }[];
 }) {
   const cents = useMemo(() => {
     const value = Number(priceUsd.replace(",", "."));
@@ -116,8 +122,8 @@ export function FanvuePanel({
           <p className="text-xs text-muted-foreground">
             {/* Le teaser est ce que voient les non-abonnés: sans lui, un post
                 payant n'est qu'un cadenas. */}
-            Shown to everyone before unlocking. Pick one of the media of this
-            send, or leave it out.
+            Shown to everyone before unlocking, and never part of what they
+            buy — so it comes from the rest of the library, not from this send.
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -134,7 +140,7 @@ export function FanvuePanel({
               None
             </button>
 
-            {selectedVariants.map((variant) => (
+            {teaserCandidates.slice(0, 12).map((variant) => (
               <button
                 key={variant.id}
                 type="button"

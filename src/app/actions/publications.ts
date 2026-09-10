@@ -125,6 +125,18 @@ export async function schedulePublicationAction(
     };
   }
 
+  // Le teaser est montré à tous; les médias du post sont ce qu'on vend. Le
+  // même fichier des deux côtés serait offert et vendu à la fois.
+  if (
+    parsed.data.fanvuePreviewVariantId &&
+    parsed.data.variantIds.includes(parsed.data.fanvuePreviewVariantId)
+  ) {
+    return {
+      ok: false,
+      error: "The free preview cannot be one of the media the post sells.",
+    };
+  }
+
   if (parsed.data.kind !== "CAROUSEL" && parsed.data.variantIds.length > 1) {
     return { ok: false, error: "A single post or a Reel carries one media only." };
   }
