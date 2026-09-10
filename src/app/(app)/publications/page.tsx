@@ -3,8 +3,10 @@ import { listPersonas, getSelectedPersonaId } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
 import { listPublications } from "@/lib/publications";
 import { Card, CardContent } from "@/components/ui/card";
+
+const RATINGS = ["SFW", "SUGGESTIVE", "NSFW"] as const;
 import { PageHeader } from "@/components/page-header";
-import { PublicationsTable } from "./publications-table";
+import { PublicationsGrid } from "./publications-grid";
 
 export default async function PublicationsPage() {
   const ctx = await requireOrgContext();
@@ -28,9 +30,8 @@ export default async function PublicationsPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden py-0">
-        <PublicationsTable
-          rows={publications.map((publication) => ({
+        <PublicationsGrid
+          cards={publications.map((publication) => ({
             id: publication.id,
             name: publication.name,
             kind: publication.kind,
@@ -45,17 +46,27 @@ export default async function PublicationsPage() {
             platform: publication.channelAccount.platform,
             persona: publication.channelAccount.persona.name,
             itemCount: publication.items.length,
-            rating: publication.items.reduce<string>(
+            // Le rating de la tuile est le plus élevé du lot: flouter selon la
+            // couverture laisserait passer un média sensible derrière une
+            // première image anodine.
+            rating: publication.items.reduce<"SFW" | "SUGGESTIVE" | "NSFW">(
               (max, item) =>
-                ["SFW", "SUGGESTIVE", "NSFW"].indexOf(item.variant.asset.rating) >
-                ["SFW", "SUGGESTIVE", "NSFW"].indexOf(max)
+                RATINGS.indexOf(item.variant.asset.rating) > RATINGS.indexOf(max)
                   ? item.variant.asset.rating
                   : max,
               "SFW",
             ),
+            coverVariantId: publication.items[0]?.variant.id ?? null,
+            coverRatio: publication.items[0]?.variant.ratio ?? null,
+            starPrice: publication.starPrice,
+            targetLabel: publication.targetLabel,
+            // Telegram nomme sa destination; ailleurs, le compte de la
+            // persona sur la plateforme est la seule destination possible.
+            destination:
+              publication.targetLabel ??
+              `${publication.channelAccount.platform.charAt(0)}${publication.channelAccount.platform.slice(1).toLowerCase()} · ${publication.channelAccount.persona.name}`,
           }))}
         />
-        </Card>
       )}
     </div>
   );

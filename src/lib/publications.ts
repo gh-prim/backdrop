@@ -43,6 +43,8 @@ export async function listPublications(ctx: OrgContext, personaId?: string) {
       remoteId: true,
       failureReason: true,
       version: true,
+      starPrice: true,
+      targetLabel: true,
       createdBy: { select: { name: true } },
       channelAccount: {
         select: {
