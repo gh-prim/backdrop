@@ -28,7 +28,7 @@ venv/
 *.session-journal
 
 # Média: jamais versionné
-media/
+/media/
 
 # Divers
 .DS_Store
