@@ -19,6 +19,7 @@ conséquences, assumées:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import os
@@ -51,7 +52,34 @@ def database_encryption_key(persona_id: str) -> bytes:
 
     Le HMAC lie la clé à l'identifiant de la persona: deux répertoires ne
     partagent jamais la même, si bien qu'une base volée ne dit rien des autres.
+
+    **La clé est choisie pour survivre à un défaut d'aiotdlib.** Son type
+    `Bytes` sérialise en base64 **url-safe**, alors que l'interface JSON de
+    TDLib attend du base64 standard. Une clé dont l'encodage contient `-` ou
+    `_` fait donc échouer `setTdlibParameters` sur:
+
+        Failed to parse JSON object as TDLib request: Wrong character in the string
+
+    TDLib reste alors muet, aucun état d'autorisation n'arrive, et la
+    connexion expire sur un délai qui ne désigne pas sa cause. Environ trois
+    clés sur quatre sont concernées — d'où une panne qui ressemble à un hasard
+    de machine, alors qu'elle ne dépend que de la clé tirée.
+
+    On dérive donc par compteur jusqu'à obtenir un encodage sans ces deux
+    caractères. Le compteur 0 est la valeur historique: une persona qui
+    fonctionne aujourd'hui garde exactement sa clé, et sa base reste lisible.
     """
-    return hmac.new(
-        master_key(), f"tdlib:{persona_id}".encode("utf-8"), hashlib.sha256
-    ).digest()
+    for counter in range(256):
+        material = f"tdlib:{persona_id}" if counter == 0 else f"tdlib:{persona_id}:{counter}"
+        candidate = hmac.new(
+            master_key(), material.encode("utf-8"), hashlib.sha256
+        ).digest()
+        encoded = base64.urlsafe_b64encode(candidate).decode("ascii")
+        if "-" not in encoded and "_" not in encoded:
+            return candidate
+
+    # Inatteignable en pratique: une clé sur quatre convient, et on en essaie
+    # 256. Lever plutôt que rendre une clé qui ne pourra jamais servir.
+    raise RuntimeError(
+        "Aucune clé de base TDLib compatible dérivée pour cette persona."
+    )
