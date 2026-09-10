@@ -6,9 +6,9 @@ import { cn } from "cn";
  * Aucune requête réseau: un logo distant échouerait hors ligne et ferait fuiter
  * la navigation de l'opérateur vers un tiers.
  *
- * Fanvue n'a pas de glyphe public établi comme Instagram ou Telegram: son
- * monogramme est une approximation assumée, à remplacer si la marque en publie
- * un officiel.
+ * Le glyphe Fanvue est vectorisé depuis l'icône officielle de la marque: son
+ * tracé n'est pas une invention, mais il n'est pas non plus le fichier
+ * d'origine — à remplacer si Fanvue publie un SVG.
  */
 
 type Props = { className?: string };
@@ -57,11 +57,8 @@ export function TelegramLogo({ className }: Props) {
 export function FanvueLogo({ className }: Props) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={cn("size-6", className)}>
-      <rect x="2" y="2" width="20" height="20" rx="5.5" fill="#0B0B0F" />
-      <path
-        d="M9 17V7.8c0-.5.4-.8.9-.8H15v2.4h-3.6v2.3H15v2.4h-3.6V17H9Z"
-        fill="white"
-      />
+      <rect x="0" y="0" width="24" height="24" rx="5.5" fill="#49F264" />
+      <path d="M13.00 5.88C14.21 5.85 18.90 5.83 20.12 5.88C21.35 5.92 20.31 6.00 20.38 6.12C20.44 6.25 20.58 6.44 20.50 6.62C20.42 6.81 20.77 7.04 19.88 7.25C18.98 7.46 16.21 7.58 15.12 7.88C14.04 8.17 13.67 8.69 13.38 9.00C13.08 9.31 13.27 9.48 13.38 9.75C13.48 10.02 13.48 10.33 14.00 10.62C14.52 10.92 16.02 11.23 16.50 11.50C16.98 11.77 16.94 12.02 16.88 12.25C16.81 12.48 16.98 12.54 16.12 12.88C15.27 13.21 12.75 13.77 11.75 14.25C10.75 14.73 10.73 15.04 10.12 15.75C9.52 16.46 8.65 18.04 8.12 18.50C7.60 18.96 7.21 18.60 7.00 18.50C6.79 18.40 6.81 18.25 6.88 17.88C6.94 17.50 7.31 16.81 7.38 16.25C7.44 15.69 7.40 14.92 7.25 14.50C7.10 14.08 7.00 14.00 6.50 13.75C6.00 13.50 4.69 13.23 4.25 13.00C3.81 12.77 3.83 12.60 3.88 12.38C3.92 12.15 3.83 11.90 4.50 11.62C5.17 11.35 7.08 11.02 7.88 10.75C8.67 10.48 8.75 10.40 9.25 10.00C9.75 9.60 10.40 8.96 10.88 8.38C11.35 7.79 11.79 6.90 12.12 6.50C12.46 6.10 12.73 6.10 12.88 6.00C13.02 5.90 11.79 5.90 13.00 5.88Z" fill="#151515" />
     </svg>
   );
 }
