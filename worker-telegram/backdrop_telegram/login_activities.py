@@ -122,7 +122,11 @@ async def request_login_code(input: dict[str, Any]) -> dict[str, Any]:
         )
 
     activity.logger.info("code envoyé", extra={"loginId": login_id})
-    return {"sentTo": sent.type.value if hasattr(sent.type, "value") else str(sent.type)}
+    # Uniquement des primitives: Temporal sérialise le retour en JSON, et un
+    # objet Hydrogram y échoue **après** que le code a été envoyé — le pire
+    # moment, puisque l'échec détruit la session en attente alors que
+    # l'opérateur a déjà reçu son code.
+    return {"sentTo": str(sent.type)}
 
 
 @activity.defn(name="submitLoginCode")
