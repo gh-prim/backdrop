@@ -158,12 +158,22 @@ services:
     restart: unless-stopped
     depends_on:
       - web
+    environment:
+      # `localhost` en développement; le nom de domaine du serveur en
+      # production, où Caddy obtient alors un vrai certificat.
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      # `internal` = autorité locale de Caddy. Sur un domaine public, mettre
+      # l'adresse e-mail de contact ACME pour basculer sur Let's Encrypt.
+      TLS_OPTIONS: ${TLS_OPTIONS:-internal}
     ports:
       - "${WEB_HTTPS_PORT:-3443}:443"
       # L'ancien port de l'application, désormais chiffré lui aussi: une URL
       # en https://localhost:3100 doit répondre, pas casser sur un
       # ERR_SSL_PROTOCOL_ERROR.
       - "${WEB_PORT:-3100}:443"
+      # ACME: Let's Encrypt valide le domaine sur le port 80. Inutile en
+      # développement, indispensable dès qu'on sort de `localhost`.
+      - "${ACME_PORT:-8080}:80"
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

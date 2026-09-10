@@ -75,6 +75,59 @@ Identifiants du seed: `owner@backdrop.local` / `backdrop-owner-2026`, ou les
 valeurs de `SEED_OWNER_EMAIL` et `SEED_OWNER_PASSWORD`. **Les changer avant
 tout usage réel.**
 
+## Déployer sur un serveur
+
+Tout se construit sur place, aucune image à publier:
+
+```bash
+git clone … && cd backdrop
+cp .env.example .env      # puis remplir les secrets
+docker compose up -d --build
+```
+
+Renseigner dans `.env` le domaine et le contact ACME, pour que Caddy obtienne
+un vrai certificat au lieu de son autorité locale:
+
+```
+SITE_ADDRESS=backdrop.example.com
+TLS_OPTIONS=ops@example.com
+WEB_HTTPS_PORT=443
+ACME_PORT=80
+BETTER_AUTH_URL=https://backdrop.example.com
+AUTH_TRUSTED_ORIGINS=https://backdrop.example.com
+```
+
+Le DNS doit déjà pointer sur la machine et le port 80 être publié: c'est là que
+Let's Encrypt valide le domaine.
+
+### Mettre à jour
+
+```bash
+git pull && docker compose up -d --build
+```
+
+Le service `migrate` s'exécute **à chaque démarrage**, avant tout le reste:
+il applique `prisma migrate deploy`, puis sort. L'application et les workers
+attendent qu'il ait terminé (`service_completed_successfully`), et ne démarrent
+donc jamais sur un schéma en retard. Quand il n'y a rien à appliquer, il le dit
+et rend la main en une seconde.
+
+Ce n'est pas le service web qui migre, délibérément: deux répliques qui
+migreraient à leur démarrage se marcheraient dessus.
+
+### La clé de chiffrement
+
+`CREDENTIALS_MASTER_KEY` déchiffre les credentials plateforme et les bases
+TDLib. La changer, ou en générer une nouvelle sur le serveur, rend illisible
+tout ce qui a été chiffré avec l'ancienne: **chaque canal serait à reconnecter**.
+Pour transporter une installation, passer par Réglages → Backup, qui scelle les
+identifiants sous une phrase de passe (voir `src/lib/config-backup.ts`).
+
+Deux choses ne voyagent jamais avec la configuration: les **médias**, qui
+vivent sur le volume, et les **sessions Telegram**, qui sont des répertoires
+TDLib liés à la machine. Sur un nouveau serveur, chaque persona Telegram
+redemande un code de connexion.
+
 ## Tests
 
 ```bash
