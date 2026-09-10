@@ -46,3 +46,6 @@ worker-telegram/.session.enc
 
 # Bases TDLib: une par persona. Contiennent la session, jamais versionnées.
 worker-telegram/.tdlib-sessions/
+
+# Exports de configuration: identifiants scellés, jamais dans le dépôt.
+backdrop-config*.json
