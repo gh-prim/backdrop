@@ -386,6 +386,10 @@ export function ComposerForm({
       {/* Tout l'état du wizard est réémis à la soumission finale. */}
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />
+      {/* La légende est saisie dans une étape, et une étape quittée est
+          démontée: sans cette reprise, tout envoi comportant un onglet après
+          l'étape Caption partait sans texte. */}
+      <input type="hidden" name="caption" value={caption} />
       {/* L'instant, pas l'heure murale: le fuseau de l'opérateur ne se devine
           pas côté serveur (voir `schedule-time`). */}
       <input
@@ -780,7 +784,6 @@ export function ComposerForm({
                 <Label htmlFor="captionInput">Caption</Label>
                 <textarea
                   id="captionInput"
-                  name="caption"
                   rows={4}
                   maxLength={2200}
                   value={caption}
