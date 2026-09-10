@@ -39,6 +39,10 @@ export type PublicationPlan = {
   toleranceMinutes: number;
   /** Simulation: tout est vérifié, rien n'est envoyé. */
   dryRun: boolean;
+  /** Fanvue: audience du post, prix en cents, teaser gratuit (4.3.7). */
+  audience: string | null;
+  priceCents: number | null;
+  previewVariantId: string | null;
   items: PublicationItemPlan[];
 };
 
@@ -72,6 +76,9 @@ export async function loadPublicationPlan(
       scheduledAt: true,
       status: true,
       dryRun: true,
+      audience: true,
+      priceCents: true,
+      previewVariantId: true,
       channelAccount: {
         select: { platform: true, scheduleToleranceMinutes: true },
       },
@@ -106,6 +113,9 @@ export async function loadPublicationPlan(
     scheduledAt: publication.scheduledAt.toISOString(),
     status: publication.status,
     dryRun: publication.dryRun,
+    audience: publication.audience,
+    priceCents: publication.priceCents,
+    previewVariantId: publication.previewVariantId,
     toleranceMinutes:
       publication.channelAccount.scheduleToleranceMinutes ??
       DEFAULT_SCHEDULE_TOLERANCE_MINUTES,

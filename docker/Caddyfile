@@ -1,0 +1,16 @@
+# Terminaison TLS locale.
+#
+# Fanvue n'accepte que des redirect_uri en HTTPS, y compris en développement
+# (4.3.2): l'application se sert donc derrière ce proxy, et le retour
+# d'autorisation arrive sur une origine chiffrée.
+#
+# `tls internal`: Caddy émet le certificat avec son autorité locale. Le
+# navigateur avertit tant que cette autorité n'est pas approuvée — c'est
+# attendu sur une instance auto-hébergée, et sans conséquence pour un outil
+# interne.
+localhost {
+	tls internal
+	# Le nom de service Compose, pas localhost: à l'intérieur du réseau
+	# Docker, localhost désignerait le conteneur du proxy lui-même.
+	reverse_proxy web:3000
+}

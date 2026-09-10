@@ -443,6 +443,63 @@ export async function scheduleTelegramPublication(
   });
 }
 
+/**
+ * Programme une publication Fanvue (4.3.8).
+ *
+ * `publishAt` existe côté Fanvue et n'est pas utilisé: l'horloge appartient à
+ * l'application sur tous les canaux (7.6). Le Schedule Temporal démarre donc
+ * le workflow, qui attend lui-même l'échéance.
+ */
+export async function scheduleFanvuePublication(
+  publicationId: string,
+  at: Date,
+): Promise<void> {
+  const client = await temporalClient();
+  await unschedulePublication(publicationId);
+
+  await client.schedule.create({
+    scheduleId: publishScheduleId(publicationId),
+    spec: {
+      calendars: [
+        {
+          year: at.getUTCFullYear(),
+          month: MONTHS[at.getUTCMonth()],
+          dayOfMonth: at.getUTCDate(),
+          hour: at.getUTCHours(),
+          minute: at.getUTCMinutes(),
+          second: at.getUTCSeconds(),
+        },
+      ],
+      timezone: "UTC",
+    },
+    action: {
+      type: "startWorkflow",
+      workflowType: "publishFanvue",
+      workflowId: publishWorkflowId(publicationId),
+      taskQueue: TASK_QUEUE.node,
+      args: [{ publicationId }],
+    },
+    policies: { overlap: ScheduleOverlapPolicy.SKIP },
+    state: { remainingActions: 1 },
+  });
+}
+
+/** Démarre la publication Fanvue immédiatement, à la programmation (7.6). */
+export async function startFanvuePublishWorkflow(
+  publicationId: string,
+): Promise<void> {
+  const client = await temporalClient();
+  try {
+    await client.workflow.start("publishFanvue", {
+      workflowId: publishWorkflowId(publicationId),
+      taskQueue: TASK_QUEUE.node,
+      args: [{ publicationId }],
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  }
+}
+
 /** Démarre la publication Telegram, à la programmation (7.6). */
 export async function startTelegramPublishWorkflow(
   publicationId: string,

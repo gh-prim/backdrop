@@ -20,6 +20,22 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: envOr("BETTER_AUTH_URL", "http://localhost:3000"),
 
+  /**
+   * L'instance est joignable par deux portes: la façade HTTPS, exigée par le
+   * retour d'autorisation Fanvue (4.3.2), et le port en clair du service web.
+   *
+   * Sans cette liste, une session ouverte sur l'une est refusée sur l'autre,
+   * et le retour d'OAuth atterrit sur l'écran de connexion — au moment
+   * précis où le code d'autorisation, à usage unique, est déjà consommé.
+   */
+  trustedOrigins: envOr(
+    "AUTH_TRUSTED_ORIGINS",
+    "http://localhost:3100,https://localhost:3443",
+  )
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,

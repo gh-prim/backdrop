@@ -17,6 +17,7 @@ import { cn } from "cn";
 import type { PersonaOption } from "@/lib/persona";
 import { InstagramWizard } from "./instagram-wizard";
 import { TelegramWizard } from "./telegram-wizard";
+import { FanvueWizard } from "./fanvue-wizard";
 
 type Platform = "INSTAGRAM" | "TELEGRAM" | "FANVUE";
 
@@ -50,8 +51,8 @@ const CATALOG: {
   {
     platform: "FANVUE",
     name: "Fanvue",
-    blurb: "Lands in phase 4.",
-    available: false,
+    blurb: "OAuth authorization. Posts and paid media, no rating limit.",
+    available: true,
   },
 ];
 
@@ -68,12 +69,15 @@ export function ChannelsPanel({
   personas,
   personaNames,
   telegramPersonaIds,
+  fanvueAppConfigured,
   isOwner,
 }: {
   channels: ChannelTile[];
   personas: PersonaOption[];
   personaNames: Record<string, string>;
   telegramPersonaIds: string[];
+  /** L'app OAuth de l'organisation existe: le wizard saute son premier temps. */
+  fanvueAppConfigured: boolean;
   isOwner: boolean;
 }) {
   const [picking, setPicking] = useState(false);
@@ -181,7 +185,12 @@ export function ChannelsPanel({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {connecting && <PlatformLogo platform={connecting} className="size-5" />}
-              Connect {connecting === "TELEGRAM" ? "Telegram" : "Instagram"}
+              Connect{" "}
+              {connecting === "TELEGRAM"
+                ? "Telegram"
+                : connecting === "FANVUE"
+                  ? "Fanvue"
+                  : "Instagram"}
             </DialogTitle>
           </DialogHeader>
 
@@ -192,6 +201,13 @@ export function ChannelsPanel({
             <TelegramWizard
               personas={personas}
               configuredPersonaIds={telegramPersonaIds}
+              onDone={() => setConnecting(null)}
+            />
+          )}
+          {connecting === "FANVUE" && (
+            <FanvueWizard
+              personas={personas}
+              appConfigured={fanvueAppConfigured}
               onDone={() => setConnecting(null)}
             />
           )}

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { listMembers, listPendingInvitations } from "@/lib/invitations";
 import { listPersonas } from "@/lib/persona-scope";
 import { listChannelStatus } from "@/lib/channels";
+import { fanvueAppConfigured } from "@/lib/channels/fanvue-app";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FixedHeightPage, TabsShell } from "@/components/tabs-shell";
@@ -16,7 +17,8 @@ export default async function SettingsPage() {
   const ctx = await requireOrgContext();
   const isOwner = ctx.role === "owner";
 
-  const [members, invitations, personas, channels, telegramApps] = await Promise.all([
+  const [members, invitations, personas, channels, telegramApps, hasFanvueApp] =
+    await Promise.all([
     listMembers(ctx),
     isOwner ? listPendingInvitations(ctx) : Promise.resolve([]),
     listPersonas(ctx),
@@ -26,7 +28,9 @@ export default async function SettingsPage() {
       where: { persona: { organizationId: ctx.organizationId } },
       select: { personaId: true },
     }),
-  ]);
+    // Présence seulement: la valeur ne remonte jamais au navigateur (9.7).
+    fanvueAppConfigured(ctx),
+    ]);
 
   const personaNames = new Map(personas.map((persona) => [persona.id, persona.name]));
 
@@ -134,6 +138,7 @@ export default async function SettingsPage() {
                 personas={personas}
                 personaNames={Object.fromEntries(personaNames)}
                 telegramPersonaIds={telegramApps.map((app) => app.personaId)}
+                fanvueAppConfigured={hasFanvueApp}
                 isOwner={isOwner}
               />
             ),

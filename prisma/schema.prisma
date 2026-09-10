@@ -113,6 +113,27 @@ model TelegramApp {
   persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
 }
 
+/// Application OAuth Fanvue de l'organisation (4.3.2).
+///
+/// Une seule app suffit à autoriser plusieurs créatrices — la même paire
+/// `client_id` / `client_secret` sert chaque flux d'autorisation, et les
+/// jetons qui en sortent appartiennent au ChannelAccount, pas ici.
+///
+/// Séparée de ChannelAccount parce qu'elle le précède: sans app enregistrée,
+/// aucune autorisation n'est possible, donc aucun compte à rattacher. Même
+/// raisonnement que TelegramApp (4.2.1).
+model FanvueApp {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  /// Chiffré au repos (AES-256-GCM): { clientId, clientSecret, redirectUri }.
+  /// Ne sort jamais vers le client (9.7).
+  credentials    Bytes
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
 model ChannelAccount {
   id                       String    @id @default(cuid())
   personaId                String
@@ -530,7 +551,8 @@ model Organization {
   invitations Invitation[]
 
   // Ajouté à la main: l'Organization est le tenant, frontière d'isolation (7.4).
-  personas Persona[]
+  personas  Persona[]
+  fanvueApp FanvueApp?
 
   @@unique([slug])
   @@map("organization")

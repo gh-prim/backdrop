@@ -129,7 +129,8 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       # Vue depuis le navigateur, pas depuis le conteneur: c'est l'URL sur
       # laquelle les cookies de session sont posés.
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3100}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://localhost:3443}
+      AUTH_TRUSTED_ORIGINS: ${AUTH_TRUSTED_ORIGINS:-http://localhost:3100,https://localhost:3443}
       MEDIA_ROOT: /media
       SCHEDULE_TOLERANCE_MINUTES: ${SCHEDULE_TOLERANCE_MINUTES:-45}
       META_APP_ID: ${META_APP_ID:-}
@@ -143,9 +144,29 @@ services:
       R2_ENDPOINT: ${R2_ENDPOINT_INTERNAL:-}
       META_GRAPH_BASE: ${META_GRAPH_BASE_INTERNAL:-}
     ports:
-      - "${WEB_PORT:-3100}:3000"
+      # Port en clair, réservé à l'outillage local (curl, scripts). L'accès
+      # opérateur passe par la façade HTTPS: Fanvue n'accepte pas un
+      # redirect_uri en clair (4.3.2).
+      - "127.0.0.1:${WEB_DEBUG_PORT:-3110}:3000"
     volumes:
       - ${MEDIA_HOST_PATH:-./media}:/media
+
+  # Façade HTTPS. Fanvue refuse un redirect_uri en clair, même en
+  # développement (4.3.2): l'application se sert donc derrière ce proxy.
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "${WEB_HTTPS_PORT:-3443}:443"
+      # L'ancien port de l'application, désormais chiffré lui aussi: une URL
+      # en https://localhost:3100 doit répondre, pas casser sur un
+      # ERR_SSL_PROTOCOL_ERROR.
+      - "${WEB_PORT:-3100}:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
 
   worker-node:
     build:
@@ -220,6 +241,7 @@ services:
       - telegram-sessions:/sessions
 
 volumes:
+  caddy-data:
   postgres-data:
   telegram-sessions:
   postgres-temporal-data:

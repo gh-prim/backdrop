@@ -70,6 +70,20 @@ describe("opacité des credentials plateforme", () => {
       // l'instance et rechiffre aussitôt sous la phrase de passe de
       // l'opérateur. Rien de déchiffré ne quitte cette fonction.
       join("src", "lib", "config-backup.ts"),
+      // Fanvue: l'adapter détient les jetons le temps d'un appel, et le
+      // renouvellement les réécrit chiffrés dans la foulée (4.3.3).
+      join("src", "lib", "channels", "fanvue.ts"),
+      join("src", "lib", "channels", "fanvue-account.ts"),
+      // Identifiants de l'app OAuth: écrits chiffrés, relus par les seules
+      // routes du flux d'autorisation, jamais rendus au navigateur.
+      join("src", "lib", "channels", "fanvue-app.ts"),
+      // Fanvue: les jetons sont détenus le temps d'un appel, et le
+      // renouvellement les réécrit chiffrés dans la foulée (4.3.3).
+      join("src", "lib", "channels", "fanvue.ts"),
+      join("src", "lib", "channels", "fanvue-account.ts"),
+      // Identifiants de l'app OAuth: écrits chiffrés, relus par les seules
+      // routes du flux d'autorisation, jamais rendus au navigateur.
+      join("src", "lib", "channels", "fanvue-app.ts"),
     ]);
     const offenders: string[] = [];
 

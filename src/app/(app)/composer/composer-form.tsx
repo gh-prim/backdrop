@@ -19,6 +19,7 @@ import { localInputToInstant, toLocalInput } from "@/lib/schedule-time";
 import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
+import { FanvuePanel } from "./fanvue-panel";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
 
@@ -109,6 +110,10 @@ export function ComposerForm({
   const [telegramChatId, setTelegramChatId] = useState("");
   const [telegramTargetLabel, setTelegramTargetLabel] = useState("");
   const [starPrice, setStarPrice] = useState("");
+  /** Fanvue: audience, prix en dollars, teaser gratuit (4.3.7). */
+  const [fanvueAudience, setFanvueAudience] = useState("subscribers");
+  const [fanvuePrice, setFanvuePrice] = useState("");
+  const [fanvuePreview, setFanvuePreview] = useState<string | null>(null);
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [publishNow, setPublishNow] = useState(false);
   const [name, setName] = useState("");
@@ -164,6 +169,16 @@ export function ComposerForm({
   const instagramChannel = chosenChannels.find(
     (channel) => channel.platform === "INSTAGRAM",
   );
+  const fanvueChannel = chosenChannels.find(
+    (channel) => channel.platform === "FANVUE",
+  );
+
+  /** Prix Fanvue en cents, ou `null` pour un post gratuit. */
+  const fanvuePriceCents = useMemo(() => {
+    const value = Number(fanvuePrice.replace(",", "."));
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return Math.round(value * 100);
+  }, [fanvuePrice]);
 
   /**
    * Rating maximal admissible: le **plus restrictif** des canaux choisis.
@@ -397,6 +412,23 @@ export function ComposerForm({
             value={telegramTargetLabel}
           />
           <input type="hidden" name="starPrice" value={starPrice} />
+        </>
+      )}
+      {fanvueChannel && (
+        <>
+          <input type="hidden" name="fanvueAudience" value={fanvueAudience} />
+          {/* Converti en cents ici: la plateforme ne connaît que des cents, et
+              l'opérateur ne pense qu'en dollars (4.3.7). */}
+          <input
+            type="hidden"
+            name="fanvuePriceCents"
+            value={fanvuePriceCents === null ? "" : String(fanvuePriceCents)}
+          />
+          <input
+            type="hidden"
+            name="fanvuePreviewVariantId"
+            value={fanvuePreview ?? ""}
+          />
         </>
       )}
       {selected.map((id) => (
@@ -818,9 +850,22 @@ export function ComposerForm({
               )}
 
               {currentStep.channel.platform === "FANVUE" && (
-                <p className="text-xs text-muted-foreground">
-                  Fanvue lands in phase 4: audience and price will be set here.
-                </p>
+                <FanvuePanel
+                  audience={fanvueAudience}
+                  onAudienceChange={setFanvueAudience}
+                  priceUsd={fanvuePrice}
+                  onPriceChange={setFanvuePrice}
+                  previewVariantId={fanvuePreview}
+                  onPreviewChange={setFanvuePreview}
+                  selectedVariants={selected
+                    .map((id) => variants.find((variant) => variant.id === id))
+                    .filter((variant): variant is VariantOption => Boolean(variant))
+                    .map((variant) => ({
+                      id: variant.id,
+                      rating: variant.rating,
+                      ratio: variant.ratio,
+                    }))}
+                />
               )}
             </div>
           )}

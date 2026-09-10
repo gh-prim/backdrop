@@ -105,6 +105,12 @@ export type CreatePublicationInput = {
    * paid media — TDLib refuse `inputMessagePaidMedia` ailleurs (4.2.6).
    */
   starPrice?: number | null;
+  /** Fanvue: qui voit le post (4.3.7). */
+  fanvueAudience?: "subscribers" | "followers-and-subscribers" | null;
+  /** Fanvue: prix en cents USD, minimum 300, exige des médias. */
+  fanvuePriceCents?: number | null;
+  /** Fanvue: média affiché gratuitement avant déverrouillage. */
+  fanvuePreviewVariantId?: string | null;
   /** Simulation: tout est vérifié, rien n'est envoyé. */
   dryRun?: boolean;
   /**
@@ -187,6 +193,21 @@ export async function createPublication(
           starPrice:
             channel.platform === Platform.TELEGRAM
               ? (input.starPrice ?? null)
+              : null,
+          // Fanvue: audience, prix en cents et teaser gratuit. Jamais
+          // additionnés avec les Stars de Telegram — deux monnaies, deux
+          // plateformes, et les confondre donnerait un post à 1 500 $.
+          audience:
+            channel.platform === Platform.FANVUE
+              ? (input.fanvueAudience ?? "subscribers")
+              : null,
+          priceCents:
+            channel.platform === Platform.FANVUE
+              ? (input.fanvuePriceCents ?? null)
+              : null,
+          previewVariantId:
+            channel.platform === Platform.FANVUE
+              ? (input.fanvuePreviewVariantId ?? null)
               : null,
           dryRun: input.dryRun ?? false,
         },

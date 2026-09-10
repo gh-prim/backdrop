@@ -18,6 +18,8 @@ import {
   rescheduleWorkflow,
   schedulePublication,
   scheduleTelegramPublication,
+  scheduleFanvuePublication,
+  startFanvuePublishWorkflow,
   startPublishWorkflow,
   startTelegramPublishWorkflow,
   unschedulePublication,
@@ -44,6 +46,10 @@ const createSchema = z.object({
   // Telegram plafonne le prix d'un message payant; la borne exacte vient de
   // `paid_media_message_star_count_max`, que le serveur annonce à 25000.
   starPrice: z.coerce.number().int().min(1).max(25000).optional(),
+  // Fanvue: audience obligatoire côté API, prix plancher 300 cents (4.3.7).
+  fanvueAudience: z.enum(["subscribers", "followers-and-subscribers"]).optional(),
+  fanvuePriceCents: z.coerce.number().int().min(300).max(250000).optional(),
+  fanvuePreviewVariantId: z.string().optional(),
   dryRun: z.coerce.boolean().optional(),
   // Instagram plafonne à 30 hashtags par publication.
   hashtags: z.array(z.string().min(1)).max(HASHTAG_LIMIT).optional(),
@@ -74,6 +80,11 @@ export async function schedulePublicationAction(
     telegramTargetLabel:
       String(formData.get("telegramTargetLabel") ?? "").trim() || undefined,
     starPrice: String(formData.get("starPrice") ?? "").trim() || undefined,
+    fanvueAudience: String(formData.get("fanvueAudience") ?? "").trim() || undefined,
+    fanvuePriceCents:
+      String(formData.get("fanvuePriceCents") ?? "").trim() || undefined,
+    fanvuePreviewVariantId:
+      String(formData.get("fanvuePreviewVariantId") ?? "").trim() || undefined,
     dryRun: formData.get("dryRun") === "1" || undefined,
     hashtags: formData.getAll("hashtags").map(String),
     audioId: String(formData.get("audioId") ?? "").trim() || undefined,
@@ -102,6 +113,15 @@ export async function schedulePublicationAction(
     return {
       ok: false,
       error: `${total} hashtags between the caption and the Instagram tab: ${HASHTAG_LIMIT} at most.`,
+    };
+  }
+
+  // Un teaser sans prix ne déverrouille rien, et un prix sans média n'est pas
+  // achetable: les deux se disent ici, pas au fond du worker (4.3.7).
+  if (parsed.data.fanvuePreviewVariantId && parsed.data.fanvuePriceCents === undefined) {
+    return {
+      ok: false,
+      error: "A free preview only makes sense on a paid Fanvue post.",
     };
   }
 
@@ -141,7 +161,12 @@ export async function schedulePublicationAction(
   const notStarted: string[] = [];
   for (const publication of created) {
     try {
-      if (publication.platform === "TELEGRAM") {
+      if (publication.platform === "FANVUE") {
+        // Même queue que le worker Node, workflow distinct: l'upload part du
+        // worker et il n'y a pas de container à surveiller (4.3.5).
+        if (publishNow) await startFanvuePublishWorkflow(publication.id);
+        else await scheduleFanvuePublication(publication.id, parsed.data.scheduledAt);
+      } else if (publication.platform === "TELEGRAM") {
         // Telegram a sa propre task queue et son propre workflow: le worker
         // Python est le seul à parler TDLib (7.3).
         if (publishNow) await startTelegramPublishWorkflow(publication.id);
