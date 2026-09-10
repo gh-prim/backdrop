@@ -43,3 +43,6 @@ worker-telegram/uv.lock
 
 # Session Telegram chiffrée, produite par le login. Jamais versionnée.
 worker-telegram/.session.enc
+
+# Bases TDLib: une par persona. Contiennent la session, jamais versionnées.
+worker-telegram/.tdlib-sessions/
