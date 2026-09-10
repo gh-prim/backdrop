@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PrismaClient, Platform, Rating, PubKind, PubStatus } from "@prisma/client";
+import { encryptCredentials } from "@/lib/crypto";
 
 export const prisma = new PrismaClient();
 
@@ -49,7 +50,9 @@ export async function createChannel(
       personaId,
       platform,
       externalId: randomUUID(),
-      credentials: Buffer.from("chiffré-au-repos"),
+      // Chiffré pour de vrai: la sauvegarde de configuration le relit, et un
+      // blob factice masquerait une régression de format.
+      credentials: encryptCredentials({ secret: "chiffré-au-repos" }),
       maxRating,
     },
   });

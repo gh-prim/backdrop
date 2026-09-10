@@ -15,6 +15,7 @@ const SERVER_ONLY_MODULES = [
   "@/lib/crypto",
   "@/lib/db",
   "@/lib/channels",
+  "@/lib/config-backup",
   "@/lib/invitations",
   "@/lib/assets",
   "@/lib/publications",

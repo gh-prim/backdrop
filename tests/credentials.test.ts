@@ -66,6 +66,10 @@ describe("opacité des credentials plateforme", () => {
       join("src", "app", "actions", "channels.ts"),
       // Documente leur absence de la projection.
       join("src", "lib", "channels.ts"),
+      // Sauvegarde de configuration: déchiffre avec la clé maître de
+      // l'instance et rechiffre aussitôt sous la phrase de passe de
+      // l'opérateur. Rien de déchiffré ne quitte cette fonction.
+      join("src", "lib", "config-backup.ts"),
     ]);
     const offenders: string[] = [];
 

@@ -10,6 +10,7 @@ import { InviteForm } from "./invite-form";
 import { PersonaForm } from "./persona-form";
 import { InvitationRow } from "./invitation-row";
 import { ChannelsPanel } from "./channels-panel";
+import { BackupPanel } from "./backup-panel";
 
 export default async function SettingsPage() {
   const ctx = await requireOrgContext();
@@ -136,6 +137,11 @@ export default async function SettingsPage() {
                 isOwner={isOwner}
               />
             ),
+          },
+          {
+            value: "backup",
+            label: "Backup",
+            content: <BackupPanel isOwner={isOwner} />,
           },
         ]}
         sidebar={
