@@ -16,8 +16,11 @@ const NAV = [
 
 export default async function AppLayout({
   children,
+  modal,
 }: {
   children: React.ReactNode;
+  /** Slot parallèle du composeur, ouvert par-dessus la page courante. */
+  modal: React.ReactNode;
 }) {
   const ctx = await requireOrgContext();
   const personas = await listPersonas(ctx);
@@ -59,6 +62,10 @@ export default async function AppLayout({
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</main>
+
+      {/* Le composeur s'ouvre ici, par-dessus la page courante. Vide partout
+          ailleurs (voir @modal/default.tsx). */}
+      {modal}
     </div>
   );
 }

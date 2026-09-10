@@ -13,13 +13,16 @@ import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
 import { HashtagPanel } from "@/components/hashtag-panel";
 import { cn } from "cn";
+import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
 
 type ChannelOption = {
   id: string;
-  platform: string;
+  // Typé plutôt que `string`: le panneau par canal choisit son contenu et son
+  // logo d'après cette valeur, et une faute de frappe passerait inaperçue.
+  platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE";
   maxRating: Rating;
   state: string;
 };
@@ -48,7 +51,7 @@ const STEPS = [
   { key: "name", label: "Name" },
   { key: "channels", label: "Channels" },
   { key: "media", label: "Media" },
-  { key: "publish", label: "Caption and send" },
+  { key: "publish", label: "Caption and channels" },
 ] as const;
 
 /**
@@ -282,7 +285,14 @@ export function ComposerForm({
 
       <Stepper step={step} onJump={goToStep} maxReached={step} />
 
-      <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_290px] xl:grid-cols-[minmax(0,1fr)_320px]">
+      {/* `min-h` plutôt qu'une hauteur pleine: une étape à un seul champ ne
+          doit pas s'afficher dans un cadre vide, ni le cadre sauter d'une
+          étape à l'autre. */}
+      {/* Pas d'`items-start` ici: la colonne de contenu doit s'étirer pour que
+          son `overflow-y-auto` ait une hauteur à respecter, faute de quoi elle
+          déborde et passe sous le pied de page. Le récapitulatif se cale seul
+          avec `self-start`. */}
+      <div className="grid min-h-[15rem] flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
           {step === 0 && (
             <div className="space-y-3">
@@ -361,20 +371,6 @@ export function ComposerForm({
                   );
                 })}
               </div>
-              {telegramChannel && (
-                <TelegramTargetPicker
-                  channelAccountId={telegramChannel.id}
-                  chatId={telegramChatId}
-                  onChatIdChange={(id, label) => {
-                    setTelegramChatId(id);
-                    setTelegramTargetLabel(label);
-                  }}
-                  starPrice={starPrice}
-                  onStarPriceChange={setStarPrice}
-                  mediaCount={selected.length}
-                />
-              )}
-
               {chosenChannels.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   One publication is created per channel: a failure on one does not
@@ -451,14 +447,6 @@ export function ComposerForm({
                     them.
                   </span>
                 </p>
-              )}
-
-              {kind === "REEL" && instagramChannel && (
-                <AudioPicker
-                  channelAccountId={instagramChannel.id}
-                  selected={audio}
-                  onSelect={setAudio}
-                />
               )}
 
               {kind === "CAROUSEL" && (
@@ -596,28 +584,81 @@ export function ComposerForm({
                   className="w-full rounded-md border bg-transparent p-2 text-sm"
                   placeholder="2200 characters maximum on Instagram."
                 />
-                <p className="text-xs text-muted-foreground">{caption.length} / 2200</p>
+                <p className="text-xs text-muted-foreground">
+                  {caption.length} / 2200 · shared by every channel of this send
+                </p>
               </div>
 
-              {/* Les hashtags vivent dans la légende: l'API n'a pas de champ
-                  séparé. Ce panneau les compte, les valide et surveille les
-                  deux plafonds (4.1.11). */}
-              {instagramChannel && (
-                <HashtagPanel
-                  channelAccountId={instagramChannel.id}
-                  caption={caption}
-                />
-              )}
+              {/* Un panneau par canal, dans l'ordre où ils ont été choisis.
+                  Les réglages étaient jusqu'ici éparpillés selon le découpage
+                  du wizard — destination Telegram à l'étape 3, musique à la 4,
+                  hashtags à la 5 — alors qu'on y pense par canal. */}
+              {chosenChannels.map((channel) => (
+                <section
+                  key={channel.id}
+                  className="space-y-3 rounded-lg border p-3"
+                >
+                  <h3 className="flex items-center gap-2 text-sm font-medium">
+                    <PlatformLogo platform={channel.platform} className="size-4" />
+                    {channel.platform.charAt(0) +
+                      channel.platform.slice(1).toLowerCase()}
+                  </h3>
 
+                  {channel.platform === "INSTAGRAM" && (
+                    <>
+                      {kind === "REEL" ? (
+                        <AudioPicker
+                          channelAccountId={channel.id}
+                          selected={audio}
+                          onSelect={setAudio}
+                        />
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Music is a Reel feature: the API exposes no audio
+                          parameter elsewhere.
+                        </p>
+                      )}
+
+                      {/* Les hashtags vivent dans la légende: l'API n'a pas de
+                          champ séparé. Ce panneau les compte, les valide et
+                          surveille les deux plafonds (4.1.11). */}
+                      <HashtagPanel
+                        channelAccountId={channel.id}
+                        caption={caption}
+                      />
+                    </>
+                  )}
+
+                  {channel.platform === "TELEGRAM" && (
+                    <TelegramTargetPicker
+                      channelAccountId={channel.id}
+                      chatId={telegramChatId}
+                      onChatIdChange={(id, label) => {
+                        setTelegramChatId(id);
+                        setTelegramTargetLabel(label);
+                      }}
+                      starPrice={starPrice}
+                      onStarPriceChange={setStarPrice}
+                      mediaCount={selected.length}
+                    />
+                  )}
+                </section>
+              ))}
             </div>
           )}
         </div>
 
         {/* Récapitulatif permanent: les choix restent lisibles pendant qu'on
-            avance, ce qui remplace l'étape de relecture finale. */}
-        <aside className="min-h-0 overflow-y-auto pr-1">
-          <Card>
-            <CardContent className="space-y-1 pt-5 text-xs">
+            avance, ce qui remplace l'étape de relecture finale. Ancré en haut
+            et sur toute la hauteur, pour ne pas flotter au milieu du vide. */}
+        <aside className="hidden min-h-0 self-start overflow-y-auto md:block">
+          {/* Hauteur au contenu: un panneau de trois lignes étiré sur toute la
+              colonne se lit comme une boîte vide. */}
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              This send
+            </p>
+            <div className="space-y-1.5 text-xs">
               <Recap label="Name" value={name} />
               <Recap
                 label="Schedule"
@@ -647,12 +688,12 @@ export function ComposerForm({
               <Recap label="Media" value={`${selected.length}`} />
               {audio && <Recap label="Music" value={`${audio.title} — ${audio.artist}`} />}
               <Recap label="Publications" value={`${chosenChannels.length}`} />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </aside>
       </div>
 
-      <div className="flex items-center gap-2 border-t pt-3">
+      <div className="-mx-4 -mb-4 flex shrink-0 items-center gap-3 border-t bg-muted/30 px-4 py-3">
         <Button
           type="button"
           variant="ghost"
@@ -738,7 +779,9 @@ function Stepper({
   return (
     // Même forme que les onglets d'une page de détail (6.1): pleine largeur,
     // soulignés. La différence est qu'un pas non atteint reste inaccessible.
-    <ol className="flex w-full items-stretch border-b text-sm">
+    // Barre pleine largeur, adossée au bord du modal: le fil d'étapes est un
+    // repère de navigation, pas un contenu — il doit se lire d'un trait.
+    <ol className="-mx-4 -mt-2 flex w-[calc(100%+2rem)] items-stretch border-b bg-muted/30 px-4 text-sm">
       {STEPS.map((entry, index) => {
         const done = index < step;
         const current = index === step;
@@ -750,7 +793,7 @@ function Stepper({
               disabled={!reachable}
               onClick={() => onJump(index)}
               className={cn(
-                "relative flex w-full items-center justify-center gap-2 px-2 py-2 transition-colors",
+                "relative flex w-full items-center justify-center gap-2 px-2 py-2.5 transition-colors",
                 current ? "font-medium text-foreground" : "text-muted-foreground",
                 reachable && !current && "hover:text-foreground",
                 !reachable && "cursor-default opacity-40",
@@ -759,12 +802,12 @@ function Stepper({
             >
               <span
                 className={cn(
-                  "flex size-4 shrink-0 items-center justify-center rounded-full border text-[9px]",
+                  "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium",
                   done && "border-primary bg-primary text-primary-foreground",
                   current && "border-primary",
                 )}
               >
-                {done ? <Check className="size-2.5" /> : index + 1}
+                {done ? <Check className="size-3" /> : index + 1}
               </span>
               <span className="truncate">{entry.label}</span>
             </button>
