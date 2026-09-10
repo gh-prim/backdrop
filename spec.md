@@ -189,9 +189,21 @@ await app.invoke(raw.functions.messages.SendMedia(
 
 **4.2.5 Attribution perdue.** Le champ `payload` de `inputMediaPaidMedia` et l'update `updateBotPurchasedPaidMedia` sont marqués **bots only**. En session utilisateur, il n'y a pas d'attribution par achat. Réconciliation par fenêtre temporelle uniquement, ce qui impose de ne pas publier deux médias payants le même jour sur le même channel si on veut des chiffres exploitables. **Contrainte éditoriale, pas seulement technique.**
 
-**4.2.6 Paid media en DM: à valider avant tout développement.** Toute la documentation MTProto décrit le paid media comme une fonctionnalité de channel. L'ouverture "to any chat" est documentée côté Bot API et suppose un solde de bot, qui n'a pas d'équivalent pour un compte utilisateur. L'app officielle ne propose pas de média payant en conversation privée.
-  - **Tâche bloquante, phase 0.** Tester `SendMedia` + `InputMediaPaidMedia` vers un `InputPeerUser` et consigner l'erreur exacte.
-  - **Si ça échoue:** le DM devient relationnel et l'upsell se fait par lien Fanvue. Un seul rail de paiement Telegram (le channel). C'est le scénario de repli attendu, et il est acceptable.
+**4.2.6 Paid media en DM: tranché le 2026-09-10.** La réponse est **non en session utilisateur**, et la documentation de TDLib l'écrit dans la description même du type:
+
+> `inputMessagePaidMedia` — *can be used only in channel chats with `supergroupFullInfo.has_paid_media_allowed`*
+
+Ce n'est pas une limite de bibliothèque mais une règle de Telegram sur les sessions utilisateur: aucun raw call, aucune autre bibliothèque, aucune version plus récente ne la contourne. Le rail de vente en session utilisateur est donc **le channel, et lui seul**.
+
+**Mais la vente en DM reste atteignable, par un autre rail.** La Bot API accepte `sendPaidMedia` vers une conversation privée, et son paramètre `business_connection_id` fait écrire le bot **au nom du compte** auquel il est connecté. Le destinataire voit la persona, pas un bot — ce qui lève l'objection qui avait fait écarter les bots en tête de 4.2.
+
+Trois conséquences à peser le moment venu:
+
+  * **Comptable.** En channel les étoiles vont au solde du channel; en DM elles vont au **solde du bot**. Cela change qui encaisse et par où passe le retrait.
+  * **Attribution retrouvée.** Le `payload` revient au bot dans l'update `purchased_paid_media`. La perte d'attribution décrite en 4.2.5, et la contrainte éditoriale qui en découlait, ne s'appliquent plus à ce rail.
+  * **Complémentaire, pas substituable.** Un bot ne peut pas initier une conversation. La session utilisateur reste nécessaire pour les channels, le DM relationnel et l'inbox.
+
+À vérifier avant de s'engager: l'exigence exacte de Telegram Premium sur le compte de la persona, et l'étendue réelle d'une connexion Business — répondre dans une conversation existante est certain, l'initier ne l'est pas.
 
 **4.2.7 Upload en deux temps.** MTProto ne connaît pas l'upload par URL. Le worker télécharge depuis le disque local et remonte les octets.
 ```python
