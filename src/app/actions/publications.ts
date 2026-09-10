@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { PubKind, PubStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { MAX_HASHTAGS_PER_POST, totalHashtags } from "@/lib/hashtags";
 import { requireOrgContext } from "@/lib/session";
 import {
   StaleVersionError,
@@ -38,6 +39,8 @@ const createSchema = z.object({
   // `paid_media_message_star_count_max`, que le serveur annonce à 25000.
   starPrice: z.coerce.number().int().min(1).max(25000).optional(),
   dryRun: z.coerce.boolean().optional(),
+  // Instagram plafonne à 30 hashtags par publication.
+  hashtags: z.array(z.string().min(1)).max(30).optional(),
   audioId: z.string().optional(),
   audioVolume: z.coerce.number().int().min(0).max(100).optional(),
   videoVolume: z.coerce.number().int().min(0).max(100).optional(),
@@ -66,6 +69,7 @@ export async function schedulePublicationAction(
       String(formData.get("telegramTargetLabel") ?? "").trim() || undefined,
     starPrice: String(formData.get("starPrice") ?? "").trim() || undefined,
     dryRun: formData.get("dryRun") === "1" || undefined,
+    hashtags: formData.getAll("hashtags").map(String),
     audioId: String(formData.get("audioId") ?? "").trim() || undefined,
     audioVolume: String(formData.get("audioVolume") ?? "").trim() || undefined,
     videoVolume: String(formData.get("videoVolume") ?? "").trim() || undefined,
@@ -82,6 +86,17 @@ export async function schedulePublicationAction(
   );
   if (targetsTelegram && !parsed.data.telegramChatId) {
     return { ok: false, error: "Choose a Telegram destination before sending." };
+  }
+
+  // Instagram refuse la publication au-delà de 30 hashtags (erreur 100/2207040),
+  // il ne se contente pas d'ignorer le surplus. Le dire ici, où l'opérateur
+  // peut retirer un hashtag, plutôt qu'à l'envoi.
+  const total = totalHashtags(parsed.data.caption, parsed.data.hashtags ?? []);
+  if (total > MAX_HASHTAGS_PER_POST) {
+    return {
+      ok: false,
+      error: `${total} hashtags between the caption and the Instagram tab: Instagram refuses a post above ${MAX_HASHTAGS_PER_POST}.`,
+    };
   }
 
   if (parsed.data.kind !== "CAROUSEL" && parsed.data.variantIds.length > 1) {

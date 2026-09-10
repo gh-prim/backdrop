@@ -1,5 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db";
+import { MAX_HASHTAGS_PER_POST, extractHashtags } from "@/lib/hashtags-shared";
+
+export { MAX_HASHTAGS_PER_POST, extractHashtags };
 
 /**
  * Hashtags Instagram: extraction, limites et budget d'interrogation.
@@ -10,22 +13,8 @@ import { prisma } from "@/lib/db";
  *    qui n'a rien à voir avec le premier et se consomme à la validation.
  */
 
-export const MAX_HASHTAGS_PER_POST = 30;
 export const HASHTAG_LOOKUP_BUDGET = 30;
 const BUDGET_WINDOW_DAYS = 7;
-
-/**
- * Extrait les hashtags d'une légende.
- *
- * Instagram accepte lettres, chiffres et tiret bas, y compris accentués. Un
- * croisillon collé à un mot précédent ne compte pas: `mot#tag` n'est pas un
- * hashtag pour Instagram non plus.
- */
-export function extractHashtags(caption: string): string[] {
-  const matches = caption.match(/(?:^|[\s.,;:!?()[\]{}"'—–-])#([\p{L}\p{N}_]+)/gu) ?? [];
-  const names = matches.map((raw) => raw.slice(raw.indexOf("#") + 1).toLowerCase());
-  return [...new Set(names)];
-}
 
 export type HashtagStatus = {
   name: string;
@@ -80,4 +69,58 @@ export async function rememberHashtag(
     // `checkedAt` est réécrit: une revérification consomme bien du budget.
     update: { hashtagId, topMedianLikes: competition, checkedAt: new Date() },
   });
+}
+
+
+/**
+ * Hashtags déjà validés pour ce compte.
+ *
+ * Ce sont eux qu'on propose en premier: leur identifiant Meta est en base, donc
+ * les reprendre ne coûte **rien** au budget hebdomadaire. C'est ce qui rend la
+ * limite des 30 interrogations par semaine supportable — on ne la consomme
+ * qu'une fois par hashtag, la première.
+ */
+export async function listKnownHashtags(channelAccountId: string) {
+  const rows = await prisma.instagramHashtag.findMany({
+    where: { channelAccountId, hashtagId: { not: null } },
+    orderBy: [{ topMedianLikes: "desc" }, { name: "asc" }],
+    select: { name: true, topMedianLikes: true, checkedAt: true },
+  });
+
+  return rows.map((row) => ({
+    name: row.name,
+    competition: row.topMedianLikes,
+    checkedAt: row.checkedAt,
+  }));
+}
+
+/**
+ * Assemble la légende Instagram.
+ *
+ * L'API n'a pas de champ hashtag: ils doivent figurer dans la légende pour
+ * fonctionner (4.1.11). Ils sont donc concaténés ici, **et seulement pour
+ * Instagram** — la légende commune reste propre pour Telegram et Fanvue.
+ */
+export function captionWithHashtags(caption: string, hashtags: string[]): string {
+  // Un hashtag déjà tapé dans la légende ne doit pas être ajouté une seconde
+  // fois: il compterait deux fois dans le plafond pour aucun effet.
+  const already = new Set(extractHashtags(caption));
+  const extra = hashtags
+    .map((name) => name.toLowerCase())
+    .filter((name) => !already.has(name));
+
+  if (extra.length === 0) return caption;
+  const tags = extra.map((name) => `#${name}`).join(" ");
+  return caption.trim().length > 0 ? `${caption.trim()}\n\n${tags}` : tags;
+}
+
+/**
+ * Nombre de hashtags que portera réellement la publication Instagram.
+ *
+ * Compte ceux tapés dans la légende commune **et** ceux choisis dans l'onglet,
+ * sans doublon. Compter les seconds seuls laisserait passer un dépassement
+ * qu'Instagram refuserait à l'envoi, très loin de sa cause.
+ */
+export function totalHashtags(caption: string, picked: string[]): number {
+  return extractHashtags(captionWithHashtags(caption, picked)).length;
 }

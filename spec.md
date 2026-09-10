@@ -147,10 +147,14 @@ Le contournement praticable serait de faire coller à l'opérateur l'identifiant
 
 **4.1.11 Hashtags.** Il n'existe **aucun paramètre dédié**: les hashtags vivent dans la `caption`, comme dans l'application. Deux plafonds indépendants, qu'on confond volontiers:
 
-- **30 hashtags par publication**, imposé par Instagram sur la légende;
+- **30 hashtags par publication**, imposé par Instagram sur la légende. Vérifié dans la documentation le 2026-09-10: au-delà, l'API **refuse la publication** avec l'erreur `100 / 2207040`, elle n'ignore pas le surplus. Le compte porte sur la légende et le premier commentaire réunis; nous ne publions pas de commentaire, la légende seule fait donc foi.
 - **30 hashtags uniques interrogeables par fenêtre glissante de 7 jours** via `GET /ig_hashtag_search`, qui est une limite d'API et n'a rien à voir avec la précédente.
 
 Le second plafond dicte la conception: une validation à la frappe épuiserait le budget d'une semaine en une seule légende. Chaque résolution est donc mise en cache en base (`InstagramHashtag`), un hashtag déjà connu n'est jamais réinterrogé, et la vérification est déclenchée explicitement par l'opérateur, qui voit sa consommation.
+
+**Les hashtags ne se tapent pas dans la légende commune.** Un envoi multi-canal partage une seule légende, et Telegram n'a rien à faire d'une traîne de croisillons. Ils sont donc choisis dans l'**étape Instagram** du composeur, parmi ceux déjà connus — gratuits, puisque leur identifiant est en base — et concaténés à la légende de la **seule publication Instagram** au moment de sa création.
+
+Le premier plafond est vérifié côté serveur sur le total réel, hashtags tapés dans la légende **et** choisis dans l'onglet, sans doublon. Ne compter que les seconds laisserait passer un dépassement qu'Instagram refuse à l'envoi, très loin de sa cause.
 
 `GET /{ig-hashtag-id}/top_media` donne les likes des meilleurs posts d'un hashtag. Leur médiane est un signal de **concurrence**, pas de volume: un hashtag dont les top posts font des milliers de likes est un hashtag où une petite audience n'apparaîtra jamais.
 

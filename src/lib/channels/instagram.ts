@@ -136,6 +136,7 @@ const NON_RETRYABLE_CODES = new Set([
   190, // token invalide ou expiré
   200, // permission insuffisante
   2207026, // format vidéo non supporté (4.1.7)
+  2207040, // plus de 30 hashtags dans la légende (4.1.11)
 ]);
 
 const RETRYABLE_CODES = new Set([

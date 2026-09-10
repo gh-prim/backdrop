@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import "server-only";
 import { Platform, PubKind, PubStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { captionWithHashtags } from "@/lib/hashtags";
 import type { OrgContext } from "@/lib/session";
 
 /**
@@ -106,6 +107,12 @@ export type CreatePublicationInput = {
   starPrice?: number | null;
   /** Simulation: tout est vérifié, rien n'est envoyé. */
   dryRun?: boolean;
+  /**
+   * Hashtags choisis dans l'onglet Instagram. Concaténés à la légende de la
+   * seule publication Instagram: l'API n'a pas de champ dédié, et Telegram n'a
+   * rien à faire d'une traîne de croisillons (4.1.11).
+   */
+  hashtags?: string[];
 };
 
 /**
@@ -157,7 +164,10 @@ export async function createPublication(
           createdByUserId: ctx.userId,
           kind: input.kind,
           name: input.name,
-          copy: input.caption,
+          copy:
+            channel.platform === Platform.INSTAGRAM
+              ? captionWithHashtags(input.caption, input.hashtags ?? [])
+              : input.caption,
           scheduledAt: input.scheduledAt,
           status: PubStatus.SCHEDULED,
           audioId: input.audioId ?? null,

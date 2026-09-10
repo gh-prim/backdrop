@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
-import { HashtagPanel } from "@/components/hashtag-panel";
+import { HashtagPicker } from "@/components/hashtag-picker";
 import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
@@ -114,6 +114,7 @@ export function ComposerForm({
   const [telegramChatId, setTelegramChatId] = useState("");
   const [telegramTargetLabel, setTelegramTargetLabel] = useState("");
   const [starPrice, setStarPrice] = useState("");
+  const [hashtags, setHashtags] = useState<string[]>([]);
   const [publishNow, setPublishNow] = useState(false);
   const [name, setName] = useState("");
   const [channelIds, setChannelIds] = useState<string[]>([]);
@@ -291,6 +292,11 @@ export function ComposerForm({
       <input type="hidden" name="name" value={name} />
       <input type="hidden" name="scheduledAt" value={scheduledAt} />
       {dryRun && <input type="hidden" name="dryRun" value="1" />}
+      {/* Concaténés à la légende de la seule publication Instagram, côté
+          serveur: la légende commune reste propre pour les autres canaux. */}
+      {hashtags.map((name) => (
+        <input key={name} type="hidden" name="hashtags" value={name} />
+      ))}
       <input type="hidden" name="audioId" value={audio?.audioId ?? ""} />
       <input
         type="hidden"
@@ -649,12 +655,11 @@ export function ComposerForm({
                     </p>
                   )}
 
-                  {/* Les hashtags vivent dans la légende: l'API n'a pas de champ
-                      séparé. Ce panneau les compte, les valide et surveille les
-                      deux plafonds (4.1.11). */}
-                  <HashtagPanel
+                  <HashtagPicker
                     channelAccountId={currentStep.channel.id}
                     caption={caption}
+                    selected={hashtags}
+                    onChange={setHashtags}
                   />
                 </>
               )}
