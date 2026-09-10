@@ -9,17 +9,27 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * Enveloppe du composeur en modal.
+ * Enveloppe du composeur.
  *
- * Fermer revient en arrière plutôt que de naviguer vers une page: c'est ce qui
- * ramène exactement là d'où l'on vient — un créneau du calendrier, le
- * dashboard, la bibliothèque.
+ * Le composeur est **toujours** un modal: composer est une action, jamais une
+ * destination. La route interceptée l'ouvre par-dessus la page courante, et
+ * `/composer` chargé directement rend ce même modal — pas une page.
+ *
+ * Fermer revient en arrière, ce qui ramène exactement là d'où l'on vient — un
+ * créneau du calendrier, le dashboard, la bibliothèque. Sur une arrivée
+ * directe il n'y a rien derrière soi: on part alors vers les publications,
+ * plutôt que de sortir de l'application.
  */
 export function ComposerModal({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
+  function close() {
+    if (window.history.length > 1) router.back();
+    else router.replace("/publications");
+  }
+
   return (
-    <Dialog defaultOpen onOpenChange={(open) => !open && router.back()}>
+    <Dialog defaultOpen onOpenChange={(open) => !open && close()}>
       <DialogContent
         // Hauteur libre, plafonnée. Forcer une hauteur pleine donnait un cadre
         // de 800 pixels presque vide sur les premières étapes, qui ne portent
