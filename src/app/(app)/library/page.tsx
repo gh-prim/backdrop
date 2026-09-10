@@ -6,15 +6,18 @@ import { BlurPreferenceToggle } from "@/components/media-thumb";
 import { PageHeader } from "@/components/page-header";
 import { UploadDialog } from "./upload-dialog";
 import { AssetGrid } from "./asset-grid";
+import { listAlbums } from "@/lib/albums";
+import { AlbumShelf } from "./album-shelf";
 
 export default async function LibraryPage() {
   const ctx = await requireOrgContext();
   const personas = await listPersonas(ctx);
   const selectedId = await getSelectedPersonaId(personas);
-  const assets = await listAssets(
-    ctx,
-    selectedId === ALL_PERSONAS ? undefined : selectedId,
-  );
+  const scope = selectedId === ALL_PERSONAS ? undefined : selectedId;
+  const [assets, albums] = await Promise.all([
+    listAssets(ctx, scope),
+    listAlbums(ctx, scope),
+  ]);
 
   const personaNames = new Map(personas.map((persona) => [persona.id, persona.name]));
 
@@ -31,7 +34,24 @@ export default async function LibraryPage() {
         }
       />
 
+      <AlbumShelf
+        albums={albums.map((album) => ({
+          id: album.id,
+          name: album.name,
+          personaName: album.personaName,
+          count: album.count,
+          rating: album.rating,
+          mosaic: album.mosaic,
+        }))}
+      />
+
       <AssetGrid
+        albums={albums.map((album) => ({
+          id: album.id,
+          name: album.name,
+          personaId: album.personaId,
+          count: album.count,
+        }))}
         assets={assets.map((asset) => ({
           id: asset.id,
           rating: asset.rating,

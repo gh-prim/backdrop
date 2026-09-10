@@ -39,6 +39,7 @@ export default async function ComposerModalPage({
     <ComposerModal>
       <ComposerForm
         initialScheduledAt={at}
+        personaId={personaId}
         personaName={personas.find((p) => p.id === personaId)?.name ?? ""}
         channels={channels
           .filter((channel) => channel.personaId === personaId)

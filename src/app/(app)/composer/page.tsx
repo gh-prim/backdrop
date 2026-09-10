@@ -45,6 +45,7 @@ export default async function ComposerPage({
       </div>
       <ComposerForm
         initialScheduledAt={at}
+        personaId={personaId}
         personaName={personas.find((p) => p.id === personaId)?.name ?? ""}
         channels={channels
           .filter((channel) => channel.personaId === personaId)

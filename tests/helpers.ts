@@ -7,7 +7,7 @@ export const prisma = new PrismaClient();
 export async function resetDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "PublicationItem", "Publication", "DmDelivery", "DmCampaignItem", "DmCampaign",
+      "AlbumItem", "Album", "PublicationItem", "Publication", "DmDelivery", "DmCampaignItem", "DmCampaign",
       "TelegramSubscriber", "MetricSnapshot", "FanvueEarning", "Variant", "Asset",
       "ChannelAccount", "Persona", "member", "invitation", "session", "account",
       "user", "organization"
@@ -55,7 +55,12 @@ export async function createChannel(
   });
 }
 
-export async function createVariant(personaId: string, userId: string, rating: Rating) {
+export async function createVariant(
+  personaId: string,
+  userId: string,
+  rating: Rating,
+  ratios: string[] = ["4:5"],
+) {
   const asset = await prisma.asset.create({
     data: {
       personaId,
@@ -65,9 +70,20 @@ export async function createVariant(personaId: string, userId: string, rating: R
       sha256: randomUUID().replace(/-/g, ""),
     },
   });
-  return prisma.variant.create({
-    data: { assetId: asset.id, ratio: "4:5", localPath: `/media/${randomUUID()}-45.jpg` },
-  });
+  // Le premier ratio reste renvoyé tel quel: les tests existants attendent une
+  // variante, pas une liste.
+  const variants = await Promise.all(
+    ratios.map((ratio) =>
+      prisma.variant.create({
+        data: {
+          assetId: asset.id,
+          ratio,
+          localPath: `/media/${randomUUID()}-${ratio.replace(":", "")}.jpg`,
+        },
+      }),
+    ),
+  );
+  return variants[0];
 }
 
 export async function createPublication(

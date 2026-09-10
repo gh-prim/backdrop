@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { MediaThumb } from "@/components/media-thumb";
 import { useLocalPreference } from "@/lib/use-local-preference";
 import { cn } from "cn";
+import { AlbumBar, type AlbumOption } from "./album-bar";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
 
@@ -34,11 +35,18 @@ const TYPE_FILTERS = [
 const MIN_COLUMNS = 2;
 const MAX_COLUMNS = 8;
 
-export function AssetGrid({ assets }: { assets: AssetCard[] }) {
+export function AssetGrid({
+  assets,
+  albums,
+}: {
+  assets: AssetCard[];
+  albums: AlbumOption[];
+}) {
   const [query, setQuery] = useState("");
   const [ratingFilter, setRatingFilter] = useState<string>("All");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [instagramReady, setInstagramReady] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
   const [neverUsed, setNeverUsed] = useState(false);
 
   // La densité est une préférence d'opérateur, pas un réglage de session:
@@ -192,6 +200,8 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
         </div>
       </div>
 
+      <AlbumBar selected={picked} albums={albums} onClear={() => setPicked([])} />
+
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
@@ -214,8 +224,36 @@ export function AssetGrid({ assets }: { assets: AssetCard[] }) {
             return (
               <Card
                 key={asset.id}
-                className="overflow-hidden py-0 transition-colors hover:border-primary/60"
+                className={cn(
+                  "group/asset relative overflow-hidden py-0 transition-colors hover:border-primary/60",
+                  picked.includes(asset.id) && "border-primary",
+                )}
               >
+                {/* Case discrète au repos, révélée au survol ou dès qu'une
+                    sélection est en cours: cocher n'est pas le geste courant
+                    d'une bibliothèque, ouvrir un média l'est. */}
+                <label
+                  className={cn(
+                    "absolute left-2 top-2 z-10 flex size-6 cursor-pointer items-center justify-center rounded-md bg-background/85 backdrop-blur-sm transition-opacity",
+                    picked.includes(asset.id) || picked.length > 0
+                      ? "opacity-100"
+                      : "opacity-0 group-hover/asset:opacity-100 focus-within:opacity-100",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${asset.description ?? "media"}`}
+                    checked={picked.includes(asset.id)}
+                    onChange={() =>
+                      setPicked((current) =>
+                        current.includes(asset.id)
+                          ? current.filter((id) => id !== asset.id)
+                          : [...current, asset.id],
+                      )
+                    }
+                  />
+                </label>
+
                 <Link href={`/library/${asset.id}`} className="block">
                   {cover ? (
                     <MediaThumb

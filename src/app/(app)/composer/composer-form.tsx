@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
+import { AlbumPicker } from "@/components/album-picker";
 import { HashtagPicker } from "@/components/hashtag-picker";
 import { HASHTAG_LIMIT, extractHashtags } from "@/lib/hashtags-shared";
+import { reduceAlbumPick } from "@/lib/albums-shared";
 import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
@@ -91,11 +93,13 @@ function defaultScheduledAt(): string {
 }
 
 export function ComposerForm({
+  personaId,
   personaName,
   channels,
   variants,
   initialScheduledAt,
 }: {
+  personaId: string;
   personaName: string;
   channels: ChannelOption[];
   variants: VariantOption[];
@@ -122,6 +126,10 @@ export function ComposerForm({
   const [kind, setKind] = useState("SINGLE");
   const [selected, setSelected] = useState<string[]>([]);
   const [ratioFilter, setRatioFilter] = useState("all");
+  /** Choisir les médias un par un, ou envoyer un album déjà constitué. */
+  const [mediaSource, setMediaSource] = useState<"media" | "album">("media");
+  /** Bilan du dernier album appliqué: ce qui est entré, et ce qui a été écarté. */
+  const [albumNote, setAlbumNote] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [caption, setCaption] = useState("");
   const [audio, setAudio] = useState<SelectedAudio | null>(null);
@@ -245,6 +253,59 @@ export function ComposerForm({
           ? [...current, variant.id]
           : [variant.id],
     );
+  }
+
+  const CAROUSEL_MAX = 10;
+
+  /**
+   * Un album devient une sélection de médias.
+   *
+   * Le filtre de rating est réappliqué **ici** et non côté serveur de l'album:
+   * l'album ignore les canaux, et un média classé au-dessus de ce que le plus
+   * restrictif accepte ne doit pas entrer dans la sélection par la bande. On
+   * le retire et on le dit, plutôt que de laisser l'envoi échouer plus tard.
+   */
+  function applyAlbum({
+    variantIds,
+    ratio,
+    albumName,
+    missing,
+  }: {
+    variantIds: string[];
+    ratio: string;
+    albumName: string;
+    missing: number;
+  }) {
+    const { kept, blocked, overflow, unknown } = reduceAlbumPick(
+      variantIds,
+      (id) => variants.find((variant) => variant.id === id)?.rating,
+      allowedRating,
+      CAROUSEL_MAX,
+    );
+
+    const dropped: string[] = [];
+    if (missing > 0) dropped.push(`${missing} without a ${ratio} variant`);
+    if (blocked > 0) dropped.push(`${blocked} above ${allowedRating}`);
+    if (overflow > 0) dropped.push(`${overflow} beyond the ${CAROUSEL_MAX}-media limit`);
+    // Une variante inconnue du composeur n'est pas publiable pour cette
+    // persona: le taire ferait un album amputé sans raison visible.
+    if (unknown > 0) dropped.push(`${unknown} not publishable here`);
+
+    const tail = dropped.length > 0 ? ` Left out: ${dropped.join(", ")}.` : "";
+
+    if (kept.length === 0) {
+      setAlbumNote(`Nothing selected from “${albumName}”.${tail}`);
+      return;
+    }
+
+    setSelected(kept);
+    // Plusieurs médias, c'est un carrousel: laisser « Single post » n'enverrait
+    // que le premier sans le dire.
+    if (kept.length > 1 && kind !== "CAROUSEL") setKind("CAROUSEL");
+    if (kept.length === 1 && kind === "CAROUSEL") setKind("SINGLE");
+    setRatioFilter(ratio);
+    setMediaSource("media");
+    setAlbumNote(`“${albumName}” in ${ratio}: ${kept.length} media selected.${tail}`);
   }
 
   /**
@@ -467,11 +528,46 @@ export function ComposerForm({
                     <option value="REEL">Reel</option>
                   </select>
                 </div>
+                <div className="flex gap-1 rounded-md border p-0.5 text-xs">
+                  {[
+                    ["media", "Media"],
+                    ["album", "Albums"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setMediaSource(value as "media" | "album")}
+                      className={cn(
+                        "rounded px-2 py-1 transition-colors",
+                        mediaSource === value
+                          ? "bg-accent font-medium text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <span className="text-xs text-muted-foreground">
                   {selected.length} selected
                   {kind === "CAROUSEL" && " — up to 10, in the order you pick"}
                 </span>
               </div>
+
+              {albumNote && (
+                <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  {albumNote}
+                </p>
+              )}
+
+              {mediaSource === "album" ? (
+                // L'album est un raccourci de sélection, pas un autre type
+                // d'envoi: il repose la sélection dans la grille, où elle reste
+                // ajustable avant la légende.
+                <AlbumPicker personaId={personaId} onPick={applyAlbum} />
+              ) : (
+                <>
 
               {(kind === "SINGLE" || (kind === "REEL" && !selectionIsVideo)) &&
                 instagramChannel && (
@@ -632,6 +728,8 @@ export function ComposerForm({
                     );
                   })}
                 </div>
+              )}
+                </>
               )}
             </div>
           )}

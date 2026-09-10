@@ -88,6 +88,7 @@ model Persona {
   metricSnapshots     MetricSnapshot[]
   fanvueEarnings      FanvueEarning[]
   telegramApp         TelegramApp?
+  albums              Album[]
 
   @@index([organizationId])
 }
@@ -161,12 +162,49 @@ model Asset {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
 
-  persona   Persona   @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  createdBy User      @relation("AssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  variants  Variant[]
+  persona    Persona     @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  createdBy  User        @relation("AssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  variants   Variant[]
+  albumItems AlbumItem[]
 
   @@unique([personaId, sha256])
   @@index([personaId])
+}
+
+/// Album de la bibliothèque: un groupe de médias qu'on envoie d'un bloc.
+///
+/// Il rassemble des **Assets** et non des Variants, parce que le ratio se
+/// choisit à l'envoi: « j'envoie cet album en 4:5 ». Grouper des variantes
+/// figerait ce choix à la composition de l'album, et interdirait de le
+/// réutiliser pour un Reel.
+model Album {
+  id        String   @id @default(cuid())
+  personaId String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  persona Persona     @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  items   AlbumItem[]
+
+  @@unique([personaId, name])
+  @@index([personaId])
+}
+
+model AlbumItem {
+  id       String @id @default(cuid())
+  albumId  String
+  assetId  String
+  position Int
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  /// `Cascade`: un média supprimé quitte les albums qui le citaient. Un album
+  /// pointant vers un média disparu ne vaudrait rien.
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, assetId])
+  @@index([albumId])
+  @@index([assetId])
 }
 
 model Variant {
