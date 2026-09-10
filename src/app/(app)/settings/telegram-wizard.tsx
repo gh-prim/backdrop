@@ -149,6 +149,11 @@ function ApiKeysStep({
     saveTelegramAppAction,
     null,
   );
+  // Contrôlés: une action qui échoue reconstruit le formulaire, et des champs
+  // non contrôlés perdraient la saisie. Retaper un api_hash de 32 caractères
+  // parce que le serveur a échoué est une punition injustifiée.
+  const [apiId, setApiId] = useState("");
+  const [apiHash, setApiHash] = useState("");
 
   useEffect(() => {
     if (state?.ok) onSaved();
@@ -162,7 +167,15 @@ function ApiKeysStep({
 
       <div className="space-y-1.5">
         <Label htmlFor="apiId">api_id</Label>
-        <Input id="apiId" name="apiId" required inputMode="numeric" className="h-8 w-40" />
+        <Input
+          id="apiId"
+          name="apiId"
+          value={apiId}
+          onChange={(event) => setApiId(event.target.value)}
+          required
+          inputMode="numeric"
+          className="h-8 w-40"
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -171,6 +184,8 @@ function ApiKeysStep({
           id="apiHash"
           name="apiHash"
           type="password"
+          value={apiHash}
+          onChange={(event) => setApiHash(event.target.value)}
           required
           autoComplete="off"
           className="h-8 w-full"
@@ -207,6 +222,10 @@ function LoginStep({
     null,
   );
   const [status, setStatus] = useState<TelegramLoginState | null>(null);
+  // Même raison qu'à l'étape précédente: un échec ne doit pas effacer le
+  // numéro. Un champ vidé fait recliquer sur « Send code » et déclenche la
+  // validation native du navigateur, qui masque la vraie erreur.
+  const [phone, setPhone] = useState("");
   const loginId = started?.ok ? started.loginId : null;
 
   // Le workflow est la source de vérité: l'écran ne devine rien, il demande.
@@ -277,6 +296,8 @@ function LoginStep({
         <Input
           id="tg-phone"
           name="phone"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
           required
           placeholder="+33612345678"
           className="h-8 w-52"

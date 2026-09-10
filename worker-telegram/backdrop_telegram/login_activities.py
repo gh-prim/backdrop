@@ -47,13 +47,20 @@ _pending: dict[str, Pending] = {}
 _lock = asyncio.Lock()
 
 
+# Marque les messages écrits pour être lus par l'opérateur. Tout ce qui n'en
+# porte pas la marque reste dans les logs: Temporal convertit n'importe quelle
+# exception en ApplicationError, et le texte d'une erreur d'infrastructure
+# contient volontiers une chaîne de connexion avec son mot de passe.
+OPERATOR_ERROR = "operator"
+
+
 def _fail(message: str, *, retryable: bool = False) -> ApplicationError:
     """
     Une erreur de login est presque toujours définitive: un code faux ne
     devient pas juste en réessayant, et chaque tentative consomme un envoi
     Telegram. On le dit explicitement à Temporal.
     """
-    return ApplicationError(message, non_retryable=not retryable)
+    return ApplicationError(message, type=OPERATOR_ERROR, non_retryable=not retryable)
 
 
 async def _drop(login_id: str) -> None:
@@ -72,7 +79,16 @@ async def request_login_code(input: dict[str, Any]) -> dict[str, Any]:
     persona_id = input["personaId"]
     phone = input["phone"]
 
-    app_credentials = await db.load_telegram_app(persona_id)
+    try:
+        app_credentials = await db.load_telegram_app(persona_id)
+    except RuntimeError as error:
+        # Message déjà rédigé pour l'opérateur (aucun api_id enregistré).
+        raise _fail(str(error)) from error
+    except Exception as error:  # noqa: BLE001 — base injoignable, credentials illisibles
+        activity.logger.exception("accès base impossible au démarrage du login")
+        raise _fail(
+            "Cannot reach the database. Check the Telegram worker logs."
+        ) from error
 
     marks = fingerprint.current()
     client = Client(

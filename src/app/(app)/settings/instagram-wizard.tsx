@@ -35,6 +35,9 @@ export function InstagramWizard({
   const [step, setStep] = useState(0);
   const [personaId, setPersonaId] = useState(personas[0]?.id ?? "");
   const [igUserId, setIgUserId] = useState("");
+  // Un token du Graph API Explorer fait plusieurs centaines de caractères: le
+  // perdre sur un échec serveur obligerait à retourner le chercher.
+  const [accessToken, setAccessToken] = useState("");
 
   useEffect(() => {
     if (state?.ok) onDone();
@@ -130,6 +133,8 @@ export function InstagramWizard({
               id="accessToken"
               name="accessToken"
               type="password"
+              value={accessToken}
+              onChange={(event) => setAccessToken(event.target.value)}
               required
               autoComplete="off"
               className="h-8 w-full"

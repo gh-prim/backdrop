@@ -23,6 +23,10 @@ from temporalio.exceptions import ActivityError, ApplicationError
 # Au-delà, le code Telegram est de toute façon périmé.
 CODE_TIMEOUT = timedelta(minutes=10)
 
+# Marque des messages écrits pour l'opérateur (voir login_activities).
+OPERATOR_ERROR = "operator"
+GENERIC_FAILURE = "Connection failed. Check the Telegram worker logs."
+
 NO_RETRY = RetryPolicy(maximum_attempts=1)
 
 
@@ -155,7 +159,15 @@ class TelegramLogin:
 
 
 def _message(error: BaseException) -> str:
+    """
+    Message destiné à l'écran de l'opérateur.
+
+    Ne laisse passer que ce qui a été écrit pour lui. Temporal convertit toute
+    exception en ApplicationError, si bien qu'un `str(error)` renverrait
+    volontiers le texte d'une erreur d'infrastructure — chaîne de connexion et
+    mot de passe compris — jusque dans le navigateur.
+    """
     cause = getattr(error, "cause", None)
-    if isinstance(cause, ApplicationError) and cause.message:
-        return cause.message
-    return str(error)
+    if isinstance(cause, ApplicationError) and cause.type == OPERATOR_ERROR:
+        return cause.message or GENERIC_FAILURE
+    return GENERIC_FAILURE

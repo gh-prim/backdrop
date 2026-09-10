@@ -28,9 +28,23 @@ def load_dotenv() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        value = value.strip()
+        value = unquote(value.strip())
         if value:
             os.environ.setdefault(key.strip(), value)
+
+
+def unquote(value: str) -> str:
+    """
+    Retire les guillemets encadrants d'une valeur de .env.
+
+    Sans ça, psycopg reçoit une URL commençant par un guillemet, ne la
+    reconnaît plus comme URI, et la lit comme une liste d'options clé=valeur —
+    une erreur qui ne se manifeste qu'au premier accès base, très loin de sa
+    cause.
+    """
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("\"", "'"):
+        return value[1:-1]
+    return value
 
 
 def env_or(name: str, fallback: str) -> str:
@@ -49,7 +63,44 @@ def require(name: str) -> str:
 
 
 def database_url() -> str:
-    return require("DATABASE_URL")
+    return libpq_url(require("DATABASE_URL"))
+
+
+def libpq_url(url: str) -> str:
+    """
+    Traduit l'URL Prisma en URL acceptable par libpq.
+
+    Prisma ajoute `?schema=`, que libpq refuse — il n'a pas de notion de schéma
+    dans son URI et rejette tout paramètre inconnu. Le schéma est donc reporté
+    dans `options=-c search_path=`, son équivalent côté serveur.
+
+    Le jeter purement et simplement serait pire que l'erreur: le worker se
+    connecterait au `search_path` par défaut et lirait des tables absentes,
+    ou pire, celles d'un autre schéma.
+    """
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+
+    schema = None
+    kept = []
+    for key, value in query:
+        if key == "schema":
+            schema = value
+        else:
+            kept.append((key, value))
+
+    if schema:
+        existing = dict(kept).get("options", "")
+        merged = f"{existing}-csearch_path={schema}" if not existing else (
+            f"{existing} -csearch_path={schema}"
+        )
+        kept = [(k, v) for k, v in kept if k != "options"] + [("options", merged)]
+
+    return urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urlencode(kept), parts.fragment)
+    )
 
 
 def temporal_address() -> str:
