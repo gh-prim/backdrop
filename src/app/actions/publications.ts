@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { PubKind } from "@prisma/client";
+import { PubKind, PubStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/session";
 import {
@@ -232,13 +232,53 @@ export async function reschedulePublicationAction(
   return { ok: true, message: "Publication saved." };
 }
 
+/**
+ * Annule tout l'envoi, pas un de ses canaux.
+ *
+ * Une publication par canal est la bonne unité en base — un échec ne doit pas
+ * en emporter d'autres — mais l'opérateur a composé **un** envoi et l'annule
+ * en entier. Annuler Telegram en laissant partir Instagram serait une surprise.
+ */
 export async function cancelPublicationAction(publicationId: string): Promise<void> {
-  await requireOrgContext();
-  // L'ordre compte: retirer le Schedule d'abord, sinon il pourrait redéclencher
-  // le workflow qu'on vient d'annuler.
-  await unschedulePublication(publicationId);
-  await cancelPublishWorkflow(publicationId);
+  const ctx = await requireOrgContext();
+
+  for (const sibling of await siblings(ctx, publicationId)) {
+    // L'ordre compte: retirer le Schedule d'abord, sinon il pourrait
+    // redéclencher le workflow qu'on vient d'annuler.
+    await unschedulePublication(sibling.id);
+    await cancelPublishWorkflow(sibling.id);
+  }
+
   revalidatePath("/publications");
+  revalidatePath("/calendar");
+}
+
+/**
+ * Les publications d'un même envoi, celle-ci comprise.
+ *
+ * Passe par le groupe et non par le nom: deux envois distincts peuvent porter
+ * le même libellé, et les confondre annulerait le mauvais.
+ */
+async function siblings(
+  ctx: { organizationId: string },
+  publicationId: string,
+): Promise<{ id: string; status: string }[]> {
+  const publication = await prisma.publication.findFirst({
+    where: {
+      id: publicationId,
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
+    select: { groupId: true },
+  });
+  if (!publication) return [];
+
+  return prisma.publication.findMany({
+    where: {
+      groupId: publication.groupId,
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
+    select: { id: true, status: true },
+  });
 }
 
 /** Sortir maintenant une publication passée en MISSED (7.6). */
@@ -271,7 +311,12 @@ async function channelsIncludeTelegram(
 
 
 /** États terminaux: seuls eux peuvent être rangés (voir schéma). */
-const ARCHIVABLE = ["PUBLISHED", "DRY_RUN", "FAILED", "MISSED"];
+const ARCHIVABLE: PubStatus[] = [
+  PubStatus.PUBLISHED,
+  PubStatus.DRY_RUN,
+  PubStatus.FAILED,
+  PubStatus.MISSED,
+];
 
 /**
  * Range une publication hors de la vue courante, sans la supprimer.
@@ -302,8 +347,19 @@ export async function archivePublicationAction(
     };
   }
 
-  await prisma.publication.update({
-    where: { id: publication.id },
+  // Tout l'envoi est rangé d'un coup: laisser un canal seul dans la liste
+  // donnerait l'illusion d'une publication mono-canal qui n'a jamais existé.
+  await prisma.publication.updateMany({
+    where: {
+      groupId: (
+        await prisma.publication.findUniqueOrThrow({
+          where: { id: publication.id },
+          select: { groupId: true },
+        })
+      ).groupId,
+      status: { in: ARCHIVABLE },
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
     data: { archivedAt: new Date() },
   });
 
@@ -317,9 +373,18 @@ export async function unarchivePublicationAction(
 ): Promise<ActionResult> {
   const ctx = await requireOrgContext();
 
-  const updated = await prisma.publication.updateMany({
+  const group = await prisma.publication.findFirst({
     where: {
       id: publicationId,
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
+    select: { groupId: true },
+  });
+  if (!group) return { ok: false, error: "Publication not found." };
+
+  const updated = await prisma.publication.updateMany({
+    where: {
+      groupId: group.groupId,
       channelAccount: { persona: { organizationId: ctx.organizationId } },
     },
     data: { archivedAt: null },

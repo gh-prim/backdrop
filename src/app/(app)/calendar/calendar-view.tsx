@@ -23,7 +23,8 @@ export type CalendarEvent = {
   name: string;
   caption: string;
   status: string;
-  platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE";
+  /** Un logo par canal: l'envoi est un seul objet, parti à plusieurs endroits. */
+  platforms: ("INSTAGRAM" | "TELEGRAM" | "FANVUE")[];
   persona: string;
   destination: string;
   scheduledAt: string;
@@ -395,7 +396,9 @@ function EventChip({
       )}
     >
       <span className="flex items-center gap-1">
-        <PlatformLogo platform={event.platform} className="size-3 shrink-0" />
+        {event.platforms.map((platform) => (
+          <PlatformLogo key={platform} platform={platform} className="size-3 shrink-0" />
+        ))}
         <span className="truncate font-medium">{event.name || "Untitled"}</span>
       </span>
       <span className="truncate opacity-80">
@@ -507,7 +510,13 @@ function MonthGrid({
                       statusClasses(event.status),
                     )}
                   >
-                    <PlatformLogo platform={event.platform} className="size-2.5 shrink-0" />
+                    {event.platforms.map((platform) => (
+                      <PlatformLogo
+                        key={platform}
+                        platform={platform}
+                        className="size-2.5 shrink-0"
+                      />
+                    ))}
                     <span className="truncate">
                       {time(new Date(event.scheduledAt))} {event.name || "Untitled"}
                     </span>
@@ -543,7 +552,9 @@ function EventDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <PlatformLogo platform={event.platform} className="size-5" />
+                {event.platforms.map((platform) => (
+                  <PlatformLogo key={platform} platform={platform} className="size-5" />
+                ))}
                 {event.name || "Untitled"}
               </DialogTitle>
               <DialogDescription>

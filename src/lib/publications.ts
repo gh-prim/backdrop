@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import "server-only";
 import { Platform, PubKind, PubStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -50,6 +51,7 @@ export async function listPublications(
       remoteId: true,
       failureReason: true,
       version: true,
+      groupId: true,
       starPrice: true,
       targetLabel: true,
       archivedAt: true,
@@ -140,12 +142,17 @@ export async function createPublication(
     throw new Error("Channel not found in this organization.");
   }
 
+  // Un identifiant pour tout le geste: les publications restent
+  // indépendantes en base, mais l'écran les traite comme un seul envoi.
+  const groupId = randomUUID();
+
   return prisma.$transaction(async (tx) => {
     const created: { id: string; platform: Platform; channelAccountId: string }[] = [];
 
     for (const channel of channels) {
       const row = await tx.publication.create({
         data: {
+          groupId,
           channelAccountId: channel.id,
           createdByUserId: ctx.userId,
           kind: input.kind,

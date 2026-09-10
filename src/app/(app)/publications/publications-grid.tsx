@@ -27,30 +27,34 @@ import {
 } from "@/app/actions/publications";
 import { cn } from "cn";
 
+export type CardLeg = {
+  platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE";
+  status: string;
+  destination: string;
+  failureReason: string | null;
+  remoteId: string | null;
+  starPrice: number | null;
+};
+
 export type PublicationCard = {
   id: string;
   name: string;
   kind: string;
+  /** État d'ensemble: le plus préoccupant des canaux de l'envoi. */
   status: string;
   caption: string;
   scheduledAt: string;
   publishedAt: string | null;
-  remoteId: string | null;
-  failureReason: string | null;
   version: number;
   author: string;
-  platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE";
   persona: string;
   itemCount: number;
   rating: "SFW" | "SUGGESTIVE" | "NSFW";
   /** Première variante: c'est elle qui rend la publication reconnaissable. */
   coverVariantId: string | null;
-  coverRatio: string | null;
-  starPrice: number | null;
-  targetLabel: string | null;
-  /** Où l'envoi est parti: channel Telegram nommé, ou compte de plateforme. */
-  destination: string;
   archived: boolean;
+  /** Un canal de l'envoi. Un geste multi-canal en a plusieurs. */
+  legs: CardLeg[];
 };
 
 const MIN_COLUMNS = 2;
@@ -91,7 +95,10 @@ export function PublicationsGrid({
   // Les destinations viennent de ce qui a réellement été envoyé, pas d'une
   // liste figée: un channel ajouté hier doit y figurer sans rien changer ici.
   const destinations = useMemo(
-    () => Array.from(new Set(cards.map((card) => card.destination))).sort(),
+    () =>
+      Array.from(
+        new Set(cards.flatMap((card) => card.legs.map((leg) => leg.destination))),
+      ).sort(),
     [cards],
   );
 
@@ -99,9 +106,20 @@ export function PublicationsGrid({
     const needle = query.trim().toLowerCase();
     return cards.filter((card) => {
       if (status !== "All" && card.status !== status) return false;
-      if (destination !== "all" && card.destination !== destination) return false;
+      if (
+        destination !== "all" &&
+        !card.legs.some((leg) => leg.destination === destination)
+      ) {
+        return false;
+      }
       if (!needle) return true;
-      return [card.name, card.caption, card.persona, card.destination, card.author]
+      return [
+        card.name,
+        card.caption,
+        card.persona,
+        card.author,
+        ...card.legs.map((leg) => leg.destination),
+      ]
         .join(" ")
         .toLowerCase()
         .includes(needle);
@@ -287,8 +305,16 @@ function PublicationTile({
         {/* Superposées plutôt que placées sous l'image: la plateforme et
             l'état doivent se lire sans quitter la vignette des yeux. */}
         <div className="pointer-events-none absolute inset-x-2 top-2 flex items-start justify-between gap-2">
-          <span className="rounded-md bg-background/85 p-1 backdrop-blur-sm">
-            <PlatformLogo platform={card.platform} className="size-4" />
+          {/* Autant de logos que de canaux: l'envoi est un seul objet, mais
+              on doit voir d'un coup d'œil où il part. */}
+          <span className="flex gap-1 rounded-md bg-background/85 p-1 backdrop-blur-sm">
+            {card.legs.map((leg) => (
+              <PlatformLogo
+                key={leg.platform}
+                platform={leg.platform}
+                className="size-4"
+              />
+            ))}
           </span>
           <StatusBadge status={card.status} />
         </div>
@@ -303,10 +329,10 @@ function PublicationTile({
               {card.itemCount}
             </Badge>
           )}
-          {card.starPrice !== null && (
+          {card.legs.find((leg) => leg.starPrice !== null) && (
             <Badge className="ml-auto h-5 gap-1 bg-amber-500/90 px-1.5 text-[10px] text-amber-950">
               <Star className="size-3" />
-              {card.starPrice}
+              {card.legs.find((leg) => leg.starPrice !== null)!.starPrice}
             </Badge>
           )}
         </div>
@@ -315,25 +341,41 @@ function PublicationTile({
       <div className={cn("flex min-h-0 flex-1 flex-col gap-1.5", dense ? "p-2" : "p-3")}>
         <p className="truncate text-sm font-medium">{card.name || "Untitled"}</p>
 
-        <p className="text-xs text-muted-foreground">
-          {card.persona}
-          {card.targetLabel ? ` · ${card.targetLabel}` : ""}
+        <p className="truncate text-xs text-muted-foreground">
+          {card.persona} · {card.legs.map((leg) => leg.destination).join(", ")}
         </p>
 
         <p className="text-xs text-muted-foreground">
           {formatDate(card.publishedAt ?? card.scheduledAt)}
-          {card.publishedAt ? "" : " · scheduled"}
+          {/* « scheduled » ne se dit que d'un envoi à venir: l'accoler à une
+              simulation ou à un échec contredirait le badge juste au-dessus. */}
+          {card.status === "SCHEDULED" ? " · scheduled" : ""}
         </p>
 
         {card.caption && !dense && (
           <p className="line-clamp-2 text-xs text-foreground/70">{card.caption}</p>
         )}
 
-        {card.failureReason && (
-          <p className="flex items-start gap-1.5 text-xs text-destructive">
-            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
-            <span className="line-clamp-2">{card.failureReason}</span>
-          </p>
+        {/* Le détail par canal n'apparaît que s'il apporte quelque chose:
+            un envoi mono-canal réussi n'a rien à ajouter à son badge. */}
+        {(card.legs.length > 1 || card.legs.some((leg) => leg.failureReason)) && (
+          <ul className="space-y-0.5">
+            {card.legs.map((leg) => (
+              <li key={leg.platform} className="flex items-start gap-1.5 text-[11px]">
+                <PlatformLogo platform={leg.platform} className="mt-0.5 size-3 shrink-0" />
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate",
+                    leg.status === "FAILED" || leg.status === "MISSED"
+                      ? "text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {leg.failureReason ?? leg.status.toLowerCase().replace("_", " ")}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
 
         <div className="mt-auto flex items-center gap-1 pt-2">
@@ -366,9 +408,9 @@ function PublicationTile({
             </Button>
           )}
 
-          {card.remoteId && (
+          {card.legs.some((leg) => leg.remoteId) && (
             <span className="truncate text-[10px] text-muted-foreground">
-              {card.remoteId}
+              {card.legs.filter((leg) => leg.remoteId).length} sent
             </span>
           )}
 

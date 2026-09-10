@@ -197,8 +197,17 @@ model Publication {
   /// Verrou optimiste, édition concurrente (7.4).
   version          Int       @default(0)
   kind             PubKind
-  /// Libellé interne, partagé par les publications sœurs d'un même envoi
-  /// multi-canal. Sert à les retrouver, pas à être publié.
+  /// Identifiant de l'envoi, partagé par les publications sœurs d'un même
+  /// geste multi-canal.
+  ///
+  /// En base, une publication par canal reste la bonne unité: un échec sur
+  /// Instagram ne doit pas emporter Telegram (section 3). Mais à l'écran c'est
+  /// **un seul objet** — on programme, annule et archive l'envoi, pas ses
+  /// morceaux. Ce champ porte cette dualité.
+  groupId          String
+  /// Libellé interne, partagé par les publications sœurs. Sert à les nommer,
+  /// pas à être publié — et surtout pas à les regrouper: deux envois distincts
+  /// peuvent porter le même nom.
   name             String    @default("")
   copy             String    @default("")
   scheduledAt      DateTime
@@ -246,6 +255,7 @@ model Publication {
   @@unique([channelAccountId, remoteId])
   @@index([channelAccountId, status])
   @@index([scheduledAt])
+  @@index([groupId])
 }
 
 model PublicationItem {

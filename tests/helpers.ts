@@ -77,6 +77,8 @@ export async function createPublication(
 ) {
   return prisma.publication.create({
     data: {
+      // Un envoi mono-canal est un groupe d'un seul élément.
+      groupId: randomUUID(),
       channelAccountId,
       createdByUserId: userId,
       kind,
