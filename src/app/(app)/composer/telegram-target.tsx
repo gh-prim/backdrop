@@ -30,6 +30,11 @@ export function TelegramTargetPicker({
 }: {
   channelAccountId: string;
   chatId: string;
+  /**
+   * Le libellé remonte avec l'identifiant: les champs cachés vivent au niveau
+   * du formulaire, pas ici. Une étape démontée en emporterait le contenu, et
+   * la publication partirait sans destination.
+   */
   onChatIdChange: (chatId: string, label: string) => void;
   starPrice: string;
   onStarPriceChange: (value: string) => void;
@@ -131,13 +136,6 @@ export function TelegramTargetPicker({
         </div>
       )}
 
-      <input type="hidden" name="telegramChatId" value={chatId} />
-      <input
-        type="hidden"
-        name="telegramTargetLabel"
-        value={selected?.title ?? ""}
-      />
-      <input type="hidden" name="starPrice" value={canCharge ? starPrice : ""} />
     </div>
   );
 }

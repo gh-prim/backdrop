@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { PubKind } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/session";
 import {
   StaleVersionError,
@@ -69,6 +70,16 @@ export async function schedulePublicationAction(
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  // Une publication Telegram sans destination échouerait au fond du worker,
+  // sur un identifiant nul, très loin de sa cause. Le dire ici.
+  const targetsTelegram = await channelsIncludeTelegram(
+    ctx,
+    parsed.data.channelAccountIds,
+  );
+  if (targetsTelegram && !parsed.data.telegramChatId) {
+    return { ok: false, error: "Choose a Telegram destination before sending." };
   }
 
   if (parsed.data.kind !== "CAROUSEL" && parsed.data.variantIds.length > 1) {
@@ -202,4 +213,21 @@ export async function publishMissedNowAction(publicationId: string): Promise<voi
   await cancelPublishWorkflow(publicationId);
   await startPublishWorkflow({ id: publicationId, platform });
   revalidatePath("/publications");
+}
+
+
+/** Vrai si au moins un canal sélectionné est Telegram. */
+async function channelsIncludeTelegram(
+  ctx: { organizationId: string },
+  channelAccountIds: string[],
+): Promise<boolean> {
+  if (channelAccountIds.length === 0) return false;
+  const count = await prisma.channelAccount.count({
+    where: {
+      id: { in: channelAccountIds },
+      platform: "TELEGRAM",
+      persona: { organizationId: ctx.organizationId },
+    },
+  });
+  return count > 0;
 }

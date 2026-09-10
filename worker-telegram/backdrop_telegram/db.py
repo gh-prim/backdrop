@@ -148,15 +148,24 @@ async def list_telegram_personas() -> list[dict[str, Any]]:
     return personas
 
 
-MEDIA_ROOT = None
-
-
 def media_root():
-    """Racine des médias, partagée avec le worker Node (section 5)."""
+    """
+    Racine des médias, partagée avec le worker Node (section 5).
+
+    Un chemin relatif est résolu **depuis la racine du dépôt**, pas depuis le
+    répertoire courant: le worker Telegram démarre depuis `worker-telegram/`,
+    et le `MEDIA_ROOT=./media` du .env — écrit pour le worker Node — y
+    désignerait un dossier inexistant. TDLib ne dit alors qu'un laconique
+    « Can't find real file path ».
+    """
     import os
     from pathlib import Path
 
-    return Path(os.environ.get("MEDIA_ROOT", "").strip() or "./media").resolve()
+    from backdrop_telegram.config import REPO
+
+    raw = os.environ.get("MEDIA_ROOT", "").strip() or "./media"
+    path = Path(raw)
+    return path.resolve() if path.is_absolute() else (REPO / path).resolve()
 
 
 async def load_publication_plan(publication_id: str) -> dict[str, Any]:

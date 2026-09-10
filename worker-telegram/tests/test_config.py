@@ -70,3 +70,22 @@ def test_les_autres_parametres_survivent():
 
     out = libpq_url("postgresql://u:p@h/db?schema=public&connect_timeout=5")
     assert "connect_timeout=5" in out
+
+
+def test_un_media_root_relatif_part_de_la_racine_du_depot(monkeypatch):
+    # Le worker Telegram démarre depuis worker-telegram/, alors que le
+    # MEDIA_ROOT du .env est écrit pour le worker Node, à la racine. Résoudre
+    # depuis le répertoire courant désignerait un dossier inexistant, et TDLib
+    # ne dirait qu'un laconique « Can't find real file path ».
+    from backdrop_telegram.config import REPO
+    from backdrop_telegram.db import media_root
+
+    monkeypatch.setenv("MEDIA_ROOT", "./media")
+    assert media_root() == (REPO / "media").resolve()
+
+
+def test_un_media_root_absolu_est_respecte(monkeypatch, tmp_path):
+    from backdrop_telegram.db import media_root
+
+    monkeypatch.setenv("MEDIA_ROOT", str(tmp_path))
+    assert media_root() == tmp_path.resolve()

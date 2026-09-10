@@ -71,6 +71,7 @@ export function ComposerForm({
 
   const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
   const [telegramChatId, setTelegramChatId] = useState("");
+  const [telegramTargetLabel, setTelegramTargetLabel] = useState("");
   const [starPrice, setStarPrice] = useState("");
   const [publishNow, setPublishNow] = useState(false);
   const [name, setName] = useState("");
@@ -239,6 +240,19 @@ export function ComposerForm({
       {channelIds.map((id) => (
         <input key={id} type="hidden" name="channelAccountIds" value={id} />
       ))}
+      {/* Hors des étapes: chacune est démontée en la quittant, et un champ
+          qui n'existe plus au moment de l'envoi n'est pas soumis. */}
+      {telegramChannel && (
+        <>
+          <input type="hidden" name="telegramChatId" value={telegramChatId} />
+          <input
+            type="hidden"
+            name="telegramTargetLabel"
+            value={telegramTargetLabel}
+          />
+          <input type="hidden" name="starPrice" value={starPrice} />
+        </>
+      )}
       {selected.map((id) => (
         <input key={id} type="hidden" name="variantIds" value={id} />
       ))}
@@ -328,7 +342,10 @@ export function ComposerForm({
                 <TelegramTargetPicker
                   channelAccountId={telegramChannel.id}
                   chatId={telegramChatId}
-                  onChatIdChange={(id) => setTelegramChatId(id)}
+                  onChatIdChange={(id, label) => {
+                    setTelegramChatId(id);
+                    setTelegramTargetLabel(label);
+                  }}
                   starPrice={starPrice}
                   onStarPriceChange={setStarPrice}
                   mediaCount={selected.length}
