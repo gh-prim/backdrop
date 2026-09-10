@@ -100,8 +100,7 @@ async def main() -> None:
     user = env("TG_TEST_USER")
     path = env("TG_TEST_FILE")
 
-    organization_id = await db.persona_organization(persona_id)
-    app_credentials = await db.load_telegram_app(organization_id)
+    app_credentials = await db.load_telegram_app(persona_id)
     # L'empreinte vient de la session, pas des constantes: rejouer une session
     # sous une autre empreinte que celle de sa création la grille (4.2.3).
     stored = await db.load_session(persona_id)

@@ -21,6 +21,7 @@ export type LoginStarted =
   | { ok: false; error: string };
 
 const appSchema = z.object({
+  personaId: z.string().min(1),
   // Telegram délivre un api_id numérique; une saisie non numérique est une
   // erreur de copier-coller, pas une valeur exotique à accepter.
   apiId: z.coerce.number().int().positive("api_id must be a positive number."),
@@ -30,11 +31,11 @@ const appSchema = z.object({
 });
 
 /**
- * Enregistre le couple api_id / api_hash de l'application (4.2.1).
+ * Enregistre le couple api_id / api_hash d'une persona (4.2.1).
  *
- * Un seul couple pour toute l'organisation, chiffré au repos comme n'importe
- * quel credential plateforme. Il ne repart jamais vers le client (9.7): l'écran
- * n'affiche que sa présence, jamais sa valeur.
+ * Un couple par persona: un api_id se crée sur my.telegram.org depuis le compte
+ * lui-même. Chiffré au repos comme n'importe quel credential plateforme, il ne
+ * repart jamais vers le client (9.7) — l'écran n'affiche que sa présence.
  */
 export async function saveTelegramAppAction(
   _prev: ActionResult | null,
@@ -42,6 +43,7 @@ export async function saveTelegramAppAction(
 ): Promise<ActionResult> {
   const ctx = await requireOwner();
   const parsed = appSchema.safeParse({
+    personaId: formData.get("personaId"),
     apiId: String(formData.get("apiId") ?? "").trim(),
     apiHash: String(formData.get("apiHash") ?? "").trim(),
   });
@@ -49,14 +51,22 @@ export async function saveTelegramAppAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
+  // La persona doit appartenir à l'organisation: sans cette vérification,
+  // l'identifiant reçu du formulaire suffirait à écrire chez un autre tenant.
+  const persona = await prisma.persona.findFirst({
+    where: { id: parsed.data.personaId, organizationId: ctx.organizationId },
+    select: { id: true },
+  });
+  if (!persona) return { ok: false, error: "Persona not found." };
+
   const credentials = encryptCredentials({
     apiId: parsed.data.apiId,
     apiHash: parsed.data.apiHash,
   });
 
   await prisma.telegramApp.upsert({
-    where: { organizationId: ctx.organizationId },
-    create: { organizationId: ctx.organizationId, credentials },
+    where: { personaId: persona.id },
+    create: { personaId: persona.id, credentials },
     update: { credentials },
   });
 
@@ -94,13 +104,14 @@ export async function startTelegramLoginAction(
   if (!persona) return { ok: false, error: "Persona not found." };
 
   const app = await prisma.telegramApp.findUnique({
-    where: { organizationId: ctx.organizationId },
+    where: { personaId: persona.id },
     select: { id: true },
   });
   if (!app) {
     return {
       ok: false,
-      error: "Save your api_id and api_hash first: Telegram cannot be reached without them.",
+      error:
+        "Save this persona's api_id and api_hash first: Telegram cannot be reached without them.",
     };
   }
 

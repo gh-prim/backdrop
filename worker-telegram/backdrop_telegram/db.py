@@ -34,33 +34,23 @@ async def connect() -> psycopg.AsyncConnection:
     )
 
 
-async def load_telegram_app(organization_id: str) -> dict[str, Any]:
-    """api_id / api_hash de l'organisation, déchiffrés (4.2.1)."""
+async def load_telegram_app(persona_id: str) -> dict[str, Any]:
+    """api_id / api_hash de la persona, déchiffrés (4.2.1)."""
     async with await connect() as conn:
         row = await (
             await conn.execute(
-                'select credentials from "TelegramApp" where "organizationId" = %s',
-                (organization_id,),
+                'select credentials from "TelegramApp" where "personaId" = %s',
+                (persona_id,),
             )
         ).fetchone()
 
     if row is None:
         raise RuntimeError(
-            "Aucun api_id / api_hash Telegram enregistré pour cette organisation."
+            "Aucun api_id / api_hash Telegram enregistré pour cette persona."
         )
     return decrypt_credentials(row["credentials"])
 
 
-async def persona_organization(persona_id: str) -> str:
-    async with await connect() as conn:
-        row = await (
-            await conn.execute(
-                'select "organizationId" from "Persona" where id = %s', (persona_id,)
-            )
-        ).fetchone()
-    if row is None:
-        raise RuntimeError(f"Persona introuvable: {persona_id}")
-    return row["organizationId"]
 
 
 async def save_session(

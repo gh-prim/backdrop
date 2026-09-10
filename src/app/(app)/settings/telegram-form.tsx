@@ -21,43 +21,104 @@ import type { PersonaOption } from "@/lib/persona";
 /**
  * Connexion Telegram, en session utilisateur (4.2.1).
  *
- * Le login se fait en plusieurs temps parce que MTProto l'impose: Telegram
+ * Tout est ici par persona: le couple api_id / api_hash comme la session. Un
+ * api_id se crée sur my.telegram.org depuis le compte lui-même, et un api_id
+ * sanctionné pour usage automatisé emporterait toutes les personas qui le
+ * partageraient.
+ *
+ * Le login se déroule en plusieurs temps parce que MTProto l'impose: Telegram
  * envoie un code, l'opérateur le saisit, et un client doit rester connecté
  * entre les deux. Cet écran ne fait que suivre l'état d'un workflow qui, lui,
- * détient ce client.
- *
- * Ni le code ni le mot de passe ne sont conservés ici: ils partent au workflow
- * et le champ est vidé.
+ * détient ce client. Ni le code ni le mot de passe ne sont conservés ici.
  */
 export function TelegramForm({
   personas,
-  configured,
+  configuredPersonaIds,
 }: {
   personas: PersonaOption[];
-  configured: boolean;
+  configuredPersonaIds: string[];
 }) {
+  const [personaId, setPersonaId] = useState(personas[0]?.id ?? "");
+  // Une persona tout juste renseignée doit enchaîner sur le login sans
+  // attendre que le serveur ait revalidé la page.
+  const [justSaved, setJustSaved] = useState<string[]>([]);
+
+  if (personas.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Create a persona first: a Telegram account is always attached to one.
+      </p>
+    );
+  }
+
+  const configured =
+    configuredPersonaIds.includes(personaId) || justSaved.includes(personaId);
+
   return (
-    <div className="space-y-5">
-      <TelegramAppForm configured={configured} />
-      {configured && personas.length > 0 && <TelegramLogin personas={personas} />}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="tg-persona">Persona</Label>
+          <select
+            id="tg-persona"
+            value={personaId}
+            onChange={(event) => setPersonaId(event.target.value)}
+            className="h-8 rounded-md border bg-transparent px-2 text-sm"
+          >
+            {personas.map((persona) => (
+              <option key={persona.id} value={persona.id}>
+                {persona.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Badge variant="outline" className="mb-1 h-5 px-1.5 text-[10px]">
+          {configured ? "api_id saved" : "no api_id yet"}
+        </Badge>
+      </div>
+
+      <TelegramAppForm
+        key={personaId}
+        personaId={personaId}
+        configured={configured}
+        onSaved={() => setJustSaved((ids) => [...ids, personaId])}
+      />
+
+      {configured && <TelegramLogin key={`login-${personaId}`} personaId={personaId} />}
     </div>
   );
 }
 
-function TelegramAppForm({ configured }: { configured: boolean }) {
+function TelegramAppForm({
+  personaId,
+  configured,
+  onSaved,
+}: {
+  personaId: string;
+  configured: boolean;
+  onSaved: () => void;
+}) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     saveTelegramAppAction,
     null,
   );
   const [open, setOpen] = useState(!configured);
 
+  useEffect(() => {
+    if (state?.ok) {
+      onSaved();
+      setOpen(false);
+    }
+    // onSaved change à chaque rendu du parent: le déclencheur est l'état.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
   if (configured && !open) {
     return (
       <div className="flex items-center gap-2 text-sm">
-        <span className="font-medium">Telegram application</span>
-        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-          api_id saved
-        </Badge>
+        <span className="text-xs text-muted-foreground">
+          Credentials stored, encrypted. They are never shown again, not even to an owner.
+        </span>
         <Button
           type="button"
           variant="ghost"
@@ -73,6 +134,8 @@ function TelegramAppForm({ configured }: { configured: boolean }) {
 
   return (
     <form action={action} className="space-y-3">
+      <input type="hidden" name="personaId" value={personaId} />
+
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1.5">
           <Label htmlFor="apiId">api_id</Label>
@@ -106,20 +169,17 @@ function TelegramAppForm({ configured }: { configured: boolean }) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        One api_id and api_hash for the whole application, from my.telegram.org under API
-        development tools. They are encrypted at rest and never shown again, not even to an
-        owner.
+        Sign in to my.telegram.org <em>as this persona</em>, then API development tools. Each
+        persona gets its own pair: one api_id flagged for automation would otherwise take down
+        every persona sharing it.
       </p>
 
       {state?.ok === false && <p className="text-xs text-destructive">{state.error}</p>}
-      {state?.ok === true && (
-        <p className="text-xs text-muted-foreground">Saved. You can now connect a persona.</p>
-      )}
     </form>
   );
 }
 
-function TelegramLogin({ personas }: { personas: PersonaOption[] }) {
+function TelegramLogin({ personaId }: { personaId: string }) {
   const [started, startAction, starting] = useActionState<LoginStarted | null, FormData>(
     startTelegramLoginAction,
     null,
@@ -153,44 +213,31 @@ function TelegramLogin({ personas }: { personas: PersonaOption[] }) {
         <div className="flex items-center gap-2">
           <span className="font-medium">Connected</span>
           <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-            {status.account.username ? `@${status.account.username}` : status.account.telegramUserId}
+            {status.account.username
+              ? `@${status.account.username}`
+              : status.account.telegramUserId}
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          The session is encrypted at rest and lives only in the Telegram worker. Reconnecting
-          the same account replaces it.
+          The session is encrypted at rest and lives only in the Telegram worker. Connecting the
+          same account again replaces it.
         </p>
       </div>
     );
   }
 
-  if (loginId && (phase === "awaiting_code" || phase === "awaiting_password" || phase === "starting")) {
-    return (
-      <CodeStep
-        loginId={loginId}
-        phase={phase}
-        detail={status?.detail ?? null}
-      />
-    );
+  if (
+    loginId &&
+    (phase === "awaiting_code" || phase === "awaiting_password" || phase === "starting")
+  ) {
+    return <CodeStep loginId={loginId} phase={phase} detail={status?.detail ?? null} />;
   }
 
   return (
-    <form action={startAction} className="space-y-3">
+    <form action={startAction} className="space-y-3 border-t pt-4">
+      <input type="hidden" name="personaId" value={personaId} />
+
       <div className="flex flex-wrap items-end gap-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="tg-persona">Persona</Label>
-          <select
-            id="tg-persona"
-            name="personaId"
-            className="h-8 rounded-md border bg-transparent px-2 text-sm"
-          >
-            {personas.map((persona) => (
-              <option key={persona.id} value={persona.id}>
-                {persona.name}
-              </option>
-            ))}
-          </select>
-        </div>
         <div className="space-y-1.5">
           <Label htmlFor="tg-phone">Phone number</Label>
           <Input
@@ -207,12 +254,12 @@ function TelegramLogin({ personas }: { personas: PersonaOption[] }) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Telegram sends the code to that account, inside the app. Connect the persona&apos;s
-        account, not your own: this session is what will publish.
+        Telegram sends the code inside the app, not by SMS. This session is what will publish, so
+        connect the persona&apos;s own account.
       </p>
 
       {started?.ok === false && <p className="text-xs text-destructive">{started.error}</p>}
-      {(phase === "failed" || status?.state === "failed") && status?.detail && (
+      {status?.state === "failed" && status.detail && (
         <p className="text-xs text-destructive">{status.detail}</p>
       )}
     </form>

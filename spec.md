@@ -164,7 +164,11 @@ Contrairement à la localisation (4.1.9 bis), cet endpoint **fonctionne en mode 
 
 Accès via **MTProto en session utilisateur** avec Hydrogram. Pas de bot: une persona doit pouvoir initier une conversation et ne pas afficher de badge bot.
 
-**4.2.1 Authentification.** Un seul `api_id` / `api_hash` pour toute l'application. Une string session par persona, stockée chiffrée en base.
+**4.2.1 Authentification.** Un couple `api_id` / `api_hash` **par persona**, et une string session par persona. Les deux sont stockés chiffrés en base et saisis depuis l'application, jamais dans l'environnement.
+
+Un `api_id` se crée sur `my.telegram.org` en étant connecté au compte concerné: il appartient donc naturellement à la persona. Faire transiter plusieurs comptes par une application unique est précisément le motif que Telegram surveille, et un `api_id` sanctionné emporterait toutes les personas d'un coup. Le cloisonnement est ici une mesure de survie, pas une élégance.
+
+Conséquence sur le modèle: `TelegramApp` est unique par persona et distinct du `ChannelAccount`, parce qu'il le précède — sans `api_id`, pas de login, donc pas encore de compte connecté à rattacher.
 
 **4.2.2 Unicité de session.** Deux processus utilisant la même session en parallèle déclenchent `AUTH_KEY_DUPLICATED` et **détruisent la session**. Conséquence architecturale contraignante, voir 7.3.
 

@@ -83,26 +83,29 @@ model Persona {
   dmCampaigns         DmCampaign[]
   metricSnapshots     MetricSnapshot[]
   fanvueEarnings      FanvueEarning[]
+  telegramApp         TelegramApp?
 
   @@index([organizationId])
 }
 
-/// Identifiants de l'application Telegram (4.2.1).
+/// Identifiants de l'application Telegram, un couple par persona (4.2.1).
 ///
-/// Un seul couple api_id / api_hash pour toute l'application, d'où l'unicité
-/// sur l'organisation. Ils ne vivent pas dans l'environnement: l'opérateur les
-/// saisit dans l'application, et ils sont chiffrés au repos comme n'importe
-/// quel credential plateforme.
+/// Un `api_id` se crée sur my.telegram.org depuis le compte lui-même: chaque
+/// persona génère donc le sien, plutôt que de faire transiter tous les comptes
+/// par une application unique — un motif que Telegram surveille.
+///
+/// Séparé du ChannelAccount parce qu'il le précède: sans api_id, pas de login,
+/// donc pas encore de compte connecté à rattacher.
 model TelegramApp {
-  id             String   @id @default(cuid())
-  organizationId String   @unique
+  id          String   @id @default(cuid())
+  personaId   String   @unique
   /// Chiffré au repos (AES-256-GCM): { apiId, apiHash }.
   /// Ne sort jamais vers le client (9.7).
-  credentials    Bytes
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  credentials Bytes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  persona Persona @relation(fields: [personaId], references: [id], onDelete: Cascade)
 }
 
 model ChannelAccount {
@@ -463,8 +466,7 @@ model Organization {
   invitations Invitation[]
 
   // Ajouté à la main: l'Organization est le tenant, frontière d'isolation (7.4).
-  personas    Persona[]
-  telegramApp TelegramApp?
+  personas Persona[]
 
   @@unique([slug])
   @@map("organization")

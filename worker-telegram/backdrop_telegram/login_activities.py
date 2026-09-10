@@ -72,8 +72,7 @@ async def request_login_code(input: dict[str, Any]) -> dict[str, Any]:
     persona_id = input["personaId"]
     phone = input["phone"]
 
-    organization_id = await db.persona_organization(persona_id)
-    app_credentials = await db.load_telegram_app(organization_id)
+    app_credentials = await db.load_telegram_app(persona_id)
 
     marks = fingerprint.current()
     client = Client(

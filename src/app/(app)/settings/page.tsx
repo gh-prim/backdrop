@@ -16,15 +16,15 @@ export default async function SettingsPage() {
   const ctx = await requireOrgContext();
   const isOwner = ctx.role === "owner";
 
-  const [members, invitations, personas, channels, telegramApp] = await Promise.all([
+  const [members, invitations, personas, channels, telegramApps] = await Promise.all([
     listMembers(ctx),
     isOwner ? listPendingInvitations(ctx) : Promise.resolve([]),
     listPersonas(ctx),
     listChannelStatus(ctx),
-    // Sa seule présence est lue, jamais sa valeur (9.7).
-    prisma.telegramApp.findUnique({
-      where: { organizationId: ctx.organizationId },
-      select: { id: true },
+    // Seule la présence d'identifiants est lue, jamais leur valeur (9.7).
+    prisma.telegramApp.findMany({
+      where: { persona: { organizationId: ctx.organizationId } },
+      select: { personaId: true },
     }),
   ]);
 
@@ -165,7 +165,7 @@ export default async function SettingsPage() {
                       <h3 className="text-sm font-medium">Telegram</h3>
                       <TelegramForm
                         personas={personas}
-                        configured={telegramApp !== null}
+                        configuredPersonaIds={telegramApps.map((app) => app.personaId)}
                       />
                     </div>
 
