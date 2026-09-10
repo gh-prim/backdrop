@@ -167,15 +167,6 @@ export async function publishFanvue(
         nonRetryable: true,
       });
     }
-    if (plan.items.some((item) => item.variantId === plan.previewVariantId)) {
-      // Dernier rempart: le composeur l'interdit déjà, mais une publication
-      // peut aussi naître d'un script (voir scripts/fanvue-post.ts).
-      throw ApplicationFailure.create({
-        message: "The free preview cannot be one of the media the post sells.",
-        nonRetryable: true,
-      });
-    }
-
     advance(18, "Checking the account");
     const account = await api.checkFanvueAccount({
       channelAccountId: plan.channelAccountId,

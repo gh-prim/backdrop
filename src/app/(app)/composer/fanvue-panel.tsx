@@ -33,9 +33,10 @@ const AUDIENCES = [
  * photo à l'unité, c'est donc un post par photo — ou un lien média, qui est un
  * autre objet.
  *
- * Le teaser est une image **hors de l'envoi**: celles du post sont
- * verrouillées, et désigner l'une d'elles comme aperçu gratuit la donnerait et
- * la vendrait à la fois. On propose donc le reste de la bibliothèque.
+ * Le teaser peut venir du lot vendu ou d'ailleurs. Montrer l'une des photos du
+ * post est un usage courant — on donne à voir ce qu'on vend — mais ce n'est pas
+ * anodin: cette photo-là ne se vend plus. Le panneau le dit au moment du choix
+ * plutôt que de l'interdire.
  */
 export function FanvuePanel({
   audience,
@@ -45,6 +46,7 @@ export function FanvuePanel({
   previewVariantId,
   onPreviewChange,
   teaserCandidates,
+  sentVariantIds,
 }: {
   audience: string;
   onAudienceChange: (value: string) => void;
@@ -53,8 +55,10 @@ export function FanvuePanel({
   onPriceChange: (value: string) => void;
   previewVariantId: string | null;
   onPreviewChange: (variantId: string | null) => void;
-  /** Médias **hors** de l'envoi: le teaser est ce qu'on montre, pas ce qu'on vend. */
+  /** Toute la bibliothèque de la persona: le teaser peut venir d'où l'on veut. */
   teaserCandidates: { id: string; rating: string; ratio: string }[];
+  /** Médias vendus par ce post: choisir l'un d'eux le rend gratuit. */
+  sentVariantIds: string[];
 }) {
   /**
    * Cadrage du teaser.
@@ -143,8 +147,8 @@ export function FanvuePanel({
           <p className="text-xs text-muted-foreground">
             {/* Le teaser est ce que voient les non-abonnés: sans lui, un post
                 payant n'est qu'un cadenas. */}
-            Shown to everyone before unlocking, and never part of what they
-            buy — so it comes from the rest of the library, not from this send.
+            Shown to everyone before unlocking. Pick one of the media of this
+            send, or any other from the library.
           </p>
 
           {ratios.length > 1 && (
@@ -210,15 +214,27 @@ export function FanvuePanel({
                 <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 text-[9px]">
                   {variant.ratio}
                 </span>
+                {sentVariantIds.includes(variant.id) && (
+                  <span className="absolute right-1 top-1 rounded bg-background/80 px-1 text-[9px]">
+                    in the post
+                  </span>
+                )}
               </button>
             ))}
 
             {shown.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No {ratioFilter} media outside this send.
+                No {ratioFilter} media in this persona's library.
               </p>
             )}
           </div>
+          {previewVariantId && sentVariantIds.includes(previewVariantId) && (
+            <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              This photo is part of the post: it will be visible for free, and
+              buyers pay for the {sentVariantIds.length - 1} others.
+            </p>
+          )}
         </div>
       )}
     </div>

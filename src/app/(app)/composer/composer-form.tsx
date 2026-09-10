@@ -872,11 +872,10 @@ export function ComposerForm({
                   onPriceChange={setFanvuePrice}
                   previewVariantId={fanvuePreview}
                   onPreviewChange={setFanvuePreview}
-                  // Le teaser ne peut pas être un média de l'envoi: ceux-là
-                  // sont verrouillés, et le donner en aperçu reviendrait à le
-                  // vendre et à l'offrir en même temps.
+                  // Toute la bibliothèque: montrer l'une des photos vendues
+                  // est un usage courant, et le panneau en avertit.
+                  sentVariantIds={selected}
                   teaserCandidates={variants
-                    .filter((variant) => !selected.includes(variant.id))
                     .map((variant) => ({
                       id: variant.id,
                       rating: variant.rating,
