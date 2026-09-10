@@ -46,13 +46,31 @@ const RATING_RANK: Record<Rating, number> = { SFW: 0, SUGGESTIVE: 1, NSFW: 2 };
  * un canal après coup sans que l'opérateur sache quoi corriger. C'est la
  * couche pédagogique du garde-fou de la section 9, dans le bon sens de lecture.
  */
-const STEPS = [
+/**
+ * Étapes communes à tout envoi.
+ *
+ * Chaque canal coché ajoute ensuite la sienne (voir `useSteps`): les réglages
+ * d'Instagram n'ont rien à faire devant quelqu'un qui ne publie que sur
+ * Telegram, et les empiler dans une étape fourre-tout revenait à demander de
+ * les trier soi-même.
+ *
+ * La description passe **avant** les étapes par canal: elle est commune à tout
+ * l'envoi, et le panneau de hashtags d'Instagram l'analyse — il serait vide si
+ * elle venait après.
+ */
+const BASE_STEPS = [
   { key: "schedule", label: "Schedule" },
   { key: "name", label: "Name" },
   { key: "channels", label: "Channels" },
   { key: "media", label: "Media" },
-  { key: "publish", label: "Caption and channels" },
+  { key: "caption", label: "Caption" },
 ] as const;
+
+const PLATFORM_LABEL: Record<string, string> = {
+  INSTAGRAM: "Instagram",
+  TELEGRAM: "Telegram",
+  FANVUE: "Fanvue",
+};
 
 /**
  * Valeur du champ `datetime-local`, au format que l'élément attend.
@@ -227,19 +245,40 @@ export function ComposerForm({
     );
   }
 
-  const stepValid = [
-    Boolean(scheduledAt) || publishNow,
-    name.trim().length > 0,
-    channelIds.length > 0,
-    selected.length > 0,
-    true,
-  ][step];
+  const steps = useMemo(
+    () => [
+      ...BASE_STEPS.map((entry) => ({ ...entry, channel: null as ChannelOption | null })),
+      ...chosenChannels.map((channel) => ({
+        key: `channel:${channel.id}`,
+        label: PLATFORM_LABEL[channel.platform] ?? channel.platform,
+        channel,
+      })),
+    ],
+    [chosenChannels],
+  );
 
-  const isLast = step === STEPS.length - 1;
+  // Décocher un canal retire son étape: rester dessus laisserait l'écran sur
+  // des réglages qui ne concernent plus personne.
+  const stepIndex = Math.min(step, steps.length - 1);
+  const currentStep = steps[stepIndex];
+
+  const stepValid =
+    currentStep.key === "schedule"
+      ? Boolean(scheduledAt) || publishNow
+      : currentStep.key === "name"
+        ? name.trim().length > 0
+        : currentStep.key === "channels"
+          ? channelIds.length > 0
+          : currentStep.key === "media"
+            ? selected.length > 0
+            : true;
+
+  const isLast = stepIndex === steps.length - 1;
 
   function goToStep(target: number) {
-    setStep(target);
-    if (target === STEPS.length - 1) {
+    const clamped = Math.max(0, Math.min(target, steps.length - 1));
+    setStep(clamped);
+    if (clamped === steps.length - 1) {
       setArmed(false);
       setTimeout(() => setArmed(true), 600);
     }
@@ -283,7 +322,7 @@ export function ComposerForm({
         <input key={id} type="hidden" name="variantIds" value={id} />
       ))}
 
-      <Stepper step={step} onJump={goToStep} maxReached={step} />
+      <Stepper steps={steps} step={stepIndex} onJump={goToStep} maxReached={stepIndex} />
 
       {/* `min-h` plutôt qu'une hauteur pleine: une étape à un seul champ ne
           doit pas s'afficher dans un cadre vide, ni le cadre sauter d'une
@@ -294,7 +333,7 @@ export function ComposerForm({
           avec `self-start`. */}
       <div className="grid min-h-[15rem] flex-1 gap-5 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-          {step === 0 && (
+          {currentStep.key === "schedule" && (
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="scheduledAtInput">Date and time</Label>
@@ -322,7 +361,7 @@ export function ComposerForm({
             </div>
           )}
 
-          {step === 1 && (
+          {currentStep.key === "name" && (
             <div className="space-y-1.5">
               <Label htmlFor="nameInput">Publication name</Label>
               <Input
@@ -340,7 +379,7 @@ export function ComposerForm({
             </div>
           )}
 
-          {step === 2 && (
+          {currentStep.key === "channels" && (
             <div className="space-y-3">
               <Label>Channels — {personaName}</Label>
               {channels.length === 0 && (
@@ -380,7 +419,7 @@ export function ComposerForm({
             </div>
           )}
 
-          {step === 3 && (
+          {currentStep.key === "media" && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="space-y-1.5">
@@ -570,7 +609,7 @@ export function ComposerForm({
             </div>
           )}
 
-          {step === 4 && (
+          {currentStep.key === "caption" && (
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="captionInput">Caption</Label>
@@ -589,61 +628,56 @@ export function ComposerForm({
                 </p>
               </div>
 
-              {/* Un panneau par canal, dans l'ordre où ils ont été choisis.
-                  Les réglages étaient jusqu'ici éparpillés selon le découpage
-                  du wizard — destination Telegram à l'étape 3, musique à la 4,
-                  hashtags à la 5 — alors qu'on y pense par canal. */}
-              {chosenChannels.map((channel) => (
-                <section
-                  key={channel.id}
-                  className="space-y-3 rounded-lg border p-3"
-                >
-                  <h3 className="flex items-center gap-2 text-sm font-medium">
-                    <PlatformLogo platform={channel.platform} className="size-4" />
-                    {channel.platform.charAt(0) +
-                      channel.platform.slice(1).toLowerCase()}
-                  </h3>
+            </div>
+          )}
 
-                  {channel.platform === "INSTAGRAM" && (
-                    <>
-                      {kind === "REEL" ? (
-                        <AudioPicker
-                          channelAccountId={channel.id}
-                          selected={audio}
-                          onSelect={setAudio}
-                        />
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          Music is a Reel feature: the API exposes no audio
-                          parameter elsewhere.
-                        </p>
-                      )}
-
-                      {/* Les hashtags vivent dans la légende: l'API n'a pas de
-                          champ séparé. Ce panneau les compte, les valide et
-                          surveille les deux plafonds (4.1.11). */}
-                      <HashtagPanel
-                        channelAccountId={channel.id}
-                        caption={caption}
-                      />
-                    </>
-                  )}
-
-                  {channel.platform === "TELEGRAM" && (
-                    <TelegramTargetPicker
-                      channelAccountId={channel.id}
-                      chatId={telegramChatId}
-                      onChatIdChange={(id, label) => {
-                        setTelegramChatId(id);
-                        setTelegramTargetLabel(label);
-                      }}
-                      starPrice={starPrice}
-                      onStarPriceChange={setStarPrice}
-                      mediaCount={selected.length}
+          {/* Une étape par canal choisi: ses réglages, et rien d'autre. */}
+          {currentStep.channel && (
+            <div className="space-y-4">
+              {currentStep.channel.platform === "INSTAGRAM" && (
+                <>
+                  {kind === "REEL" ? (
+                    <AudioPicker
+                      channelAccountId={currentStep.channel.id}
+                      selected={audio}
+                      onSelect={setAudio}
                     />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Music is a Reel feature: the API exposes no audio parameter
+                      elsewhere.
+                    </p>
                   )}
-                </section>
-              ))}
+
+                  {/* Les hashtags vivent dans la légende: l'API n'a pas de champ
+                      séparé. Ce panneau les compte, les valide et surveille les
+                      deux plafonds (4.1.11). */}
+                  <HashtagPanel
+                    channelAccountId={currentStep.channel.id}
+                    caption={caption}
+                  />
+                </>
+              )}
+
+              {currentStep.channel.platform === "TELEGRAM" && (
+                <TelegramTargetPicker
+                  channelAccountId={currentStep.channel.id}
+                  chatId={telegramChatId}
+                  onChatIdChange={(id, label) => {
+                    setTelegramChatId(id);
+                    setTelegramTargetLabel(label);
+                  }}
+                  starPrice={starPrice}
+                  onStarPriceChange={setStarPrice}
+                  mediaCount={selected.length}
+                />
+              )}
+
+              {currentStep.channel.platform === "FANVUE" && (
+                <p className="text-xs text-muted-foreground">
+                  Fanvue lands in phase 4: audience and price will be set here.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -697,8 +731,8 @@ export function ComposerForm({
         <Button
           type="button"
           variant="ghost"
-          disabled={step === 0}
-          onClick={() => goToStep(step - 1)}
+          disabled={stepIndex === 0}
+          onClick={() => goToStep(stepIndex - 1)}
         >
           <ChevronLeft className="size-4" />
           Back
@@ -726,7 +760,7 @@ export function ComposerForm({
         )}
 
         {!isLast && (
-          <Button type="button" disabled={!stepValid} onClick={() => goToStep(step + 1)}>
+          <Button type="button" disabled={!stepValid} onClick={() => goToStep(stepIndex + 1)}>
             Next
             <ChevronRight className="size-4" />
           </Button>
@@ -768,10 +802,12 @@ function Recap({ label, value }: { label: string; value: string }) {
 }
 
 function Stepper({
+  steps,
   step,
   maxReached,
   onJump,
 }: {
+  steps: { key: string; label: string; channel: ChannelOption | null }[];
   step: number;
   maxReached: number;
   onJump: (index: number) => void;
@@ -782,7 +818,7 @@ function Stepper({
     // Barre pleine largeur, adossée au bord du modal: le fil d'étapes est un
     // repère de navigation, pas un contenu — il doit se lire d'un trait.
     <ol className="-mx-4 -mt-2 flex w-[calc(100%+2rem)] items-stretch border-b bg-muted/30 px-4 text-sm">
-      {STEPS.map((entry, index) => {
+      {steps.map((entry, index) => {
         const done = index < step;
         const current = index === step;
         const reachable = index <= maxReached;
@@ -800,15 +836,21 @@ function Stepper({
                 current && "after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-foreground",
               )}
             >
-              <span
-                className={cn(
-                  "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium",
-                  done && "border-primary bg-primary text-primary-foreground",
-                  current && "border-primary",
-                )}
-              >
-                {done ? <Check className="size-3" /> : index + 1}
-              </span>
+              {/* Une étape de canal porte son logo plutôt qu'un numéro: on la
+                  repère alors sans lire, ce qui compte quand il y en a trois. */}
+              {entry.channel ? (
+                <PlatformLogo platform={entry.channel.platform} className="size-5 shrink-0" />
+              ) : (
+                <span
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium",
+                    done && "border-primary bg-primary text-primary-foreground",
+                    current && "border-primary",
+                  )}
+                >
+                  {done ? <Check className="size-3" /> : index + 1}
+                </span>
+              )}
               <span className="truncate">{entry.label}</span>
             </button>
           </li>
