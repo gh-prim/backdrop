@@ -23,16 +23,21 @@ import type { PersonaOption } from "@/lib/persona";
 export function FanvueWizard({
   personas,
   appConfigured,
+  initialPersonaId,
   onDone,
 }: {
   personas: PersonaOption[];
   appConfigured: boolean;
+  /** Persona à reconnecter: le parcours est le même, la cible est connue. */
+  initialPersonaId?: string;
   onDone: () => void;
 }) {
   const [step, setStep] = useState<"app" | "authorize">(
     appConfigured ? "authorize" : "app",
   );
-  const [personaId, setPersonaId] = useState(personas[0]?.id ?? "");
+  const [personaId, setPersonaId] = useState(
+    initialPersonaId ?? personas[0]?.id ?? "",
+  );
 
   const [state, action, pending] = useActionState<FanvueResult | null, FormData>(
     saveFanvueAppAction,

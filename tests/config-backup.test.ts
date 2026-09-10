@@ -10,7 +10,7 @@ import {
   createVariant,
 } from "./helpers";
 import { exportConfig, importConfig, OperatorError } from "@/lib/config-backup";
-import { decryptCredentials } from "@/lib/crypto";
+import { decryptCredentials, encryptCredentials } from "@/lib/crypto";
 
 /**
  * La sauvegarde de configuration doit remonter une instance ailleurs — sans
@@ -104,6 +104,31 @@ describe("sauvegarde de configuration", () => {
     // Un canal sans identifiants afficherait « connecté » et échouerait au
     // premier envoi: on le dit plutôt que de le créer.
     expect(plan.channelsSkipped).toHaveLength(1);
+  });
+
+  it("emporte l'application OAuth Fanvue, sans laquelle rien ne se réautorise", async () => {
+    await prisma.fanvueApp.create({
+      data: {
+        organizationId: source.organizationId,
+        credentials: encryptCredentials({
+          clientId: "client",
+          clientSecret: "secret",
+          redirectUri: "https://localhost:3443/api/fanvue/callback",
+        }),
+      },
+    });
+
+    const backup = await exportConfig(source as never, { passphrase: PASSPHRASE });
+    const target = await targetOrg();
+    const plan = await importConfig(target as never, backup, { passphrase: PASSPHRASE });
+
+    // Sans elle, une instance restaurée a ses canaux Fanvue et aucun moyen de
+    // les réautoriser: le parcours n'a plus de client_id à présenter.
+    expect(plan.fanvueApp).toBe(true);
+    const restored = await prisma.fanvueApp.findUniqueOrThrow({
+      where: { organizationId: target.organizationId },
+    });
+    expect(decryptCredentials(restored.credentials)).toMatchObject({ clientId: "client" });
   });
 
   it("est idempotent: deux imports laissent le même état", async () => {

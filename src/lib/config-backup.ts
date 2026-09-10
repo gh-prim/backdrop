@@ -102,6 +102,12 @@ export type ConfigBackup = z.infer<typeof configSchema>;
 type Secrets = {
   channels: Record<string, unknown>;
   telegramApps: Record<string, unknown>;
+  /**
+   * Application OAuth Fanvue de l'organisation. Sans elle, une instance
+   * restaurée a bien ses canaux Fanvue mais aucun moyen de les réautoriser:
+   * le parcours n'a plus de `client_id` à présenter.
+   */
+  fanvueApp?: unknown;
 };
 
 /** Clé naturelle d'un canal, stable d'une instance à l'autre. */
@@ -162,6 +168,14 @@ export async function exportConfig(
   });
 
   const secrets: Secrets = { channels: {}, telegramApps: {} };
+
+  if (options.passphrase) {
+    const app = await prisma.fanvueApp.findUnique({
+      where: { organizationId: ctx.organizationId },
+      select: { credentials: true },
+    });
+    if (app) secrets.fanvueApp = decryptCredentials(app.credentials);
+  }
 
   const exported = personas.map((persona) => {
     if (options.passphrase) {
@@ -228,6 +242,8 @@ export type ImportPlan = {
   albumsCreated: string[];
   /** Médias qu'aucune empreinte locale ne retrouve: albums incomplets. */
   missingMedia: number;
+  /** L'application OAuth Fanvue a été rétablie. */
+  fanvueApp: boolean;
 };
 
 function emptyPlan(): ImportPlan {
@@ -241,6 +257,7 @@ function emptyPlan(): ImportPlan {
     hashtags: 0,
     albumsCreated: [],
     missingMedia: 0,
+    fanvueApp: false,
   };
 }
 
@@ -276,6 +293,18 @@ export async function importConfig(
       // Le message reste volontairement pauvre: distinguer « mauvaise phrase »
       // de « fichier altéré » renseignerait qui essaie des phrases au hasard.
       throw new OperatorError("Wrong passphrase, or the file has been altered.");
+    }
+  }
+
+  if (secrets?.fanvueApp !== undefined) {
+    plan.fanvueApp = true;
+    if (!dryRun) {
+      const blob = encryptCredentials(secrets.fanvueApp);
+      await prisma.fanvueApp.upsert({
+        where: { organizationId: ctx.organizationId },
+        create: { organizationId: ctx.organizationId, credentials: blob },
+        update: { credentials: blob },
+      });
     }
   }
 

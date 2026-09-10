@@ -8,7 +8,7 @@ export const prisma = new PrismaClient();
 export async function resetDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "AlbumItem", "Album", "PublicationItem", "Publication", "DmDelivery", "DmCampaignItem", "DmCampaign",
+      "FanvueApp", "AlbumItem", "Album", "PublicationItem", "Publication", "DmDelivery", "DmCampaignItem", "DmCampaign",
       "TelegramSubscriber", "MetricSnapshot", "FanvueEarning", "Variant", "Asset",
       "ChannelAccount", "Persona", "member", "invitation", "session", "account",
       "user", "organization"

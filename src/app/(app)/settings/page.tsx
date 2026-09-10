@@ -13,7 +13,38 @@ import { InvitationRow } from "./invitation-row";
 import { ChannelsPanel } from "./channels-panel";
 import { BackupPanel } from "./backup-panel";
 
-export default async function SettingsPage() {
+/**
+ * Issue du parcours d'autorisation Fanvue, rapportée à l'écran.
+ *
+ * Le retour d'OAuth revient sur cette page avec un paramètre: sans ce
+ * message, un échec se traduisait par un simple retour à l'onglet Membres —
+ * et l'opérateur ne pouvait pas savoir ce qui avait manqué.
+ */
+const FANVUE_OUTCOME: Record<string, { tone: "ok" | "ko"; message: string }> = {
+  connected: { tone: "ok", message: "Fanvue connecté." },
+  app: {
+    tone: "ko",
+    message:
+      "Aucune application OAuth enregistrée: ouvrir la tuile Fanvue et saisir ses identifiants.",
+  },
+  persona: { tone: "ko", message: "Persona introuvable dans cette organisation." },
+  expired: { tone: "ko", message: "Parcours expiré: recommencer la connexion." },
+  state: { tone: "ko", message: "Retour d'autorisation refusé: état invalide." },
+  refused: { tone: "ko", message: "Autorisation refusée côté Fanvue." },
+  code: { tone: "ko", message: "Fanvue n'a pas renvoyé de code d'autorisation." },
+  failed: {
+    tone: "ko",
+    message: "Échange de jetons impossible. Voir les logs du service web.",
+  },
+};
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fanvue?: string }>;
+}) {
+  const { fanvue } = await searchParams;
+  const outcome = fanvue ? FANVUE_OUTCOME[fanvue] : undefined;
   const ctx = await requireOrgContext();
   const isOwner = ctx.role === "owner";
 
@@ -43,7 +74,22 @@ export default async function SettingsPage() {
         </p>
       </div>
 
+      {outcome && (
+        <p
+          className={
+            outcome.tone === "ok"
+              ? "rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs"
+              : "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          }
+        >
+          {outcome.message}
+        </p>
+      )}
+
       <TabsShell
+        // Le retour d'autorisation concerne les canaux: y atterrir évite de
+        // chercher dans quel onglet il s'est passé quelque chose.
+        defaultValue={fanvue ? "channels" : undefined}
         tabs={[
           {
             value: "members",
