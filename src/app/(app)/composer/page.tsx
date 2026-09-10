@@ -7,7 +7,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FixedHeightPage } from "@/components/tabs-shell";
 import { ComposerForm } from "./composer-form";
 
-export default async function ComposerPage() {
+export default async function ComposerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ at?: string }>;
+}) {
+  // Le calendrier ouvre le composeur sur un créneau choisi. La date arrive
+  // donc en paramètre, et remplace la valeur par défaut.
+  const { at } = await searchParams;
   const ctx = await requireOrgContext();
   const personas = await listPersonas(ctx);
   const selectedId = await getSelectedPersonaId(personas);
@@ -37,6 +44,7 @@ export default async function ComposerPage() {
         </p>
       </div>
       <ComposerForm
+        initialScheduledAt={at}
         personaName={personas.find((p) => p.id === personaId)?.name ?? ""}
         channels={channels
           .filter((channel) => channel.personaId === personaId)

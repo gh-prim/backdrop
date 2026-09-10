@@ -51,25 +51,45 @@ const STEPS = [
   { key: "publish", label: "Caption and send" },
 ] as const;
 
+/**
+ * Valeur du champ `datetime-local`, au format que l'élément attend.
+ *
+ * Construit à la main plutôt que par `toISOString()`: celui-ci renvoie de
+ * l'UTC, que le navigateur afficherait tel quel comme une heure locale.
+ */
+function toLocalInput(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function defaultScheduledAt(): string {
   const at = new Date(Date.now() + 60 * 60 * 1000);
   at.setSeconds(0, 0);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  return toLocalInput(at);
 }
 
 export function ComposerForm({
   personaName,
   channels,
   variants,
+  initialScheduledAt,
 }: {
   personaName: string;
   channels: ChannelOption[];
   variants: VariantOption[];
+  /** Créneau choisi dans le calendrier, en ISO. */
+  initialScheduledAt?: string;
 }) {
   const [step, setStep] = useState(0);
 
-  const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
+  // Le créneau cliqué dans le calendrier gagne sur le défaut « dans une heure ».
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    if (!initialScheduledAt) return defaultScheduledAt();
+    const parsed = new Date(initialScheduledAt);
+    return Number.isNaN(parsed.getTime())
+      ? defaultScheduledAt()
+      : toLocalInput(parsed);
+  });
   const [telegramChatId, setTelegramChatId] = useState("");
   const [telegramTargetLabel, setTelegramTargetLabel] = useState("");
   const [starPrice, setStarPrice] = useState("");
