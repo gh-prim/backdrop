@@ -749,6 +749,9 @@ function statusClasses(status: string) {
   if (status === "PUBLISHED") {
     return "border-emerald-500 bg-emerald-500/15";
   }
+  if (status === "DRY_RUN") {
+    return "border-sky-400 bg-sky-400/15";
+  }
   if (status === "PUBLISHING") {
     return "border-sky-500 bg-sky-500/15 animate-pulse";
   }

@@ -290,6 +290,7 @@ class PublishTelegram:
                     "starPrice": plan["starPrice"],
                     "caption": plan["caption"],
                     "media": plan["media"],
+                    "dryRun": plan.get("dryRun", False),
                 },
                 # Les octets partent d'ici: une vidéo prend le temps qu'elle
                 # prend, et l'interrompre ne ferait que la recommencer.
@@ -307,6 +308,18 @@ class PublishTelegram:
                 retry_policy=RetryPolicy(maximum_attempts=5),
             )
             return {"outcome": "failed", "reason": reason}
+
+        if sent.get("dryRun"):
+            await workflow.execute_activity(
+                "markTelegramDryRun",
+                {"publicationId": publication_id},
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(maximum_attempts=5),
+            )
+            self._percent = 100
+            self._state = "published"
+            self._detail = "Dry run: everything checked, nothing sent."
+            return {"outcome": "dry-run"}
 
         await workflow.execute_activity(
             "markTelegramPublished",

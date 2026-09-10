@@ -34,7 +34,11 @@ enum Rating {
 /// MISSED: échéance dépassée au-delà de la tolérance de retard (7.6).
 /// Ce n'est pas un échec, c'est une décision en attente.
 
+/// DRY_RUN: tout a été vérifié, rien n'a été envoyé. État terminal distinct de
+/// PUBLISHED, parce que confondre une simulation avec un envoi réel serait la
+/// pire ambiguïté possible dans cette liste.
 enum PubStatus {
+  DRY_RUN
   DRAFT
   SCHEDULED
   PUBLISHING
@@ -228,6 +232,9 @@ model Publication {
   /// Rangée hors de la vue courante, sans être supprimée. Réservé aux états
   /// terminaux: archiver ce qui doit encore partir masquerait un envoi à venir.
   archivedAt       DateTime?
+  /// Simulation: le workflow vérifie tout et s'arrête avant l'appel plateforme.
+  /// Permet d'éprouver un envoi multi-canal sans rien publier en production.
+  dryRun           Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

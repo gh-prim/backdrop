@@ -37,6 +37,8 @@ export type PublicationPlan = {
   scheduledAt: string;
   status: string;
   toleranceMinutes: number;
+  /** Simulation: tout est vérifié, rien n'est envoyé. */
+  dryRun: boolean;
   items: PublicationItemPlan[];
 };
 
@@ -69,6 +71,7 @@ export async function loadPublicationPlan(
       videoVolume: true,
       scheduledAt: true,
       status: true,
+      dryRun: true,
       channelAccount: {
         select: { platform: true, scheduleToleranceMinutes: true },
       },
@@ -102,6 +105,7 @@ export async function loadPublicationPlan(
     videoVolume: publication.videoVolume,
     scheduledAt: publication.scheduledAt.toISOString(),
     status: publication.status,
+    dryRun: publication.dryRun,
     toleranceMinutes:
       publication.channelAccount.scheduleToleranceMinutes ??
       DEFAULT_SCHEDULE_TOLERANCE_MINUTES,
@@ -113,6 +117,20 @@ export async function loadPublicationPlan(
       isVideo: looksLikeVideo(item.variant.localPath),
     })),
   };
+}
+
+/**
+ * Clôt une simulation.
+ *
+ * État distinct de PUBLISHED, et `remoteId` laissé nul: confondre une
+ * simulation avec un envoi réel dans la liste des publications serait la pire
+ * ambiguïté que cet écran puisse produire.
+ */
+export async function markDryRun(publicationId: string): Promise<void> {
+  await prisma.publication.update({
+    where: { id: publicationId },
+    data: { status: "DRY_RUN", publishedAt: null, remoteId: null },
+  });
 }
 
 export async function markPublishing(publicationId: string): Promise<void> {

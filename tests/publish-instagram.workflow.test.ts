@@ -41,6 +41,7 @@ function plan(overrides: Partial<PublicationPlan> = {}): PublicationPlan {
         isVideo: false,
       },
     ],
+    dryRun: false,
     ...overrides,
   };
 }
@@ -64,6 +65,7 @@ function activityDoubles(planned: PublicationPlan, options: {
       markFailed: async (_id: string, reason: string) =>
         void calls.push(`markFailed:${reason}`),
       markMissed: async () => void calls.push("markMissed"),
+      markDryRun: async () => void calls.push("markDryRun"),
       cleanupPublishSchedule: async () => {
         calls.push("cleanupPublishSchedule");
         if (options.cleanupFails) throw new Error("Temporal injoignable");
@@ -161,6 +163,21 @@ describe("workflow publishInstagram", () => {
     expect(missed.result).toMatchObject({ outcome: "missed" });
     expect(missed.calls).toContain("cleanupPublishSchedule");
   }, 90_000);
+
+  it("en simulation, vérifie tout et n'appelle jamais Meta", async () => {
+    // Tout l'intérêt du mode: éprouver un envoi multi-canal en production sans
+    // rien publier. Le quota est bien interrogé — c'est une vérification —
+    // mais aucun container n'est créé.
+    const { result, calls } = await runWorkflow(plan({ dryRun: true }));
+
+    expect(result).toMatchObject({ outcome: "dry-run" });
+    expect(calls).toContain("markPublishing");
+    expect(calls).toContain("checkInstagramQuota");
+    expect(calls.some((c) => c.startsWith("createInstagramContainer"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("publishInstagramContainer"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("markPublished:"))).toBe(false);
+    expect(calls).toContain("markDryRun");
+  }, 60_000);
 
   it("publie quand même si le nettoyage du Schedule échoue", async () => {
     // Le nettoyage est cosmétique et le balayeur horaire le rattrape. Il ne

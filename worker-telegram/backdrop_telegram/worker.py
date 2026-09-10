@@ -102,6 +102,7 @@ async def main() -> None:
             publish_activities.send_telegram_publication,
             publish_activities.load_telegram_publication,
             publish_activities.mark_telegram_published,
+            publish_activities.mark_telegram_dry_run,
             publish_activities.mark_telegram_failed,
         ],
         max_concurrent_activities=8,

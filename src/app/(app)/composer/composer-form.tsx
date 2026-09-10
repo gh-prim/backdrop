@@ -109,6 +109,7 @@ export function ComposerForm({
    * tombait sur le bouton d'envoi qui venait d'apparaître.
    */
   const [armed, setArmed] = useState(true);
+  const [dryRun, setDryRun] = useState(false);
   const router = useRouter();
 
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
@@ -247,6 +248,7 @@ export function ComposerForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />
       <input type="hidden" name="scheduledAt" value={scheduledAt} />
+      {dryRun && <input type="hidden" name="dryRun" value="1" />}
       <input type="hidden" name="audioId" value={audio?.audioId ?? ""} />
       <input
         type="hidden"
@@ -668,6 +670,20 @@ export function ComposerForm({
           <span className="text-sm text-muted-foreground">{state.message}</span>
         )}
 
+        {isLast && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={dryRun}
+              onChange={(event) => setDryRun(event.target.checked)}
+            />
+            {/* Éprouver un envoi multi-canal sans rien publier: tout est
+                vérifié — statut, échéance, rating, quota, destination — et
+                l'appel plateforme n'a pas lieu. */}
+            Dry run — check everything, send nothing
+          </label>
+        )}
+
         {!isLast && (
           <Button type="button" disabled={!stepValid} onClick={() => goToStep(step + 1)}>
             Next
@@ -687,7 +703,13 @@ export function ComposerForm({
               !armed || pending || selected.length === 0 || channelIds.length === 0
             }
           >
-            {pending ? "Sending…" : publishNow ? "Publish now" : "Schedule"}
+            {pending
+              ? "Sending…"
+              : dryRun
+                ? "Dry run"
+                : publishNow
+                  ? "Publish now"
+                  : "Schedule"}
           </Button>
         )}
       </div>

@@ -49,8 +49,13 @@ export default async function DashboardPage() {
   const missed = publications.filter((p) => p.status === "MISSED");
   const attention = [...missed, ...failed];
 
+  // `publishedAt` reste nul sur une simulation, elle ne peut donc pas être
+  // comptée ici. La condition suffit, mais le statut le dit plus clairement.
   const publishedThisWeek = publications.filter(
-    (p) => p.publishedAt && now - p.publishedAt.getTime() < WEEK_MS,
+    (p) =>
+      p.status === "PUBLISHED" &&
+      p.publishedAt &&
+      now - p.publishedAt.getTime() < WEEK_MS,
   );
 
   const recent = publications

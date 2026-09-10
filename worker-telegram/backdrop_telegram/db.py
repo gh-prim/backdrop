@@ -180,7 +180,7 @@ async def load_publication_plan(publication_id: str) -> dict[str, Any]:
         row = await (
             await conn.execute(
                 'select p.id, p.status, p.kind, p.copy, p."starPrice", '
-                'p."targetChatId", p."targetLabel", p."scheduledAt", '
+                'p."dryRun", p."targetChatId", p."targetLabel", p."scheduledAt", '
                 'c."personaId", c."scheduleToleranceMinutes" '
                 'from "Publication" p '
                 'join "ChannelAccount" c on c.id = p."channelAccountId" '
@@ -209,6 +209,7 @@ async def load_publication_plan(publication_id: str) -> dict[str, Any]:
         "status": row["status"],
         "caption": row["copy"],
         "starPrice": row["starPrice"],
+        "dryRun": bool(row["dryRun"]),
         "chatId": row["targetChatId"],
         "targetLabel": row["targetLabel"],
         "personaId": row["personaId"],
@@ -243,4 +244,20 @@ async def mark_publication_failed(publication_id: str, reason: str) -> None:
             'update "Publication" set status = \'FAILED\', "failureReason" = %s, '
             '"updatedAt" = %s where id = %s',
             (reason[:500], datetime.now(timezone.utc), publication_id),
+        )
+
+
+async def mark_publication_dry_run(publication_id: str) -> None:
+    """
+    Clôt une simulation.
+
+    État distinct de PUBLISHED, `remoteId` laissé nul: confondre une simulation
+    avec un envoi réel dans la liste des publications serait la pire ambiguïté
+    que cet écran puisse produire.
+    """
+    async with await connect() as conn:
+        await conn.execute(
+            'update "Publication" set status = \'DRY_RUN\', "remoteId" = null, '
+            '"publishedAt" = null, "updatedAt" = %s where id = %s',
+            (datetime.now(timezone.utc), publication_id),
         )

@@ -53,6 +53,7 @@ export async function listPublications(
       starPrice: true,
       targetLabel: true,
       archivedAt: true,
+      dryRun: true,
       createdBy: { select: { name: true } },
       channelAccount: {
         select: {
@@ -101,6 +102,8 @@ export type CreatePublicationInput = {
    * paid media — TDLib refuse `inputMessagePaidMedia` ailleurs (4.2.6).
    */
   starPrice?: number | null;
+  /** Simulation: tout est vérifié, rien n'est envoyé. */
+  dryRun?: boolean;
 };
 
 /**
@@ -168,6 +171,7 @@ export async function createPublication(
             channel.platform === Platform.TELEGRAM
               ? (input.starPrice ?? null)
               : null,
+          dryRun: input.dryRun ?? false,
         },
         select: { id: true },
       });

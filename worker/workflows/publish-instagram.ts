@@ -90,7 +90,7 @@ async function dropSchedule(publicationId: string): Promise<void> {
 
 export async function publishInstagram(
   input: PublishInstagramInput,
-): Promise<{ outcome: "published" | "missed" | "skipped"; remoteId?: string }> {
+): Promise<{ outcome: "published" | "missed" | "skipped" | "dry-run"; remoteId?: string }> {
   const steps: PublishStep[] = [];
   const progress: PublishProgress = {
     percent: 0,
@@ -201,6 +201,17 @@ export async function publishInstagram(
         message: `Publishing quota reached: ${quota.used}/${quota.limit} over 24 h.`,
         nonRetryable: true,
       });
+    }
+
+    // Point d'arrêt de la simulation: tout ce qui pouvait être vérifié l'a
+    // été — statut, échéance, rating par le trigger à l'insertion, URL
+    // publique de chaque variante, quota du compte. Ce qui suit crée des
+    // containers chez Meta, donc a des effets hors de chez nous.
+    if (plan.dryRun) {
+      await db.markDryRun(input.publicationId);
+      finish("published", "Dry run: everything checked, nothing sent.");
+      await dropSchedule(input.publicationId);
+      return { outcome: "dry-run" };
     }
 
     const creationId =

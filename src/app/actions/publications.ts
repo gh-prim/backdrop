@@ -37,6 +37,7 @@ const createSchema = z.object({
   // Telegram plafonne le prix d'un message payant; la borne exacte vient de
   // `paid_media_message_star_count_max`, que le serveur annonce à 25000.
   starPrice: z.coerce.number().int().min(1).max(25000).optional(),
+  dryRun: z.coerce.boolean().optional(),
   audioId: z.string().optional(),
   audioVolume: z.coerce.number().int().min(0).max(100).optional(),
   videoVolume: z.coerce.number().int().min(0).max(100).optional(),
@@ -64,6 +65,7 @@ export async function schedulePublicationAction(
     telegramTargetLabel:
       String(formData.get("telegramTargetLabel") ?? "").trim() || undefined,
     starPrice: String(formData.get("starPrice") ?? "").trim() || undefined,
+    dryRun: formData.get("dryRun") === "1" || undefined,
     audioId: String(formData.get("audioId") ?? "").trim() || undefined,
     audioVolume: String(formData.get("audioVolume") ?? "").trim() || undefined,
     videoVolume: String(formData.get("videoVolume") ?? "").trim() || undefined,
@@ -269,7 +271,7 @@ async function channelsIncludeTelegram(
 
 
 /** États terminaux: seuls eux peuvent être rangés (voir schéma). */
-const ARCHIVABLE = ["PUBLISHED", "FAILED", "MISSED"];
+const ARCHIVABLE = ["PUBLISHED", "DRY_RUN", "FAILED", "MISSED"];
 
 /**
  * Range une publication hors de la vue courante, sans la supprimer.

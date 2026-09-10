@@ -55,6 +55,13 @@ async def send_telegram_publication(input: dict[str, Any]) -> dict[str, Any]:
     if star_price:
         await _require_paid_media_allowed(api, chat_id)
 
+    # Point d'arrêt de la simulation: la persona est connectée, la destination
+    # existe et accepte le prix demandé. Ce qui suit téléverse des octets chez
+    # Telegram, donc a des effets hors de chez nous.
+    if input.get("dryRun"):
+        await api.get_chat(chat_id=chat_id)
+        return {"messageId": None, "paid": bool(star_price), "dryRun": True}
+
         paid = [
             InputPaidMedia(
                 type=(
@@ -157,6 +164,11 @@ async def load_telegram_publication(input: dict[str, Any]) -> dict[str, Any]:
 @activity.defn(name="markTelegramPublished")
 async def mark_telegram_published(input: dict[str, Any]) -> None:
     await db.mark_publication_published(input["publicationId"], str(input["messageId"]))
+
+
+@activity.defn(name="markTelegramDryRun")
+async def mark_telegram_dry_run(input: dict[str, Any]) -> None:
+    await db.mark_publication_dry_run(input["publicationId"])
 
 
 @activity.defn(name="markTelegramFailed")

@@ -55,7 +55,7 @@ export type PublicationCard = {
 
 const MIN_COLUMNS = 2;
 const MAX_COLUMNS = 6;
-const STATUSES = ["All", "SCHEDULED", "PUBLISHED", "FAILED", "MISSED"] as const;
+const STATUSES = ["All", "SCHEDULED", "PUBLISHED", "DRY_RUN", "FAILED", "MISSED"] as const;
 
 /**
  * Publications en tuiles.
@@ -154,7 +154,7 @@ export function PublicationsGrid({
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {value === "All" ? "All" : value.toLowerCase()}
+              {value === "All" ? "All" : value.toLowerCase().replace("_", " ")}
             </button>
           ))}
         </div>
@@ -393,7 +393,7 @@ function ArchiveButton({
   className?: string;
 }) {
   const [pending, startTransition] = useTransition();
-  const terminal = ["PUBLISHED", "FAILED", "MISSED"].includes(card.status);
+  const terminal = ["PUBLISHED", "DRY_RUN", "FAILED", "MISSED"].includes(card.status);
   if (!terminal) return null;
 
   const label = card.archived ? "Restore" : "Archive";
@@ -434,6 +434,15 @@ function StatusBadge({ status }: { status: string }) {
   if (status === "PUBLISHING") {
     return (
       <Badge className="h-5 animate-pulse px-1.5 text-[10px]">sending…</Badge>
+    );
+  }
+  // Une simulation ne doit jamais se lire comme un envoi: teinte propre, et
+  // le mot en toutes lettres.
+  if (status === "DRY_RUN") {
+    return (
+      <Badge className="h-5 bg-sky-500/20 px-1.5 text-[10px] text-sky-700 dark:text-sky-300">
+        dry run
+      </Badge>
     );
   }
   return (
