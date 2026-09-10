@@ -103,7 +103,7 @@ async def main() -> None:
     app_credentials = await db.load_telegram_app(persona_id)
     # L'empreinte vient de la session, pas des constantes: rejouer une session
     # sous une autre empreinte que celle de sa création la grille (4.2.3).
-    stored = await db.load_session(persona_id)
+    stored = await db.load_telegram_account(persona_id)
 
     app = Client(
         name="backdrop-probe",

@@ -80,9 +80,16 @@ class PersonaTelegram:
         persona_id: str,
         api_id: int,
         api_hash: str,
-        phone: Optional[str] = None,
+        phone: str,
     ) -> None:
         gateway.install_shared_receiver()
+
+        # aiotdlib refuse un client sans numéro, y compris pour rouvrir une
+        # base déjà autorisée: il est donc conservé à la connexion et relu ici.
+        if not phone:
+            raise ValueError(
+                "Numéro requis: aiotdlib le réclame même pour une simple reprise."
+            )
 
         directory = sessions.session_directory(persona_id)
         self.persona_id = persona_id
@@ -193,5 +200,14 @@ class PersonaTelegram:
         et rattrape les trous d'updates, là où du MTProto brut obligerait à
         gérer soi-même les séquences `pts`/`qts` — du code qu'on croit juste
         pendant des mois avant de découvrir qu'il perd des messages.
+
+        Le handler reçoit **cet objet**, pas le client aiotdlib sous-jacent:
+        sans quoi il n'aurait aucun moyen de savoir de quelle persona vient le
+        message, et devrait redescendre dans une API dont toute cette couche
+        existe précisément pour l'isoler.
         """
-        return self.raw.add_event_handler(handler, API.Types.UPDATE_NEW_MESSAGE)
+
+        async def bridge(_raw, update) -> None:
+            await handler(self, update)
+
+        return self.raw.add_event_handler(bridge, API.Types.UPDATE_NEW_MESSAGE)

@@ -52,7 +52,7 @@ class PersonaPool:
         persona_id: str,
         api_id: int,
         api_hash: str,
-        phone: Optional[str] = None,
+        phone: str,
         **start_kwargs,
     ) -> PersonaTelegram:
         """Ouvre le client d'une persona, ou rend celui déjà ouvert."""

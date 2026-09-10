@@ -53,7 +53,7 @@ async def load_telegram_app(persona_id: str) -> dict[str, Any]:
 
 
 
-async def save_session(
+async def save_telegram_account(
     *,
     persona_id: str,
     telegram_user_id: int,
@@ -61,11 +61,15 @@ async def save_session(
     max_rating: str = "NSFW",
 ) -> str:
     """
-    Enregistre la session sur le ChannelAccount de la persona.
+    Enregistre le compte Telegram d'une persona.
 
-    C'est le worker qui écrit, et non le workflow qui renverrait la session à
-    Node: le résultat d'une activité est conservé dans l'historique Temporal,
-    et une session Telegram n'a rien à y faire (7.2).
+    Ne contient **pas** la session: avec TDLib, le secret est le répertoire
+    chiffré sur disque. Ce qui est stocké ici est ce qu'il faut pour rouvrir ce
+    répertoire — au premier chef le numéro, qu'aiotdlib réclame même pour une
+    simple reprise — et de quoi afficher le compte dans l'application.
+
+    C'est le worker qui écrit, et non le workflow: le résultat d'une activité
+    est conservé dans l'historique Temporal (7.2).
     """
     blob = encrypt_credentials(payload)
     external_id = str(telegram_user_id)
@@ -95,8 +99,8 @@ async def save_session(
     return row["id"]
 
 
-async def load_session(persona_id: str) -> dict[str, Any]:
-    """Session Telegram d'une persona, déchiffrée."""
+async def load_telegram_account(persona_id: str) -> dict[str, Any]:
+    """Métadonnées du compte Telegram d'une persona, déchiffrées."""
     async with await connect() as conn:
         row = await (
             await conn.execute(
@@ -111,3 +115,34 @@ async def load_session(persona_id: str) -> dict[str, Any]:
             "Le connecter depuis Settings → Channels."
         )
     return decrypt_credentials(row["credentials"])
+
+
+async def list_telegram_personas() -> list[dict[str, Any]]:
+    """
+    Personas ayant un compte Telegram connecté, avec de quoi rouvrir leur
+    client. Lu au démarrage du worker: chacune doit être remise à l'écoute
+    sans intervention.
+    """
+    async with await connect() as conn:
+        rows = await (
+            await conn.execute(
+                'select c."personaId", c.credentials, t.credentials as app '
+                'from "ChannelAccount" c '
+                'join "TelegramApp" t on t."personaId" = c."personaId" '
+                "where c.platform = 'TELEGRAM'"
+            )
+        ).fetchall()
+
+    personas = []
+    for row in rows:
+        account = decrypt_credentials(row["credentials"])
+        app = decrypt_credentials(row["app"])
+        personas.append(
+            {
+                "personaId": row["personaId"],
+                "phone": account.get("phone"),
+                "apiId": int(app["apiId"]),
+                "apiHash": app["apiHash"],
+            }
+        )
+    return personas
