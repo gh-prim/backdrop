@@ -30,6 +30,16 @@ export type ChannelTile = {
   expiresInDays: number | null;
 };
 
+/**
+ * Canaux dont la connexion peut être refaite sans supprimer la tuile.
+ *
+ * Telegram: la session est un répertoire lié à la machine, perdu à chaque
+ * réinstallation. Fanvue: le jeton de renouvellement est à usage unique, et
+ * une chaîne rompue impose une réautorisation. Instagram n'y figure pas — son
+ * jeton se renouvelle tout seul jusqu'à 60 jours (4.1.9).
+ */
+const RECONNECTABLE = new Set(["TELEGRAM", "FANVUE"]);
+
 const CATALOG: {
   platform: Platform;
   name: string;
@@ -118,8 +128,14 @@ export function ChannelsPanel({
             canDelete={isOwner}
             onDelete={() => setDeleting(channel)}
             onReconnect={
-              isOwner && channel.platform === "TELEGRAM"
+              isOwner && RECONNECTABLE.has(channel.platform)
                 ? () => {
+                    if (channel.platform === "FANVUE") {
+                      // L'autorisation se déroule chez Fanvue: on quitte
+                      // l'application et on revient avec des jetons neufs.
+                      window.location.href = `/api/fanvue/authorize?personaId=${channel.personaId}`;
+                      return;
+                    }
                     setReconnecting(channel.personaId);
                     setConnecting("TELEGRAM");
                   }
@@ -242,8 +258,7 @@ function ChannelCard({
   personaName: string;
   canDelete: boolean;
   onDelete: () => void;
-  /** Proposé sur Telegram seulement: c'est le seul canal dont la session vit
-      sur la machine, et donc le seul qu'une restauration laisse à refaire. */
+  /** Absent sur les canaux dont la connexion n'a pas à être refaite à la main. */
   onReconnect?: () => void;
 }) {
   return (
@@ -269,8 +284,8 @@ function ChannelCard({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Reconnect Telegram for ${personaName}`}
-            title="Reconnect: redo the login, keep the channel and its history"
+            aria-label={`Reconnect ${channel.platform.toLowerCase()} for ${personaName}`}
+            title="Reconnect: redo the authorization, keep the channel and its history"
             className="opacity-0 transition-opacity group-hover/tile:opacity-100 focus-visible:opacity-100"
             onClick={onReconnect}
           >

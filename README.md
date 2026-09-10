@@ -194,15 +194,22 @@ et rend la main en une seconde.
 Ce n'est pas le service web qui migre, délibérément: deux répliques qui
 migreraient à leur démarrage se marcheraient dessus.
 
-### Reconnecter Telegram
+### Reconnecter un canal
 
-Une session Telegram est un répertoire TDLib chiffré, **lié à la machine**:
-une instance restaurée ailleurs a le canal en base, mais plus de session. La
-tuile Telegram porte un bouton de reconnexion (l'éclair, au survol) qui refait
-le parcours téléphone + code sans toucher au canal ni à son historique.
+Les tuiles Telegram et Fanvue portent un bouton de reconnexion (l'éclair, au
+survol). Il refait l'autorisation **sans toucher au canal ni à son
+historique**: l'écriture est un upsert sur (persona, plateforme, identifiant
+distant), la ligne est mise à jour, pas dupliquée.
 
-Le même bouton sert quand la session est révoquée depuis l'application
-Telegram, ou après un changement de `CREDENTIALS_MASTER_KEY`.
+- **Telegram**: la session est un répertoire TDLib chiffré, lié à la machine.
+  Une instance restaurée ailleurs a le canal en base et plus de session. Le
+  bouton rejoue le parcours téléphone + code. Même chose après une révocation
+  depuis le téléphone ou un changement de `CREDENTIALS_MASTER_KEY`.
+- **Fanvue**: le jeton de renouvellement est à usage unique (4.3.3). Une chaîne
+  rompue — deux rafraîchissements concurrents, une restauration — impose une
+  réautorisation. Le bouton renvoie sur le parcours OAuth.
+
+Instagram n'a pas ce bouton: son jeton se renouvelle seul jusqu'à 60 jours.
 
 ### La clé de chiffrement
 
