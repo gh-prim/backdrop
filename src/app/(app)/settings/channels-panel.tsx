@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { PlugZapIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { deleteChannelAction, type ActionResult } from "@/app/actions/channels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,8 @@ export function ChannelsPanel({
   const [picking, setPicking] = useState(false);
   const [connecting, setConnecting] = useState<Platform | null>(null);
   const [deleting, setDeleting] = useState<ChannelTile | null>(null);
+  /** Persona dont on refait la session, sans repasser par la création. */
+  const [reconnecting, setReconnecting] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
@@ -115,6 +117,14 @@ export function ChannelsPanel({
             personaName={personaNames[channel.personaId] ?? "unknown persona"}
             canDelete={isOwner}
             onDelete={() => setDeleting(channel)}
+            onReconnect={
+              isOwner && channel.platform === "TELEGRAM"
+                ? () => {
+                    setReconnecting(channel.personaId);
+                    setConnecting("TELEGRAM");
+                  }
+                : undefined
+            }
           />
         ))}
 
@@ -201,7 +211,11 @@ export function ChannelsPanel({
             <TelegramWizard
               personas={personas}
               configuredPersonaIds={telegramPersonaIds}
-              onDone={() => setConnecting(null)}
+              initialPersonaId={reconnecting ?? undefined}
+              onDone={() => {
+                setConnecting(null);
+                setReconnecting(null);
+              }}
             />
           )}
           {connecting === "FANVUE" && (
@@ -222,11 +236,15 @@ function ChannelCard({
   personaName,
   canDelete,
   onDelete,
+  onReconnect,
 }: {
   channel: ChannelTile;
   personaName: string;
   canDelete: boolean;
   onDelete: () => void;
+  /** Proposé sur Telegram seulement: c'est le seul canal dont la session vit
+      sur la machine, et donc le seul qu'une restauration laisse à refaire. */
+  onReconnect?: () => void;
 }) {
   return (
     <div className="group/tile flex items-start gap-3 rounded-lg border p-3">
@@ -245,20 +263,36 @@ function ChannelCard({
         </div>
       </div>
 
-      {canDelete && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Remove ${channel.platform.toLowerCase()} for ${personaName}`}
-          // Discret au repos: supprimer un canal n'est pas une action
-          // courante, et un bouton toujours visible finit par être cliqué.
-          className="opacity-0 transition-opacity group-hover/tile:opacity-100 focus-visible:opacity-100"
-          onClick={onDelete}
-        >
-          <Trash2Icon />
-        </Button>
-      )}
+      <div className="flex items-center">
+        {onReconnect && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Reconnect Telegram for ${personaName}`}
+            title="Reconnect: redo the login, keep the channel and its history"
+            className="opacity-0 transition-opacity group-hover/tile:opacity-100 focus-visible:opacity-100"
+            onClick={onReconnect}
+          >
+            <PlugZapIcon />
+          </Button>
+        )}
+
+        {canDelete && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Remove ${channel.platform.toLowerCase()} for ${personaName}`}
+            // Discret au repos: supprimer un canal n'est pas une action
+            // courante, et un bouton toujours visible finit par être cliqué.
+            className="opacity-0 transition-opacity group-hover/tile:opacity-100 focus-visible:opacity-100"
+            onClick={onDelete}
+          >
+            <Trash2Icon />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

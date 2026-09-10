@@ -171,7 +171,18 @@ Let's Encrypt valide le domaine.
 ### Mettre à jour
 
 ```bash
-git pull && docker compose up -d --build
+sudo ./scripts/update.sh
+```
+
+Un seul geste: `git pull`, reconstruction des images, redémarrage de la stack,
+puis l'état des conteneurs. Le `git pull` est exécuté sous l'utilisateur qui a
+appelé `sudo`, jamais sous root — sinon les objets Git changent de
+propriétaire et les commandes suivantes échouent sur des permissions.
+
+L'équivalent à la main:
+
+```bash
+git pull && docker compose build && docker compose up -d
 ```
 
 Le service `migrate` s'exécute **à chaque démarrage**, avant tout le reste:
@@ -182,6 +193,16 @@ et rend la main en une seconde.
 
 Ce n'est pas le service web qui migre, délibérément: deux répliques qui
 migreraient à leur démarrage se marcheraient dessus.
+
+### Reconnecter Telegram
+
+Une session Telegram est un répertoire TDLib chiffré, **lié à la machine**:
+une instance restaurée ailleurs a le canal en base, mais plus de session. La
+tuile Telegram porte un bouton de reconnexion (l'éclair, au survol) qui refait
+le parcours téléphone + code sans toucher au canal ni à son historique.
+
+Le même bouton sert quand la session est révoquée depuis l'application
+Telegram, ou après un changement de `CREDENTIALS_MASTER_KEY`.
 
 ### La clé de chiffrement
 

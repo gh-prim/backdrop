@@ -31,13 +31,22 @@ const STEPS = ["Persona", "API keys", "Phone", "Code"] as const;
 export function TelegramWizard({
   personas,
   configuredPersonaIds,
+  initialPersonaId,
   onDone,
 }: {
   personas: PersonaOption[];
   configuredPersonaIds: string[];
+  /**
+   * Persona à reconnecter. Une session TDLib est un répertoire lié à la
+   * machine: une instance restaurée ailleurs a le compte en base mais plus de
+   * session, et c'est ce parcours-là qui la refait.
+   */
+  initialPersonaId?: string;
   onDone: () => void;
 }) {
-  const [personaId, setPersonaId] = useState(personas[0]?.id ?? "");
+  const [personaId, setPersonaId] = useState(
+    initialPersonaId ?? personas[0]?.id ?? "",
+  );
   const [savedKeys, setSavedKeys] = useState<string[]>([]);
   const [step, setStep] = useState(0);
 
