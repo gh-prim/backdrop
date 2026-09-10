@@ -1,12 +1,26 @@
+{
+	# Un navigateur qui vise une adresse IP n'envoie pas de SNI: sans ce
+	# repli, Caddy ne sait pas quel site servir et coupe la poignée de main
+	# sur une « internal error » qui ne désigne rien. Indispensable pour un
+	# déploiement sur IP locale, sans effet sur un nom de domaine.
+	default_sni {$SITE_ADDRESS:localhost}
+}
+
 # Terminaison TLS.
 #
-# `SITE_ADDRESS` décide de tout: `localhost` en développement, où Caddy émet un
-# certificat avec son autorité locale, ou un nom de domaine sur un serveur, où
-# il obtient un certificat Let's Encrypt automatiquement — à condition que les
-# ports 80 et 443 soient publiés et que le DNS pointe déjà sur la machine.
+# `SITE_ADDRESS` décide de tout: `localhost` en développement, une IP ou un nom
+# de machine sur un réseau local, un nom de domaine public sur un serveur
+# exposé.
 #
-# Fanvue n'accepte que des redirect_uri en HTTPS (4.3.2): cette façade n'est
-# pas un confort, c'est ce qui rend la connexion du canal possible.
+# `TLS_OPTIONS` suit: `internal` fait signer par l'autorité locale de Caddy —
+# le seul choix possible sur une IP privée, que Let's Encrypt ne peut pas
+# valider. Sur un domaine public, y mettre une adresse e-mail bascule sur
+# Let's Encrypt.
+#
+# Fanvue n'accepte que des redirect_uri en HTTPS (4.3.2), mais ne les visite
+# jamais: c'est le navigateur de l'opérateur qui est redirigé. Une adresse
+# privée convient donc parfaitement, du moment que ce navigateur est sur le
+# même réseau.
 {$SITE_ADDRESS:localhost} {
 	tls {$TLS_OPTIONS:internal}
 

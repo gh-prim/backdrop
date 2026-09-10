@@ -85,8 +85,37 @@ cp .env.example .env      # puis remplir les secrets
 docker compose up -d --build
 ```
 
-Renseigner dans `.env` le domaine et le contact ACME, pour que Caddy obtienne
-un vrai certificat au lieu de son autorité locale:
+### Sur un réseau local
+
+Le cas courant: une machine du réseau, joignable par son IP.
+
+```
+SITE_ADDRESS=192.168.1.50
+TLS_OPTIONS=internal
+WEB_HTTPS_PORT=443
+BETTER_AUTH_URL=https://192.168.1.50
+AUTH_TRUSTED_ORIGINS=https://192.168.1.50
+```
+
+Let's Encrypt ne certifie pas une adresse privée: Caddy émet donc lui-même le
+certificat, avec son autorité locale. Le navigateur avertit tant que cette
+autorité n'est pas approuvée. Pour ne plus le voir, installer la racine sur les
+postes qui utilisent l'outil:
+
+```bash
+docker compose cp proxy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt
+# macOS
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain caddy-root.crt
+# Ubuntu
+sudo cp caddy-root.crt /usr/local/share/ca-certificates/caddy-root.crt && sudo update-ca-certificates
+```
+
+Rien n'a besoin d'être exposé sur Internet, **y compris pour Fanvue**: la
+plateforme n'appelle jamais le `redirect_uri`, elle y renvoie le navigateur de
+l'opérateur. Une adresse privée suffit donc, du moment que ce navigateur est
+sur le même réseau — c'est l'URL à déclarer telle quelle dans l'app Fanvue.
+
+### Sur un domaine public
 
 ```
 SITE_ADDRESS=backdrop.example.com
