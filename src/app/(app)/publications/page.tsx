@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireOrgContext } from "@/lib/session";
 import { listPersonas, getSelectedPersonaId } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
@@ -8,29 +9,55 @@ const RATINGS = ["SFW", "SUGGESTIVE", "NSFW"] as const;
 import { PageHeader } from "@/components/page-header";
 import { PublicationsGrid } from "./publications-grid";
 
-export default async function PublicationsPage() {
+export default async function PublicationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string }>;
+}) {
   const ctx = await requireOrgContext();
+  const { archived } = await searchParams;
+  const showingArchived = archived === "1";
+
   const personas = await listPersonas(ctx);
   const selectedId = await getSelectedPersonaId(personas);
   const publications = await listPublications(
     ctx,
     selectedId === ALL_PERSONAS ? undefined : selectedId,
+    { includeArchived: showingArchived },
+  ).then((rows) =>
+    // L'archive est une vue à part: on n'y mélange pas ce qui est en cours.
+    showingArchived ? rows.filter((row) => row.archivedAt !== null) : rows,
   );
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Publications"
+        title={showingArchived ? "Archive" : "Publications"}
         description={`${publications.length} publication${publications.length > 1 ? "s" : ""}`}
       />
       {publications.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No publications yet. The Composer schedules one.
+            {showingArchived ? (
+              <>
+                <p>Nothing archived yet.</p>
+                {/* La bascule vit dans la grille, qui ne s'affiche pas ici:
+                    sans cette sortie, une archive vide serait sans retour. */}
+                <Link
+                  href="/publications"
+                  className="mt-2 inline-block underline underline-offset-4"
+                >
+                  Back to publications
+                </Link>
+              </>
+            ) : (
+              "No publications yet. The Composer schedules one."
+            )}
           </CardContent>
         </Card>
       ) : (
         <PublicationsGrid
+          showingArchived={showingArchived}
           cards={publications.map((publication) => ({
             id: publication.id,
             name: publication.name,
@@ -60,6 +87,7 @@ export default async function PublicationsPage() {
             coverRatio: publication.items[0]?.variant.ratio ?? null,
             starPrice: publication.starPrice,
             targetLabel: publication.targetLabel,
+            archived: publication.archivedAt !== null,
             // Telegram nomme sa destination; ailleurs, le compte de la
             // persona sur la plateforme est la seule destination possible.
             destination:

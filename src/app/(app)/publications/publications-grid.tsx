@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
-import { AlertTriangle, Images, Search, Star, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Archive, ArchiveRestore, AlertTriangle, Images, Search, Star, X } from "lucide-react";
+import { toast } from "sonner";
 import { useLocalPreference } from "@/lib/use-local-preference";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,9 +18,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  archivePublicationAction,
   cancelPublicationAction,
   publishMissedNowAction,
   reschedulePublicationAction,
+  unarchivePublicationAction,
   type ActionResult,
 } from "@/app/actions/publications";
 import { cn } from "cn";
@@ -46,6 +50,7 @@ export type PublicationCard = {
   targetLabel: string | null;
   /** Où l'envoi est parti: channel Telegram nommé, ou compte de plateforme. */
   destination: string;
+  archived: boolean;
 };
 
 const MIN_COLUMNS = 2;
@@ -62,7 +67,14 @@ const STATUSES = ["All", "SCHEDULED", "PUBLISHED", "FAILED", "MISSED"] as const;
  * La grille défile: c'est une collection, et la règle du non-scroll vise les
  * pages de détail (6.1).
  */
-export function PublicationsGrid({ cards }: { cards: PublicationCard[] }) {
+export function PublicationsGrid({
+  cards,
+  showingArchived,
+}: {
+  cards: PublicationCard[];
+  showingArchived: boolean;
+}) {
+  const router = useRouter();
   const [editing, setEditing] = useState<PublicationCard | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string>("All");
@@ -162,6 +174,21 @@ export function PublicationsGrid({ cards }: { cards: PublicationCard[] }) {
             ))}
           </select>
         </label>
+
+        {/* L'archive est un autre jeu de données, pas un filtre du même:
+            elle se demande au serveur, d'où le passage par l'URL. */}
+        <Button
+          type="button"
+          variant={showingArchived ? "secondary" : "ghost"}
+          size="sm"
+          className="h-8 gap-1.5 text-xs"
+          onClick={() =>
+            router.push(showingArchived ? "/publications" : "/publications?archived=1")
+          }
+        >
+          <Archive className="size-3.5" />
+          {showingArchived ? "Viewing archive" : "Archive"}
+        </Button>
 
         {activeFilters > 0 && (
           <Button
@@ -340,13 +367,58 @@ function PublicationTile({
           )}
 
           {card.remoteId && (
-            <span className="ml-auto truncate text-[10px] text-muted-foreground">
+            <span className="truncate text-[10px] text-muted-foreground">
               {card.remoteId}
             </span>
           )}
+
+          <ArchiveButton card={card} className="ml-auto" />
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * Ranger ou remettre une publication.
+ *
+ * Absent tant qu'elle n'est pas terminée: masquer un envoi encore à venir
+ * donnerait le sentiment de l'avoir annulé, alors qu'il partirait quand même.
+ */
+function ArchiveButton({
+  card,
+  className,
+}: {
+  card: PublicationCard;
+  className?: string;
+}) {
+  const [pending, startTransition] = useTransition();
+  const terminal = ["PUBLISHED", "FAILED", "MISSED"].includes(card.status);
+  if (!terminal) return null;
+
+  const label = card.archived ? "Restore" : "Archive";
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      title={label}
+      disabled={pending}
+      className={cn("opacity-0 transition-opacity group-hover/tile:opacity-100 focus-visible:opacity-100", className)}
+      onClick={() =>
+        startTransition(async () => {
+          const result = card.archived
+            ? await unarchivePublicationAction(card.id)
+            : await archivePublicationAction(card.id);
+          if (result.ok) toast.success(result.message ?? label);
+          else toast.error(result.error);
+        })
+      }
+    >
+      {card.archived ? <ArchiveRestore /> : <Archive />}
+    </Button>
   );
 }
 

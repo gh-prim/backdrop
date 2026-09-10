@@ -22,7 +22,11 @@ export class StaleVersionError extends Error {
   }
 }
 
-export async function listPublications(ctx: OrgContext, personaId?: string) {
+export async function listPublications(
+  ctx: OrgContext,
+  personaId?: string,
+  { includeArchived = false }: { includeArchived?: boolean } = {},
+) {
   return prisma.publication.findMany({
     where: {
       channelAccount: {
@@ -31,6 +35,9 @@ export async function listPublications(ctx: OrgContext, personaId?: string) {
           ...(personaId ? { id: personaId } : {}),
         },
       },
+      // Archivé veut dire « rangé », pas « supprimé »: les lignes restent, et
+      // la vue les réclame explicitement quand l'opérateur veut les revoir.
+      ...(includeArchived ? {} : { archivedAt: null }),
     },
     select: {
       id: true,
@@ -45,6 +52,7 @@ export async function listPublications(ctx: OrgContext, personaId?: string) {
       version: true,
       starPrice: true,
       targetLabel: true,
+      archivedAt: true,
       createdBy: { select: { name: true } },
       channelAccount: {
         select: {

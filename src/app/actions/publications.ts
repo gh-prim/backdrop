@@ -266,3 +266,65 @@ async function channelsIncludeTelegram(
   });
   return count > 0;
 }
+
+
+/** États terminaux: seuls eux peuvent être rangés (voir schéma). */
+const ARCHIVABLE = ["PUBLISHED", "FAILED", "MISSED"];
+
+/**
+ * Range une publication hors de la vue courante, sans la supprimer.
+ *
+ * Refusé sur une publication encore à venir: la masquer donnerait le sentiment
+ * de l'avoir annulée, alors qu'elle partirait quand même. Pour celles-là,
+ * l'action juste est « Cancel ».
+ */
+export async function archivePublicationAction(
+  publicationId: string,
+): Promise<ActionResult> {
+  const ctx = await requireOrgContext();
+
+  const publication = await prisma.publication.findFirst({
+    // Scope serveur: l'organisation vient de la session (9.6).
+    where: {
+      id: publicationId,
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
+    select: { id: true, status: true },
+  });
+  if (!publication) return { ok: false, error: "Publication not found." };
+
+  if (!ARCHIVABLE.includes(publication.status)) {
+    return {
+      ok: false,
+      error: "Only a finished publication can be archived. Cancel it first.",
+    };
+  }
+
+  await prisma.publication.update({
+    where: { id: publication.id },
+    data: { archivedAt: new Date() },
+  });
+
+  revalidatePath("/publications");
+  revalidatePath("/calendar");
+  return { ok: true, message: "Archived." };
+}
+
+export async function unarchivePublicationAction(
+  publicationId: string,
+): Promise<ActionResult> {
+  const ctx = await requireOrgContext();
+
+  const updated = await prisma.publication.updateMany({
+    where: {
+      id: publicationId,
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
+    data: { archivedAt: null },
+  });
+  if (updated.count === 0) return { ok: false, error: "Publication not found." };
+
+  revalidatePath("/publications");
+  revalidatePath("/calendar");
+  return { ok: true, message: "Back in the list." };
+}

@@ -225,6 +225,9 @@ model Publication {
   remoteId         String?
   failureReason    String?
   publishedAt      DateTime?
+  /// Rangée hors de la vue courante, sans être supprimée. Réservé aux états
+  /// terminaux: archiver ce qui doit encore partir masquerait un envoi à venir.
+  archivedAt       DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
