@@ -1,51 +1,34 @@
 """
-Activités du login Telegram (4.2.1).
+Activités du login Telegram (4.2.1), sur TDLib.
 
-MTProto impose une contrainte que rien ne contourne: entre l'envoi du code et
-sa validation, **le même client connecté** doit rester en vie. Le
-`phone_code_hash` est lié à la clé d'authentification négociée à la connexion;
-se déconnecter en négocie une nouvelle et invalide le code.
+TDLib conduit tout l'échange depuis `start()`: elle demande le code quand elle
+en a besoin, puis le mot de passe si le compte est protégé. Elle ne rend la
+main qu'une fois autorisée. Or l'application, elle, a besoin de reprendre la
+main entre chaque étape pour afficher un champ et attendre l'opérateur.
 
-D'où ce registre en mémoire. Il n'est correct que parce que le worker Telegram
-est un singleton (7.3) — la même contrainte qui interdit de répliquer ce worker
-est ce qui rend le registre atteignable par les deux activités.
+D'où ce découpage: `start()` tourne dans une tâche de fond, et ses demandes de
+saisie sont branchées sur des `Future`. Chaque activité pousse une saisie puis
+rend la main dès que TDLib réclame la suivante — ou que la connexion aboutit.
+La structure du workflow est ainsi restée celle d'Hydrogram, alors que la
+bibliothèque en dessous a entièrement changé.
 
-Un redémarrage du worker vide le registre. C'est assumé: le login échoue alors
-avec un message clair et l'opérateur recommence. Faire survivre un client
-MTProto à un redémarrage n'a pas de sens.
+Le registre en mémoire n'est correct que parce que ce worker est un singleton
+(7.3) — la contrainte qui interdit de le répliquer est ce qui rend les logins
+en attente atteignables d'une activité à l'autre. Un redémarrage les perd, et
+c'est assumé: un login inachevé se recommence.
 """
 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
-from hydrogram import Client
-from hydrogram.errors import (
-    FloodWait,
-    PhoneCodeExpired,
-    PhoneCodeInvalid,
-    PhoneNumberInvalid,
-    SessionPasswordNeeded,
-)
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from backdrop_telegram import db, fingerprint
-
-
-@dataclass
-class Pending:
-    client: Client
-    phone: str
-    phone_code_hash: str
-    persona_id: str
-
-
-_pending: dict[str, Pending] = {}
-_lock = asyncio.Lock()
-
+from backdrop_telegram.tdlib import LoginAbandoned, PersonaTelegram, pool
 
 # Marque les messages écrits pour être lus par l'opérateur. Tout ce qui n'en
 # porte pas la marque reste dans les logs: Temporal convertit n'importe quelle
@@ -53,24 +36,97 @@ _lock = asyncio.Lock()
 # contient volontiers une chaîne de connexion avec son mot de passe.
 OPERATOR_ERROR = "operator"
 
+# Temps laissé à TDLib pour joindre Telegram et réclamer la saisie suivante.
+STEP_TIMEOUT = 90
+
+
+@dataclass
+class Pending:
+    client: PersonaTelegram
+    persona_id: str
+    phone: str
+    task: Optional[asyncio.Task] = None
+    code: asyncio.Future = field(default_factory=asyncio.Future)
+    password: asyncio.Future = field(default_factory=asyncio.Future)
+    code_wanted: asyncio.Future = field(default_factory=asyncio.Future)
+    password_wanted: asyncio.Future = field(default_factory=asyncio.Future)
+    code_type: str = "app"
+
+
+_pending: dict[str, Pending] = {}
+_lock = asyncio.Lock()
+
 
 def _fail(message: str, *, retryable: bool = False) -> ApplicationError:
     """
     Une erreur de login est presque toujours définitive: un code faux ne
     devient pas juste en réessayant, et chaque tentative consomme un envoi
-    Telegram. On le dit explicitement à Temporal.
+    Telegram.
     """
     return ApplicationError(message, type=OPERATOR_ERROR, non_retryable=not retryable)
+
+
+def _resolve(future: asyncio.Future, value: Any = True) -> None:
+    if not future.done():
+        future.set_result(value)
 
 
 async def _drop(login_id: str) -> None:
     async with _lock:
         pending = _pending.pop(login_id, None)
-    if pending is not None:
-        try:
-            await pending.client.disconnect()
-        except Exception:  # noqa: BLE001 — un client déjà tombé n'a rien à signaler
-            pass
+    if pending is None:
+        return
+
+    if pending.task is not None and not pending.task.done():
+        pending.task.cancel()
+    try:
+        await pending.client.close()
+    except Exception:  # noqa: BLE001 — un client déjà tombé n'a rien à signaler
+        pass
+
+
+async def _race(pending: Pending, wanted: asyncio.Future) -> str:
+    """
+    Attend soit la demande de saisie suivante, soit la fin de la connexion.
+
+    Sans cette course, une connexion qui aboutit sans demander de mot de passe
+    resterait bloquée à attendre une saisie qui ne viendra jamais.
+    """
+    assert pending.task is not None
+    done, _ = await asyncio.wait(
+        {wanted, pending.task},
+        timeout=STEP_TIMEOUT,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if not done:
+        raise _fail("Telegram n'a pas répondu dans le temps imparti.")
+
+    if pending.task in done:
+        # La tâche porte l'erreur éventuelle: la relire la fait remonter ici.
+        error = pending.task.exception()
+        if error is not None:
+            raise _translate(error)
+        return "connected"
+    return "wanted"
+
+
+def _translate(error: BaseException) -> ApplicationError:
+    """Traduit une erreur TDLib en message lisible, sans rien laisser fuir."""
+    text = str(error)
+    if isinstance(error, LoginAbandoned):
+        return _fail(text)
+    if "PHONE_CODE_INVALID" in text:
+        return _fail("Code incorrect.")
+    if "PHONE_CODE_EXPIRED" in text:
+        return _fail("Code expiré. Recommencer la connexion.")
+    if "PASSWORD_HASH_INVALID" in text:
+        return _fail("Mot de passe refusé.")
+    if "PHONE_NUMBER_INVALID" in text:
+        return _fail("Numéro refusé par Telegram.")
+    if "FLOOD_WAIT" in text:
+        return _fail("Telegram impose une attente avant un nouvel envoi.")
+    activity.logger.exception("échec de login non traduit")
+    return _fail("Connexion refusée par Telegram. Voir les logs du worker.")
 
 
 @activity.defn(name="requestLoginCode")
@@ -80,59 +136,56 @@ async def request_login_code(input: dict[str, Any]) -> dict[str, Any]:
     phone = input["phone"]
 
     try:
-        app_credentials = await db.load_telegram_app(persona_id)
+        credentials = await db.load_telegram_app(persona_id)
     except RuntimeError as error:
-        # Message déjà rédigé pour l'opérateur (aucun api_id enregistré).
         raise _fail(str(error)) from error
-    except Exception as error:  # noqa: BLE001 — base injoignable, credentials illisibles
+    except Exception as error:  # noqa: BLE001 — base injoignable, données illisibles
         activity.logger.exception("accès base impossible au démarrage du login")
-        raise _fail(
-            "Cannot reach the database. Check the Telegram worker logs."
-        ) from error
+        raise _fail("Cannot reach the database. Check the Telegram worker logs.") from error
 
-    marks = fingerprint.current()
-    client = Client(
-        name=f"backdrop-login-{login_id}",
-        api_id=int(app_credentials["apiId"]),
-        api_hash=app_credentials["apiHash"],
-        device_model=marks["deviceModel"],
-        system_version=marks["systemVersion"],
-        app_version=marks["appVersion"],
-        in_memory=True,
+    # Une persona déjà ouverte détient le verrou de son répertoire TDLib: la
+    # reconnecter sans fermer d'abord échouerait sur la base elle-même.
+    await pool.close(persona_id)
+    await _drop(login_id)
+
+    client = PersonaTelegram(
+        persona_id=persona_id,
+        api_id=int(credentials["apiId"]),
+        api_hash=credentials["apiHash"],
+        phone=phone,
     )
+    pending = Pending(client=client, persona_id=persona_id, phone=phone)
 
-    await client.connect()
-    try:
-        sent = await client.send_code(phone)
-    except PhoneNumberInvalid as error:
-        await client.disconnect()
-        raise _fail(f"Numéro refusé par Telegram: {error}") from error
-    except FloodWait as error:
-        await client.disconnect()
-        raise _fail(
-            f"Telegram impose une attente de {error.value} secondes avant un nouvel envoi."
-        ) from error
+    async def code_provider(code_type: str) -> str:
+        pending.code_type = code_type
+        _resolve(pending.code_wanted)
+        return await pending.code
 
+    async def password_provider() -> str:
+        _resolve(pending.password_wanted)
+        return await pending.password
+
+    pending.task = asyncio.create_task(
+        client.start(code_provider=code_provider, password_provider=password_provider)
+    )
     async with _lock:
-        _pending[login_id] = Pending(
-            client=client,
-            phone=phone,
-            phone_code_hash=sent.phone_code_hash,
-            persona_id=persona_id,
-        )
+        _pending[login_id] = pending
 
-    activity.logger.info("code envoyé", extra={"loginId": login_id})
+    outcome = await _race(pending, pending.code_wanted)
+    if outcome == "connected":
+        # Base déjà autorisée: aucune saisie n'a été demandée.
+        return await _finish(login_id, pending)
+
+    activity.logger.info("code demandé", extra={"loginId": login_id})
     # Uniquement des primitives: Temporal sérialise le retour en JSON, et un
-    # objet Hydrogram y échoue **après** que le code a été envoyé — le pire
-    # moment, puisque l'échec détruit la session en attente alors que
-    # l'opérateur a déjà reçu son code.
-    return {"sentTo": str(sent.type)}
+    # objet de bibliothèque y échoue **après** l'envoi du code — le pire
+    # moment, puisque l'échec détruit la session en attente.
+    return {"state": "awaiting_code", "sentTo": str(pending.code_type)}
 
 
 @activity.defn(name="submitLoginCode")
 async def submit_login_code(input: dict[str, Any]) -> dict[str, Any]:
     login_id = input["loginId"]
-    code = input["code"]
 
     async with _lock:
         pending = _pending.get(login_id)
@@ -141,18 +194,14 @@ async def submit_login_code(input: dict[str, Any]) -> dict[str, Any]:
             "Session de login expirée: le worker a redémarré. Recommencer la connexion."
         )
 
-    try:
-        await pending.client.sign_in(pending.phone, pending.phone_code_hash, code)
-    except SessionPasswordNeeded:
-        # Vérification en deux étapes: le compte est protégé, on demande le
-        # mot de passe. Le client reste connecté, donc le registre reste valide.
-        return {"state": "password_needed"}
-    except PhoneCodeInvalid as error:
-        raise _fail("Code incorrect.") from error
-    except PhoneCodeExpired as error:
-        raise _fail("Code expiré. Recommencer la connexion.") from error
+    _resolve(pending.code, input["code"])
 
-    return await _finish(login_id, pending)
+    outcome = await _race(pending, pending.password_wanted)
+    if outcome == "connected":
+        return await _finish(login_id, pending)
+
+    # Vérification en deux étapes: le client reste vivant, le registre valide.
+    return {"state": "password_needed"}
 
 
 @activity.defn(name="submitLoginPassword")
@@ -166,40 +215,49 @@ async def submit_login_password(input: dict[str, Any]) -> dict[str, Any]:
             "Session de login expirée: le worker a redémarré. Recommencer la connexion."
         )
 
-    try:
-        await pending.client.check_password(input["password"])
-    except Exception as error:  # noqa: BLE001 — Hydrogram varie selon la cause
-        raise _fail(f"Mot de passe refusé: {type(error).__name__}") from error
+    _resolve(pending.password, input["password"])
+
+    assert pending.task is not None
+    done, _ = await asyncio.wait({pending.task}, timeout=STEP_TIMEOUT)
+    if not done:
+        raise _fail("Telegram n'a pas répondu dans le temps imparti.")
+    error = pending.task.exception()
+    if error is not None:
+        raise _translate(error)
 
     return await _finish(login_id, pending)
 
 
 async def _finish(login_id: str, pending: Pending) -> dict[str, Any]:
-    """Exporte la session, l'enregistre chiffrée, et libère le client."""
-    me = await pending.client.get_me()
-    session = await pending.client.export_session_string()
+    """Enregistre le compte, place le client dans le pool, libère le registre."""
+    account = await pending.client.me()
 
-    payload = {
-        "session": session,
-        "userId": me.id,
-        "username": me.username,
-        "phone": pending.phone,
-        **fingerprint.current(),
-    }
-    channel_account_id = await db.save_session(
-        persona_id=pending.persona_id, telegram_user_id=me.id, payload=payload
+    channel_account_id = await db.save_telegram_account(
+        persona_id=pending.persona_id,
+        telegram_user_id=account.user_id,
+        payload={
+            # Pas de session ici: avec TDLib le secret est le répertoire
+            # chiffré sur disque. Ce qui est stocké sert à le rouvrir.
+            "phone": pending.phone,
+            "userId": account.user_id,
+            "username": account.username,
+            **fingerprint.current(),
+        },
     )
 
-    await _drop(login_id)
+    # Le client rejoint le pool plutôt que d'être fermé: il doit rester à
+    # l'écoute des messages entrants dès la connexion terminée.
+    await pool.adopt(pending.persona_id, pending.client)
 
-    # Rien de sensible ne remonte: le résultat d'une activité est conservé dans
-    # l'historique Temporal (7.2). La session est déjà en base, chiffrée.
+    async with _lock:
+        _pending.pop(login_id, None)
+
     return {
         "state": "connected",
         "channelAccountId": channel_account_id,
-        "username": me.username,
-        "firstName": me.first_name,
-        "telegramUserId": me.id,
+        "username": account.username,
+        "firstName": account.first_name,
+        "telegramUserId": account.user_id,
     }
 
 
@@ -207,7 +265,7 @@ async def _finish(login_id: str, pending: Pending) -> dict[str, Any]:
 async def abandon_login(input: dict[str, Any]) -> None:
     """
     Libère un login inachevé. Appelé sur **toutes** les sorties du workflow,
-    y compris l'abandon et l'expiration: un client MTProto laissé connecté
-    garde une socket ouverte et un slot de session côté Telegram.
+    y compris l'abandon et l'expiration: un client TDLib laissé ouvert garde
+    le verrou du répertoire de la persona, qui ne pourrait plus se reconnecter.
     """
     await _drop(input["loginId"])

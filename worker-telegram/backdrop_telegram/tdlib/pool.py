@@ -77,6 +77,30 @@ class PersonaPool:
             )
             return client
 
+    async def adopt(self, persona_id: str, client: PersonaTelegram) -> None:
+        """
+        Fait entrer dans le pool un client déjà démarré ailleurs.
+
+        Le login construit son propre client — il doit piloter les demandes de
+        code — et le pool le reprend une fois connecté, plutôt que de le fermer
+        pour le rouvrir. Rouvrir coûterait une renégociation de session pour
+        rien, et laisserait un intervalle pendant lequel la persona
+        n'écouterait pas.
+        """
+        async with self._lock:
+            previous = self._clients.get(persona_id)
+            self._clients[persona_id] = client
+
+        if self._on_message is not None:
+            client.on_message(self._on_message)
+
+        # Un client précédent détiendrait encore le verrou du répertoire.
+        if previous is not None and previous is not client:
+            try:
+                await previous.close()
+            except Exception as error:  # noqa: BLE001
+                logger.warning("fermeture du client remplacé imparfaite: %s", error)
+
     def get(self, persona_id: str) -> Optional[PersonaTelegram]:
         return self._clients.get(persona_id)
 
