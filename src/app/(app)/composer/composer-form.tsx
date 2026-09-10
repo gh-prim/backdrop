@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { schedulePublicationAction, type ActionResult } from "@/app/actions/publications";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
 import { HashtagPanel } from "@/components/hashtag-panel";
-import { PublishProgressDialog } from "@/components/publish-progress-dialog";
 import { cn } from "cn";
 import { TelegramTargetPicker } from "./telegram-target";
 
@@ -83,27 +83,35 @@ export function ComposerForm({
   const [caption, setCaption] = useState("");
   const [audio, setAudio] = useState<SelectedAudio | null>(null);
 
-  const [tracked, setTracked] = useState<string[] | null>(null);
   /**
    * Le bouton d'envoi est désarmé un court instant à l'arrivée sur la dernière
    * étape. Sans cela, un double clic sur « Next » publiait: le second clic
    * tombait sur le bouton d'envoi qui venait d'apparaître.
    */
   const [armed, setArmed] = useState(true);
+  const router = useRouter();
 
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
-    async (prev, formData) => {
-      const result = await schedulePublicationAction(prev, formData);
-      // Le suivi ne s'ouvre que sur un envoi immédiat: une publication
-      // programmée pour ce soir n'a rien à montrer maintenant, et la barre de
-      // tâches du haut préviendra quand elle partira.
-      if (publishNow && result.ok && result.publicationIds?.length) {
-        setTracked(result.publicationIds);
-      }
-      return result;
-    },
+    schedulePublicationAction,
     null,
   );
+
+  /**
+   * Une fois la publication acceptée, le composeur a fini son travail.
+   *
+   * Retenir l'opérateur devant une barre de progression serait doublement
+   * faux: la barre de tâches du haut suit déjà l'envoi et le notifiera à
+   * l'arrivée, et rester là laisse croire qu'il faut surveiller — alors que
+   * fermer l'onglet ne changerait rien, le workflow tournant côté serveur.
+   *
+   * On rend donc la main: retour aux publications, où l'envoi apparaît avec
+   * son état réel.
+   */
+  useEffect(() => {
+    if (!state?.ok) return;
+    const timer = setTimeout(() => router.push("/publications"), 900);
+    return () => clearTimeout(timer);
+  }, [state, router]);
 
   const chosenChannels = channels.filter((channel) => channelIds.includes(channel.id));
 
@@ -215,13 +223,6 @@ export function ComposerForm({
 
   return (
     <form action={action} className="flex min-h-0 flex-1 flex-col gap-4">
-      {tracked && (
-        <PublishProgressDialog
-          publicationIds={tracked}
-          onClose={() => setTracked(null)}
-        />
-      )}
-
       {/* Tout l'état du wizard est réémis à la soumission finale. */}
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />
