@@ -13,17 +13,18 @@ l'empreinte sont partagés, parce que les dupliquer créerait deux vérités.
 
 Prérequis
 ---------
-    uv run --no-project python -m backdrop_telegram.login   # une seule fois
+    Connecter la persona depuis l'application (Settings → Channels → Telegram).
 
+    export TG_PERSONA_ID=...
     export TG_TEST_CHANNEL=@mon_channel_de_test
     export TG_TEST_USER=@mon_compte_de_test
     export TG_TEST_FILE=../tests/fixtures/teaser.jpg
 
     uv run --no-project python -m backdrop_telegram.probe_paid_media
 
-La session est relue chiffrée depuis `.session.enc` et ne transite jamais par
-une variable d'environnement, où elle serait lisible par tout process du
-système et par n'importe quel `ps`.
+La session est relue chiffrée depuis le ChannelAccount de la persona et ne
+transite jamais par une variable d'environnement, où elle serait lisible par
+tout process du système et par n'importe quel `ps`.
 
 Consigner la sortie intégrale dans docs/findings/telegram-paid-media-dm.md.
 """
@@ -38,8 +39,7 @@ import traceback
 from hydrogram import Client
 from hydrogram import raw
 
-from backdrop_telegram import session_file
-from backdrop_telegram.login import load_dotenv
+from backdrop_telegram import config, db
 
 STARS_AMOUNT = 50
 
@@ -94,21 +94,22 @@ async def send_paid(app: Client, target: str, reusable, label: str) -> None:
 
 
 async def main() -> None:
-    load_dotenv()
-    api_id = int(env("TELEGRAM_API_ID"))
-    api_hash = env("TELEGRAM_API_HASH")
+    config.load_dotenv()
+    persona_id = env("TG_PERSONA_ID")
     channel = env("TG_TEST_CHANNEL")
     user = env("TG_TEST_USER")
     path = env("TG_TEST_FILE")
 
+    organization_id = await db.persona_organization(persona_id)
+    app_credentials = await db.load_telegram_app(organization_id)
     # L'empreinte vient de la session, pas des constantes: rejouer une session
     # sous une autre empreinte que celle de sa création la grille (4.2.3).
-    stored = session_file.load()
+    stored = await db.load_session(persona_id)
 
     app = Client(
         name="backdrop-probe",
-        api_id=api_id,
-        api_hash=api_hash,
+        api_id=int(app_credentials["apiId"]),
+        api_hash=app_credentials["apiHash"],
         session_string=stored["session"],
         device_model=stored["deviceModel"],
         system_version=stored["systemVersion"],

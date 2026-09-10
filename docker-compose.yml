@@ -129,6 +129,35 @@ services:
       # Le worker écrirait des dérivations que personne d'autre ne verrait.
       - ${MEDIA_HOST_PATH:-./media}:/media
 
+  # Worker Telegram — singleton par nécessité (spec 7.3).
+  #
+  # Deux processus partageant une session MTProto déclenchent
+  # AUTH_KEY_DUPLICATED et détruisent la session (4.2.2). `replicas: 1` est
+  # donc une contrainte de correction, pas un réglage de performance, et le
+  # registre des logins en attente n'est atteignable que sous cette condition.
+  worker-telegram:
+    build:
+      context: ./worker-telegram
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      # api_id et api_hash ne sont pas ici: ils vivent en base, chiffrés,
+      # saisis depuis l'application (4.2.1). Seule la clé maître transite.
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
+      MEDIA_ROOT: /media
+    volumes:
+      - ${MEDIA_HOST_PATH:-./media}:/media
+
 volumes:
   postgres-data:
   postgres-temporal-data:

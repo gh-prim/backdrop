@@ -1,4 +1,5 @@
 import { requireOrgContext } from "@/lib/session";
+import { prisma } from "@/lib/db";
 import { listMembers, listPendingInvitations } from "@/lib/invitations";
 import { listPersonas } from "@/lib/persona-scope";
 import { listChannelStatus } from "@/lib/channels";
@@ -9,16 +10,22 @@ import { InviteForm } from "./invite-form";
 import { PersonaForm } from "./persona-form";
 import { InvitationRow } from "./invitation-row";
 import { InstagramForm } from "./instagram-form";
+import { TelegramForm } from "./telegram-form";
 
 export default async function SettingsPage() {
   const ctx = await requireOrgContext();
   const isOwner = ctx.role === "owner";
 
-  const [members, invitations, personas, channels] = await Promise.all([
+  const [members, invitations, personas, channels, telegramApp] = await Promise.all([
     listMembers(ctx),
     isOwner ? listPendingInvitations(ctx) : Promise.resolve([]),
     listPersonas(ctx),
     listChannelStatus(ctx),
+    // Sa seule présence est lue, jamais sa valeur (9.7).
+    prisma.telegramApp.findUnique({
+      where: { organizationId: ctx.organizationId },
+      select: { id: true },
+    }),
   ]);
 
   const personaNames = new Map(personas.map((persona) => [persona.id, persona.name]));
@@ -153,8 +160,17 @@ export default async function SettingsPage() {
                 {isOwner ? (
                   <div className="border-t pt-4">
                     <InstagramForm personas={personas} />
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Telegram lands in phase 2, Fanvue in phase 4.
+
+                    <div className="mt-5 space-y-3 border-t pt-4">
+                      <h3 className="text-sm font-medium">Telegram</h3>
+                      <TelegramForm
+                        personas={personas}
+                        configured={telegramApp !== null}
+                      />
+                    </div>
+
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      Fanvue lands in phase 4.
                     </p>
                   </div>
                 ) : (

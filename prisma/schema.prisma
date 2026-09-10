@@ -87,6 +87,24 @@ model Persona {
   @@index([organizationId])
 }
 
+/// Identifiants de l'application Telegram (4.2.1).
+///
+/// Un seul couple api_id / api_hash pour toute l'application, d'où l'unicité
+/// sur l'organisation. Ils ne vivent pas dans l'environnement: l'opérateur les
+/// saisit dans l'application, et ils sont chiffrés au repos comme n'importe
+/// quel credential plateforme.
+model TelegramApp {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  /// Chiffré au repos (AES-256-GCM): { apiId, apiHash }.
+  /// Ne sort jamais vers le client (9.7).
+  credentials    Bytes
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
 model ChannelAccount {
   id                       String    @id @default(cuid())
   personaId                String
@@ -445,7 +463,8 @@ model Organization {
   invitations Invitation[]
 
   // Ajouté à la main: l'Organization est le tenant, frontière d'isolation (7.4).
-  personas Persona[]
+  personas    Persona[]
+  telegramApp TelegramApp?
 
   @@unique([slug])
   @@map("organization")

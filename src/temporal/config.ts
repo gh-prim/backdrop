@@ -81,3 +81,33 @@ export function classifyPublishSchedule(summary: {
   if (summary.info.nextActionTimes.length > 0) return "live";
   return summary.info.recentActions.length > 0 ? "exhausted" : "stuck";
 }
+
+/**
+ * Connexion Telegram (4.2.1). Le login vit dans un workflow parce que MTProto
+ * exige qu'un même client reste connecté entre l'envoi du code et sa
+ * validation: aucun aller-retour HTTP sans état ne peut porter ça.
+ */
+export function telegramLoginWorkflowId(loginId: string): string {
+  return `tg-login:${loginId}`;
+}
+
+export const TELEGRAM_LOGIN_STATE_QUERY = "loginState";
+export const TELEGRAM_CODE_SIGNAL = "submitCode";
+export const TELEGRAM_PASSWORD_SIGNAL = "submitPassword";
+
+export type TelegramLoginState = {
+  state:
+    | "starting"
+    | "awaiting_code"
+    | "awaiting_password"
+    | "connected"
+    | "failed";
+  /** Message destiné à l'opérateur. Jamais un secret. */
+  detail: string | null;
+  account: {
+    channelAccountId: string;
+    username: string | null;
+    firstName: string | null;
+    telegramUserId: number;
+  } | null;
+};

@@ -10,6 +10,11 @@ import {
   RESCHEDULE_SIGNAL,
   REFRESH_META_TOKENS_SCHEDULE_ID,
   SWEEP_PUBLISH_SCHEDULES_SCHEDULE_ID,
+  TELEGRAM_CODE_SIGNAL,
+  TELEGRAM_LOGIN_STATE_QUERY,
+  TELEGRAM_PASSWORD_SIGNAL,
+  telegramLoginWorkflowId,
+  type TelegramLoginState,
   TASK_QUEUE,
   ingestWorkflowId,
   publishScheduleId,
@@ -286,4 +291,69 @@ export async function readPublishProgress(
   } catch {
     return null;
   }
+}
+
+/**
+ * Démarre une connexion Telegram et laisse le workflow attendre le code.
+ *
+ * La task queue est celle du worker Python: c'est lui qui détient Hydrogram et
+ * le client MTProto resté connecté (7.3).
+ */
+export async function startTelegramLogin(input: {
+  loginId: string;
+  personaId: string;
+  phone: string;
+}): Promise<void> {
+  const client = await temporalClient();
+  await client.workflow.start("telegramLogin", {
+    workflowId: telegramLoginWorkflowId(input.loginId),
+    taskQueue: TASK_QUEUE.telegram,
+    args: [input],
+    // Un login abandonné ne doit pas retenir un client MTProto indéfiniment.
+    workflowExecutionTimeout: "30 minutes",
+  });
+}
+
+export async function sendTelegramLoginCode(
+  loginId: string,
+  code: string,
+): Promise<void> {
+  const client = await temporalClient();
+  await client.workflow
+    .getHandle(telegramLoginWorkflowId(loginId))
+    .signal(TELEGRAM_CODE_SIGNAL, code);
+}
+
+export async function sendTelegramLoginPassword(
+  loginId: string,
+  password: string,
+): Promise<void> {
+  const client = await temporalClient();
+  await client.workflow
+    .getHandle(telegramLoginWorkflowId(loginId))
+    .signal(TELEGRAM_PASSWORD_SIGNAL, password);
+}
+
+export async function readTelegramLoginState(
+  loginId: string,
+): Promise<TelegramLoginState | null> {
+  const client = await temporalClient();
+  try {
+    return await client.workflow
+      .getHandle(telegramLoginWorkflowId(loginId))
+      .query<TelegramLoginState, []>(TELEGRAM_LOGIN_STATE_QUERY);
+  } catch {
+    return null;
+  }
+}
+
+/** Abandon explicite: le workflow libère le client MTProto en sortant. */
+export async function cancelTelegramLogin(loginId: string): Promise<void> {
+  const client = await temporalClient();
+  await client.workflow
+    .getHandle(telegramLoginWorkflowId(loginId))
+    .cancel()
+    .catch(() => {
+      // Déjà terminé: rien à signaler.
+    });
 }
