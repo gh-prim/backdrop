@@ -62,6 +62,11 @@ async def send_telegram_publication(input: dict[str, Any]) -> dict[str, Any]:
         await api.get_chat(chat_id=chat_id)
         return {"messageId": None, "paid": bool(star_price), "dryRun": True}
 
+    # Envoi payant. Le bloc doit rester **hors** de la simulation ci-dessus:
+    # imbriqué dedans, il devenait inatteignable et l'envoi retombait sur le
+    # chemin gratuit — un lot facturé 100 étoiles est alors parti offert, sans
+    # que rien ne le signale (2026-09-10).
+    if star_price:
         paid = [
             InputPaidMedia(
                 type=(
