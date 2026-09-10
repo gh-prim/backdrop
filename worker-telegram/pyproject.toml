@@ -5,14 +5,18 @@ description = "Worker Telegram de Backdrop: session MTProto unique, activités T
 requires-python = ">=3.12"
 dependencies = [
     "temporalio>=1.9",
-    "hydrogram>=0.1.4",
-    "tgcrypto>=1.2.5",
+    # TDLib et non un client MTProto tiers: Telegram refuse en silence les
+    # logins des clients restés sur une couche ancienne (4.2.2).
+    "aiotdlib>=0.27.6",
     "cryptography>=44",
     "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+# Sonde ponctuelle du média payant, lancée à la main depuis l'hôte. Hors de
+# l'image: le worker ne l'importe pas.
+probe = ["hydrogram>=0.1.4", "tgcrypto>=1.2.5"]
 
 [build-system]
 requires = ["hatchling"]

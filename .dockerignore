@@ -1,0 +1,14 @@
+# Le contexte de build ne doit porter que les sources.
+node_modules
+**/node_modules
+.next
+.git
+.env
+.env.test
+media
+worker-telegram/.venv
+worker-telegram/.tdlib-sessions
+worker-telegram/.session.enc
+**/__pycache__
+*.log
+tsconfig.tsbuildinfo

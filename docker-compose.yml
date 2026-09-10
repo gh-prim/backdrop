@@ -1,6 +1,8 @@
-# Backdrop — stack de développement.
-# Phase 0: base applicative, base Temporal, serveur Temporal, console.
-# Les workers (worker-node, worker-telegram) et le service web arrivent en phase 1 et 2.
+# Backdrop — stack complète.
+#
+# `docker compose up -d` lève tout: bases, Temporal, migrations, application
+# web et les deux workers. Le service `migrate` s'exécute une fois et rend la
+# main; web et workers l'attendent, plutôt que de migrer chacun au démarrage.
 
 services:
   postgres:
@@ -94,6 +96,57 @@ services:
       timeout: 5s
       retries: 20
 
+  # Migrations du schéma applicatif. S'exécute une fois, puis sort.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      # Vue depuis le navigateur, pas depuis le conteneur: c'est l'URL sur
+      # laquelle les cookies de session sont posés.
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3100}
+      MEDIA_ROOT: /media
+      SCHEDULE_TOLERANCE_MINUTES: ${SCHEDULE_TOLERANCE_MINUTES:-45}
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v25.0}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
+      R2_ENDPOINT: ${R2_ENDPOINT_INTERNAL:-}
+      META_GRAPH_BASE: ${META_GRAPH_BASE_INTERNAL:-}
+    ports:
+      - "${WEB_PORT:-3100}:3000"
+    volumes:
+      - ${MEDIA_HOST_PATH:-./media}:/media
+
   worker-node:
     build:
       context: .
@@ -104,6 +157,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
       TEMPORAL_ADDRESS: temporal:7233
@@ -147,18 +202,25 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      # Une persona connectée est un répertoire TDLib chiffré: volume nommé,
+      # et non bind mount, parce que personne d'autre n'a à le lire.
+      TELEGRAM_SESSION_ROOT: /sessions
       # api_id et api_hash ne sont pas ici: ils vivent en base, chiffrés,
       # saisis depuis l'application (4.2.1). Seule la clé maître transite.
       CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
       MEDIA_ROOT: /media
     volumes:
       - ${MEDIA_HOST_PATH:-./media}:/media
+      - telegram-sessions:/sessions
 
 volumes:
   postgres-data:
+  telegram-sessions:
   postgres-temporal-data:
   minio-data:

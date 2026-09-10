@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Build autonome pour l'image Docker: Next trace les dépendances réellement
+  // atteintes et les copie dans `.next/standalone`. L'image finale n'embarque
+  // donc ni pnpm, ni le lockfile, ni les 900 Mo de node_modules de build.
+  output: "standalone",
+
   experimental: {
     // Les Server Actions plafonnent à 1 Mo par défaut, ce qui refuse la
     // moindre photo. On monte à 50 Mo: assez pour une image et pour une vidéo

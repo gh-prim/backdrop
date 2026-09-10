@@ -1,0 +1,63 @@
+# Service web: l'application Next.js.
+#
+# Trois étapes: dépendances, build, exécution. La dernière ne contient que le
+# résultat du build — pas de gestionnaire de paquets, pas de sources.
+
+FROM node:24-bookworm-slim AS deps
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM node:24-bookworm-slim AS build
+RUN corepack enable
+# openssl: le client Prisma en a besoin pour choisir son moteur.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json next.config.ts postcss.config.mjs components.json ./
+COPY prisma ./prisma
+RUN pnpm exec prisma generate
+COPY public ./public
+COPY src ./src
+# La compilation atteint la base uniquement pour du typage: une URL factice
+# suffit, et évite de faire dépendre le build d'un Postgres joignable.
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm build
+
+# Cible dédiée aux migrations: le schéma est appliqué par un conteneur qui
+# s'arrête, jamais par le serveur web à son démarrage. Deux répliques web qui
+# migrent en même temps se marcheraient dessus.
+FROM node:24-bookworm-slim AS migrate
+RUN corepack enable
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY prisma ./prisma
+CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
+
+FROM node:24-bookworm-slim AS runtime
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+
+# Le serveur écrit les dérivations et lit les originaux sur ce volume.
+VOLUME ["/media"]
+
+EXPOSE 3000
+CMD ["node", "server.js"]

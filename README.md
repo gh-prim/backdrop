@@ -14,26 +14,58 @@ valider en production.
 
 ```bash
 cp .env.example .env      # puis remplir les secrets
-docker compose up -d      # bases, Temporal, console, worker-node
-pnpm install
-pnpm db:migrate
+docker compose up -d      # toute la stack, migrations comprises
 pnpm db:seed              # crée l'organisation et le premier owner
 pnpm worker:schedules     # enregistre le refresh des tokens Meta (45 jours)
-pnpm dev
 ```
 
-Pour itérer sur le worker sans reconstruire l'image:
-
-```bash
-docker compose stop worker-node && pnpm worker
-```
+`up` lève les bases, Temporal, l'application et les deux workers. Le service
+`migrate` applique le schéma une fois et sort; web et workers l'attendent,
+plutôt que de migrer chacun à leur démarrage — deux répliques qui migrent en
+même temps se marcheraient dessus.
 
 | Service | Adresse |
 |---|---|
 | Application | http://localhost:3100 |
 | Temporal UI | http://localhost:8233 |
 | PostgreSQL applicatif | `localhost:5434` |
-| Worker | conteneur `worker-node`, queue `backdrop-node` |
+| Worker Node | conteneur `worker-node`, queue `backdrop-node` |
+| Worker Telegram | conteneur `worker-telegram`, queue `backdrop-telegram` |
+
+### Développer
+
+Le service web occupe le port 3100. Pour coder avec le rechargement à chaud,
+lui rendre la place:
+
+```bash
+docker compose stop web && pnpm install && pnpm dev
+```
+
+Même chose pour les workers, sans reconstruire leur image:
+
+```bash
+docker compose stop worker-node && pnpm worker
+docker compose stop worker-telegram && cd worker-telegram && uv run python -m backdrop_telegram.worker
+```
+
+### Le worker Telegram et ses sessions
+
+Une persona connectée est un **répertoire TDLib chiffré**, pas une chaîne en
+base: il vit dans le volume `telegram-sessions`, et le perdre impose de
+reconnecter chaque persona depuis l'application. Le worker hôte écrit lui dans
+`worker-telegram/.tdlib-sessions/`; passer de l'un à l'autre demande donc de
+recopier le répertoire, process arrêté des deux côtés:
+
+```bash
+docker compose stop worker-telegram
+docker run --rm -v backdrop_telegram-sessions:/sessions \
+  -v "$PWD/worker-telegram/.tdlib-sessions":/src:ro alpine \
+  sh -c 'cp -a /src/. /sessions/'
+docker compose start worker-telegram
+```
+
+Un seul des deux à la fois: deux processus sur la même session déclenchent
+`AUTH_KEY_DUPLICATED` et la détruisent (spec 4.2.2).
 
 Les ports 3100 et 5434 ne sont pas les ports par défaut: 3000 et 5432 sont
 fréquemment occupés sur une machine de développement, et le binding Docker perd
