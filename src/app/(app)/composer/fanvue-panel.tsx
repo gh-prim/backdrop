@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { MediaThumb } from "@/components/media-thumb";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,27 @@ export function FanvuePanel({
   /** Médias **hors** de l'envoi: le teaser est ce qu'on montre, pas ce qu'on vend. */
   teaserCandidates: { id: string; rating: string; ratio: string }[];
 }) {
+  /**
+   * Cadrage du teaser.
+   *
+   * Fanvue affiche en portrait haut: un 4:5 y est rogné et rend mal. Le
+   * choix doit donc être explicite, et l'aperçu montrer le vrai cadrage —
+   * une vignette forcée dans une boîte 4:5 les fait tous se ressembler.
+   */
+  const ratios = useMemo(
+    () => [...new Set(teaserCandidates.map((variant) => variant.ratio))].sort(),
+    [teaserCandidates],
+  );
+  const [ratioFilter, setRatioFilter] = useState<string>("9:16");
+
+  const shown = useMemo(
+    () =>
+      ratioFilter === "all"
+        ? teaserCandidates
+        : teaserCandidates.filter((variant) => variant.ratio === ratioFilter),
+    [teaserCandidates, ratioFilter],
+  );
+
   const cents = useMemo(() => {
     const value = Number(priceUsd.replace(",", "."));
     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
@@ -126,6 +147,26 @@ export function FanvuePanel({
             buy — so it comes from the rest of the library, not from this send.
           </p>
 
+          {ratios.length > 1 && (
+            <div className="flex gap-1 rounded-md border p-0.5 text-xs">
+              {["all", ...ratios].map((ratio) => (
+                <button
+                  key={ratio}
+                  type="button"
+                  onClick={() => setRatioFilter(ratio)}
+                  className={cn(
+                    "rounded px-2 py-1 transition-colors",
+                    ratioFilter === ratio
+                      ? "bg-accent font-medium text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {ratio === "all" ? "All ratios" : ratio}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -140,13 +181,14 @@ export function FanvuePanel({
               None
             </button>
 
-            {teaserCandidates.slice(0, 12).map((variant) => (
+            {shown.slice(0, 12).map((variant) => (
               <button
                 key={variant.id}
                 type="button"
+                title={variant.ratio}
                 onClick={() => onPreviewChange(variant.id)}
                 className={cn(
-                  "rounded-md ring-offset-2 ring-offset-background transition",
+                  "relative rounded-md ring-offset-2 ring-offset-background transition",
                   previewVariantId === variant.id && "ring-2 ring-primary",
                 )}
               >
@@ -154,10 +196,28 @@ export function FanvuePanel({
                   variantId={variant.id}
                   rating={variant.rating as "SFW" | "SUGGESTIVE" | "NSFW"}
                   ratio={variant.ratio}
-                  className="h-20 w-16"
+                  // Hauteur fixe, largeur au cadrage réel: un 9:16 doit se
+                  // reconnaître d'un coup d'œil parmi des 4:5.
+                  className={cn(
+                    "h-24",
+                    variant.ratio === "9:16"
+                      ? "w-[54px]"
+                      : variant.ratio === "1:1"
+                        ? "w-24"
+                        : "w-[77px]",
+                  )}
                 />
+                <span className="absolute bottom-1 left-1 rounded bg-background/80 px-1 text-[9px]">
+                  {variant.ratio}
+                </span>
               </button>
             ))}
+
+            {shown.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No {ratioFilter} media outside this send.
+              </p>
+            )}
           </div>
         </div>
       )}
