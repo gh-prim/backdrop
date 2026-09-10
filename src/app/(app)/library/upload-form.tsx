@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { FileVideo, ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { uploadAssetAction } from "@/app/actions/assets";
+import { addToAlbumAction, createAlbumAction } from "@/app/actions/albums";
+import { Input } from "@/components/ui/input";
+import type { AlbumOption } from "./album-bar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -51,10 +54,12 @@ function humanSize(bytes: number) {
 
 export function UploadForm({
   personas,
+  albums,
   defaultPersonaId,
   onUploaded,
 }: {
   personas: PersonaOption[];
+  albums: AlbumOption[];
   defaultPersonaId: string;
   onUploaded?: () => void;
 }) {
@@ -67,6 +72,18 @@ export function UploadForm({
   const [rating, setRating] = useState<string>("SFW");
   const [ratios, setRatios] = useState<string[]>(["4:5", "9:16"]);
   const [running, setRunning] = useState(false);
+  /**
+   * Rangement à l'arrivée, facultatif.
+   *
+   * `""` = nulle part, `new` = un album à créer, sinon l'id d'un album
+   * existant. Ranger au moment où l'on téléverse est le seul instant où l'on
+   * sait encore pourquoi ces fichiers vont ensemble.
+   */
+  const [albumChoice, setAlbumChoice] = useState("");
+  const [albumName, setAlbumName] = useState("");
+  const [albumNote, setAlbumNote] = useState<string | null>(null);
+
+  const personaAlbums = albums.filter((album) => album.personaId === personaId);
 
   // Les URL d'aperçu sont des ressources: les libérer quand la file change.
   useEffect(() => {
@@ -97,6 +114,8 @@ export function UploadForm({
   async function submit() {
     if (!personaId || queue.length === 0) return;
     setRunning(true);
+    setAlbumNote(null);
+    const uploaded: string[] = [];
 
     for (const [index, item] of queue.entries()) {
       if (item.status === "done") continue;
@@ -112,6 +131,7 @@ export function UploadForm({
       for (const ratio of ratios) formData.append("ratios", ratio);
 
       const result = await uploadAssetAction(null, formData);
+      if (result.ok && result.assetId) uploaded.push(result.assetId);
 
       setQueue((current) =>
         current.map((entry, i) =>
@@ -126,14 +146,45 @@ export function UploadForm({
       );
     }
 
+    if (albumChoice) await fileAway(uploaded);
+
     setRunning(false);
     onUploaded?.();
+  }
+
+  /**
+   * Range les médias tout juste créés dans l'album demandé.
+   *
+   * Après l'upload et non pendant: un album qui existerait déjà à moitié
+   * pendant qu'un fichier échoue laisserait un regroupement à la fois créé et
+   * incomplet, sans que rien ne le dise.
+   */
+  async function fileAway(assetIds: string[]) {
+    if (assetIds.length === 0) return;
+
+    const formData = new FormData();
+    for (const id of assetIds) formData.append("assetIds", id);
+
+    let result;
+    if (albumChoice === "new") {
+      formData.set("name", albumName);
+      result = await createAlbumAction(null, formData);
+    } else {
+      formData.set("albumId", albumChoice);
+      result = await addToAlbumAction(null, formData);
+    }
+
+    setAlbumNote(result.ok ? (result.message ?? "Filed.") : result.error);
   }
 
   const pending = queue.filter((item) => item.status !== "done").length;
 
   return (
-    <div className="space-y-4">
+    // Deux colonnes: ce qu'on téléverse à gauche, où ça se range à droite. Le
+    // rangement est un choix à part — facultatif, et sans effet sur le reste
+    // du formulaire.
+    <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_16rem]">
+      <div className="space-y-4">
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -304,7 +355,13 @@ export function UploadForm({
       <div className="flex items-center gap-3">
         <Button
           type="button"
-          disabled={running || pending === 0 || !personaId || ratios.length === 0}
+          disabled={
+            running ||
+            pending === 0 ||
+            !personaId ||
+            ratios.length === 0 ||
+            (albumChoice === "new" && albumName.trim().length === 0)
+          }
           onClick={submit}
         >
           {running ? (
@@ -329,6 +386,87 @@ export function UploadForm({
           </Button>
         )}
       </div>
+      </div>
+
+      <aside className="space-y-2 md:border-l md:pl-5">
+        <div>
+          <p className="text-sm font-medium">Album</p>
+          <p className="text-xs text-muted-foreground">
+            {/* Le dire haut et clair: on peut téléverser sans rien ranger, et
+                ranger ne retire rien de la bibliothèque. */}
+            Optional. The media reach the library either way.
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <AlbumChoice
+            label="No album"
+            hint="Straight to the library"
+            active={albumChoice === ""}
+            onClick={() => setAlbumChoice("")}
+          />
+
+          {personaAlbums.map((album) => (
+            <AlbumChoice
+              key={album.id}
+              label={album.name}
+              hint={`${album.count} media`}
+              active={albumChoice === album.id}
+              onClick={() => setAlbumChoice(album.id)}
+            />
+          ))}
+
+          <AlbumChoice
+            label="New album…"
+            hint="Group this batch"
+            active={albumChoice === "new"}
+            onClick={() => setAlbumChoice("new")}
+          />
+        </div>
+
+        {albumChoice === "new" && (
+          <Input
+            value={albumName}
+            onChange={(event) => setAlbumName(event.target.value)}
+            placeholder="Locker room — September"
+            autoFocus
+            className="h-8 w-full"
+          />
+        )}
+
+        {albumNote && (
+          <p className="rounded bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+            {albumNote}
+          </p>
+        )}
+      </aside>
     </div>
+  );
+}
+
+function AlbumChoice({
+  label,
+  hint,
+  active,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "block w-full rounded-md border px-2.5 py-1.5 text-left transition-colors",
+        active ? "border-primary bg-accent" : "hover:bg-accent/40",
+      )}
+    >
+      <span className="block truncate text-sm">{label}</span>
+      <span className="block text-[11px] text-muted-foreground">{hint}</span>
+    </button>
   );
 }

@@ -29,6 +29,14 @@ export default async function LibraryPage() {
 
   const personaNames = new Map(personas.map((persona) => [persona.id, persona.name]));
 
+  /** De quoi choisir un album, au téléversement comme dans la sélection. */
+  const albumOptions = albums.map((album) => ({
+    id: album.id,
+    name: album.name,
+    personaId: album.personaId,
+    count: album.count,
+  }));
+
   return (
     <FixedHeightPage>
       <PageHeader
@@ -37,7 +45,11 @@ export default async function LibraryPage() {
         actions={
           <>
             <BlurPreferenceToggle />
-            <UploadDialog personas={personas} defaultPersonaId={selectedId} />
+            <UploadDialog
+              personas={personas}
+              albums={albumOptions}
+              defaultPersonaId={selectedId}
+            />
           </>
         }
       />
@@ -49,15 +61,11 @@ export default async function LibraryPage() {
             label: "Library",
             content: (
               <AssetGrid
-                albums={albums.map((album) => ({
-                  id: album.id,
-                  name: album.name,
-                  personaId: album.personaId,
-                  count: album.count,
-                }))}
+                albums={albumOptions}
                 assets={assets.map((asset) => ({
                   id: asset.id,
                   rating: asset.rating,
+                  personaId: asset.personaId,
                   personaName: personaNames.get(asset.personaId) ?? "",
                   authorName: asset.createdBy.name,
                   createdAt: asset.createdAt.toLocaleDateString("en-GB", {

@@ -16,6 +16,7 @@ type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
 export type AssetCard = {
   id: string;
   rating: Rating;
+  personaId: string;
   personaName: string;
   authorName: string;
   createdAt: string;
@@ -82,6 +83,12 @@ export function AssetGrid({
         .includes(needle);
     });
   }, [assets, query, ratingFilter, typeFilter, instagramReady, neverUsed]);
+
+  /** Personas représentées dans la sélection courante. */
+  const pickedPersonas = useMemo(() => {
+    const byId = new Map(assets.map((asset) => [asset.id, asset.personaId]));
+    return [...new Set(picked.map((id) => byId.get(id)).filter(Boolean))] as string[];
+  }, [assets, picked]);
 
   const activeFilters =
     (ratingFilter !== "All" ? 1 : 0) +
@@ -200,7 +207,14 @@ export function AssetGrid({
         </div>
       </div>
 
-      <AlbumBar selected={picked} albums={albums} onClear={() => setPicked([])} />
+      <AlbumBar
+        selected={picked}
+        // Un album appartient à une persona: ne proposer que les siens évite
+        // de faire choisir un album que l'action refusera ensuite.
+        albums={albums.filter((album) => album.personaId === pickedPersonas[0])}
+        mixedPersonas={pickedPersonas.length > 1}
+        onClear={() => setPicked([])}
+      />
 
       {filtered.length === 0 ? (
         <Card>

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FolderPlus, X } from "lucide-react";
+import { FolderPlus, Plus, X } from "lucide-react";
 import {
   addToAlbumAction,
   createAlbumAction,
@@ -23,19 +23,23 @@ export type AlbumOption = { id: string; name: string; personaId: string; count: 
 /**
  * Barre d'action de la sélection.
  *
- * N'apparaît qu'une fois des médias cochés: une barre permanente et vide
- * occuperait de la place pour ne rien proposer.
+ * N'apparaît qu'une fois des médias cochés — un seul suffit: on range aussi
+ * bien une image que dix. Les deux gestes sont proposés côte à côte, et aucun
+ * n'est obligatoire: cocher des médias sert d'abord à les regarder.
  */
 export function AlbumBar({
   selected,
   albums,
+  mixedPersonas = false,
   onClear,
 }: {
   selected: string[];
   albums: AlbumOption[];
+  /** La sélection couvre plusieurs personas: aucun album ne peut la recevoir. */
+  mixedPersonas?: boolean;
   onClear: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"new" | "existing" | null>(null);
   if (selected.length === 0) return null;
 
   return (
@@ -45,15 +49,40 @@ export function AlbumBar({
           {selected.length} selected
         </span>
 
-        <Button
-          type="button"
-          size="sm"
-          className="h-8 gap-1.5"
-          onClick={() => setOpen(true)}
-        >
-          <FolderPlus className="size-3.5" />
-          Add to album
-        </Button>
+        {mixedPersonas ? (
+          // Le dire ici plutôt qu'en erreur après coup: un album vise les
+          // canaux d'une seule persona.
+          <span className="text-xs text-muted-foreground">
+            Albums belong to one persona — this selection spans several.
+          </span>
+        ) : (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => setMode("new")}
+            >
+              <Plus className="size-3.5" />
+              New album
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={albums.length === 0}
+              title={
+                albums.length === 0 ? "No album for this persona yet." : undefined
+              }
+              onClick={() => setMode("existing")}
+            >
+              <FolderPlus className="size-3.5" />
+              Add to album
+            </Button>
+          </>
+        )}
 
         <Button
           type="button"
@@ -68,8 +97,8 @@ export function AlbumBar({
       </div>
 
       <AlbumDialog
-        open={open}
-        onOpenChange={setOpen}
+        mode={mode}
+        onClose={() => setMode(null)}
         selected={selected}
         albums={albums}
         onDone={onClear}
@@ -79,22 +108,19 @@ export function AlbumBar({
 }
 
 function AlbumDialog({
-  open,
-  onOpenChange,
+  mode,
+  onClose,
   selected,
   albums,
   onDone,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** `null` ferme le dialogue: le geste est déjà choisi dans la barre. */
+  mode: "new" | "existing" | null;
+  onClose: () => void;
   selected: string[];
   albums: AlbumOption[];
   onDone: () => void;
 }) {
-  const [mode, setMode] = useState<"new" | "existing">(
-    albums.length > 0 ? "existing" : "new",
-  );
-
   const [createState, create, creating] = useActionState<AlbumResult | null, FormData>(
     createAlbumAction,
     null,
@@ -109,7 +135,7 @@ function AlbumDialog({
   useEffect(() => {
     if (state?.ok) {
       toast.success(state.message ?? "Done.");
-      onOpenChange(false);
+      onClose();
       onDone();
     }
     // Le déclencheur est le résultat, pas l'identité des callbacks.
@@ -117,33 +143,17 @@ function AlbumDialog({
   }, [state]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={mode !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add {selected.length} media to an album</DialogTitle>
+          <DialogTitle>
+            {mode === "new" ? "New album" : "Add to an album"}
+          </DialogTitle>
           <DialogDescription>
-            An album groups media, it does not move them: they stay in the library.
+            {selected.length} media. An album groups them, it does not move them:
+            they stay in the library.
           </DialogDescription>
         </DialogHeader>
-
-        {albums.length > 0 && (
-          <div className="flex gap-1 rounded-md border p-0.5 text-xs">
-            {(["existing", "new"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMode(value)}
-                className={
-                  mode === value
-                    ? "flex-1 rounded bg-accent px-2 py-1 font-medium"
-                    : "flex-1 rounded px-2 py-1 text-muted-foreground hover:text-foreground"
-                }
-              >
-                {value === "existing" ? "Existing album" : "New album"}
-              </button>
-            ))}
-          </div>
-        )}
 
         <form action={mode === "new" ? create : add} className="space-y-3">
           {selected.map((id) => (
@@ -193,7 +203,7 @@ function AlbumDialog({
               variant="ghost"
               size="sm"
               className="h-8"
-              onClick={() => onOpenChange(false)}
+              onClick={onClose}
             >
               Cancel
             </Button>

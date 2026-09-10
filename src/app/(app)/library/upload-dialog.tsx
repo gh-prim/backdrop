@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { PersonaOption } from "@/lib/persona";
+import type { AlbumOption } from "./album-bar";
 import { UploadForm } from "./upload-form";
 
 /**
@@ -24,9 +25,11 @@ import { UploadForm } from "./upload-form";
  */
 export function UploadDialog({
   personas,
+  albums,
   defaultPersonaId,
 }: {
   personas: PersonaOption[];
+  albums: AlbumOption[];
   defaultPersonaId: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,6 +61,7 @@ export function UploadDialog({
         <div className="max-h-[72vh] overflow-y-auto pr-1">
           <UploadForm
             personas={personas}
+            albums={albums}
             defaultPersonaId={defaultPersonaId}
             onUploaded={() => router.refresh()}
           />
