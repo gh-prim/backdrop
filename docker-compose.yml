@@ -109,6 +109,30 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
 
+  # Amorçage du premier owner. Ne tourne jamais tout seul:
+  #   docker compose run --rm seed
+  # Sur un serveur il n'y a ni Node ni sources hors conteneur, et le seed est
+  # le seul point d'entrée du premier compte (9.8).
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      target: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?absent du .env — openssl rand -base64 32}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://localhost:3443}
+      SEED_ORG_NAME: ${SEED_ORG_NAME:-Backdrop}
+      SEED_ORG_SLUG: ${SEED_ORG_SLUG:-backdrop}
+      SEED_OWNER_EMAIL: ${SEED_OWNER_EMAIL:-owner@backdrop.local}
+      # Absent: le script en tire un au hasard et l'affiche une seule fois.
+      SEED_OWNER_PASSWORD: ${SEED_OWNER_PASSWORD:-}
+    command: ["pnpm", "tsx", "prisma/seed.ts"]
+
   web:
     build:
       context: .

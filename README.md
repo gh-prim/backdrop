@@ -13,9 +13,9 @@ valider en production.
 ## Démarrer
 
 ```bash
-cp .env.example .env      # puis remplir les secrets
-docker compose up -d      # toute la stack, migrations comprises
-pnpm db:seed              # crée l'organisation et le premier owner
+cp .env.example .env           # puis remplir les secrets
+docker compose up -d           # toute la stack, migrations comprises
+docker compose run --rm seed   # crée l'organisation et le premier owner
 pnpm worker:schedules     # enregistre le refresh des tokens Meta (45 jours)
 ```
 
@@ -117,7 +117,12 @@ Tout se construit sur place, aucune image à publier:
 git clone … && cd backdrop
 cp .env.example .env      # puis remplir les secrets
 docker compose up -d --build
+docker compose run --rm seed   # crée l'organisation et le premier owner
 ```
+
+Le seed n'a pas besoin de Node ni des sources sur la machine: il tourne dans
+son propre conteneur. Sans `SEED_OWNER_PASSWORD` dans le `.env`, il tire un mot
+de passe au hasard et l'affiche une seule fois.
 
 ### Sur un réseau local
 
