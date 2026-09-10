@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { ComposerCloseContext } from "@/app/(app)/composer/composer-close";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +46,11 @@ export function ComposerModal({ children }: { children: React.ReactNode }) {
           <DialogTitle>New publication</DialogTitle>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        {/* Le formulaire referme lui-même la fenêtre quand l'envoi est
+            accepté: lui seul sait quand son travail est fini. */}
+        <ComposerCloseContext.Provider value={close}>
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </ComposerCloseContext.Provider>
       </DialogContent>
     </Dialog>
   );

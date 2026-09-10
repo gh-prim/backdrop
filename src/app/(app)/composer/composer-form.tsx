@@ -20,6 +20,7 @@ import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
 import { FanvuePanel } from "./fanvue-panel";
+import { useComposerClose } from "./composer-close";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
 
@@ -137,6 +138,7 @@ export function ComposerForm({
   const [armed, setArmed] = useState(true);
   const [dryRun, setDryRun] = useState(false);
   const router = useRouter();
+  const closeModal = useComposerClose();
 
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     schedulePublicationAction,
@@ -156,9 +158,19 @@ export function ComposerForm({
    */
   useEffect(() => {
     if (!state?.ok) return;
-    const timer = setTimeout(() => router.push("/publications"), 900);
+    const timer = setTimeout(() => {
+      if (closeModal) {
+        // En modal: refermer et rafraîchir la page de dessous, qui montre
+        // désormais l'envoi. Naviguer vers `/publications` ne refermerait
+        // rien quand c'est déjà la page hôte.
+        closeModal();
+        router.refresh();
+        return;
+      }
+      router.push("/publications");
+    }, 900);
     return () => clearTimeout(timer);
-  }, [state, router]);
+  }, [state, router, closeModal]);
 
   const chosenChannels = channels.filter((channel) => channelIds.includes(channel.id));
 
