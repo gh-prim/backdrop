@@ -8,14 +8,23 @@
  *   pnpm db:seed
  */
 import "dotenv/config";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { auth } from "../src/lib/auth";
 import { prisma } from "../src/lib/db";
 
 const ORG_NAME = process.env.SEED_ORG_NAME ?? "Backdrop";
 const ORG_SLUG = process.env.SEED_ORG_SLUG ?? "backdrop";
 const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? "owner@backdrop.local";
-const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD ?? "backdrop-owner-2026";
+/**
+ * Mot de passe du premier owner.
+ *
+ * Aucune valeur par défaut: un mot de passe écrit dans le dépôt est un mot de
+ * passe connu de tous, et celui-ci ouvre le compte qui administre l'outil.
+ * Faute de `SEED_OWNER_PASSWORD`, on en tire un au hasard et on l'affiche une
+ * fois — à recopier tout de suite, il n'est écrit nulle part.
+ */
+const GENERATED = randomBytes(18).toString("base64url");
+const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD ?? GENERATED;
 const OWNER_NAME = process.env.SEED_OWNER_NAME ?? "Owner";
 
 async function main() {
@@ -44,6 +53,9 @@ async function main() {
     });
     user = await prisma.user.findUniqueOrThrow({ where: { id: created.id } });
     console.log(`user created: ${OWNER_EMAIL} / ${OWNER_PASSWORD}`);
+    if (!process.env.SEED_OWNER_PASSWORD) {
+      console.log("Mot de passe tiré au hasard: le noter maintenant.");
+    }
   }
 
   const member = await prisma.member.findFirst({

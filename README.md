@@ -71,9 +71,12 @@ Les ports 3100 et 5434 ne sont pas les ports par défaut: 3000 et 5432 sont
 fréquemment occupés sur une machine de développement, et le binding Docker perd
 silencieusement l'arbitrage sur 5432. Tout est paramétrable dans `.env`.
 
-Identifiants du seed: `owner@backdrop.local` / `backdrop-owner-2026`, ou les
-valeurs de `SEED_OWNER_EMAIL` et `SEED_OWNER_PASSWORD`. **Les changer avant
-tout usage réel.**
+Identifiants du seed: `owner@backdrop.local`, ou `SEED_OWNER_EMAIL`. Le mot de
+passe vient de `SEED_OWNER_PASSWORD`; sans lui, le script en tire un au hasard
+et l'affiche **une seule fois** — le noter à ce moment-là.
+
+Il n'y a délibérément pas de mot de passe par défaut: écrit dans le dépôt, il
+serait connu de quiconque le lit, et il ouvre le compte qui administre l'outil.
 
 ## Déployer sur un serveur
 
