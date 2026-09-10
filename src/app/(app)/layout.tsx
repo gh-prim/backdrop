@@ -5,10 +5,14 @@ import { PersonaSwitcher } from "@/components/persona-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { TaskMenu } from "@/components/task-menu";
 
+/**
+ * Le composeur n'y figure pas: c'est une action, pas une destination. On
+ * l'ouvre depuis là où l'on compose — un créneau du calendrier, le dashboard,
+ * la liste des publications.
+ */
 const NAV = [
   { href: "/", label: "Dashboard" },
   { href: "/library", label: "Library" },
-  { href: "/composer", label: "Composer" },
   { href: "/publications", label: "Publications" },
   { href: "/calendar", label: "Calendar" },
   { href: "/settings", label: "Settings" },

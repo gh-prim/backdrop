@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { requireOrgContext } from "@/lib/session";
 import { listPersonas, getSelectedPersonaId } from "@/lib/persona-scope";
 import { ALL_PERSONAS } from "@/lib/persona";
@@ -35,6 +37,14 @@ export default async function PublicationsPage({
       <PageHeader
         title={showingArchived ? "Archive" : "Publications"}
         description={`${groupPublications(publications).length} publication${groupPublications(publications).length > 1 ? "s" : ""}`}
+        actions={
+          // `nativeButton={false}`: le rendu est un <a>, et prétendre le
+          // contraire retire à Base UI la sémantique native.
+          <Button size="sm" nativeButton={false} render={<Link href="/composer" />}>
+            <Plus />
+            New publication
+          </Button>
+        }
       />
       {publications.length === 0 ? (
         <Card>

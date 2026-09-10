@@ -30,23 +30,33 @@ export type AlbumCard = {
 };
 
 /**
- * Étagère des albums, au-dessus des médias.
+ * Onglet des albums.
  *
  * Un album est un raccourci d'envoi: on l'ouvre pour composer tout son contenu
- * d'un geste, plutôt que de recocher cinq médias à chaque fois.
+ * d'un geste, plutôt que de recocher cinq médias à chaque fois. Il ne retire
+ * rien de la bibliothèque — un média rangé dans un album reste dans l'onglet
+ * d'à côté, où on le retrouve avec tous les autres.
  */
 export function AlbumShelf({ albums }: { albums: AlbumCard[] }) {
   const [renaming, setRenaming] = useState<AlbumCard | null>(null);
-  if (albums.length === 0) return null;
+
+  if (albums.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed p-10 text-center">
+        <p className="text-sm font-medium">No album yet</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Pick several media in the Library tab, then group them. The media stay
+          where they are.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-medium">
-        Albums
-        <span className="ml-2 text-xs font-normal text-muted-foreground">
-          send the whole set in one go, in the ratio you pick
-        </span>
-      </h2>
+    <section className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Send the whole set in one go, in the ratio you pick.
+      </p>
 
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
         {albums.map((album) => (
