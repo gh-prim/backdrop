@@ -177,16 +177,50 @@ export async function reschedulePublicationAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
+  const target = await prisma.publication.findFirst({
+    where: {
+      id: parsed.data.publicationId,
+      channelAccount: { persona: { organizationId: ctx.organizationId } },
+    },
+    select: { channelAccount: { select: { platform: true } } },
+  });
+  if (!target) return { ok: false, error: "Publication not found." };
+
   try {
-    const { platform } = await updateScheduledPublication(ctx, parsed.data);
-    // La nouvelle échéance est portée par le Schedule. Le signal reste utile
-    // pour une publication déjà démarrée qui patiente sur son timer, cas des
-    // publications créées avant le passage aux Schedules.
-    await schedulePublication(
-      { id: parsed.data.publicationId, platform },
-      parsed.data.scheduledAt,
+    /**
+     * Le Schedule est déplacé **avant** la base, et cet ordre est délibéré.
+     *
+     * Les deux ne sont pas dans la même transaction. Si la base changeait
+     * d'abord et que le Schedule échouait, l'échéance annoncée à l'opérateur
+     * et celle qui déclenche réellement divergeraient — une publication
+     * partirait à l'ancienne heure alors que l'écran affiche la nouvelle, et
+     * le message d'erreur laisserait croire que rien n'a bougé.
+     *
+     * Dans cet ordre, le pire cas est un Schedule déjà déplacé alors que la
+     * base a refusé l'écriture. Il est inoffensif: le workflow relit toujours
+     * la base au démarrage et attend l'heure qu'il y trouve.
+     */
+    const platform = target.channelAccount.platform;
+    if (platform === "TELEGRAM") {
+      await scheduleTelegramPublication(
+        parsed.data.publicationId,
+        parsed.data.scheduledAt,
+      );
+    } else {
+      await schedulePublication(
+        { id: parsed.data.publicationId, platform },
+        parsed.data.scheduledAt,
+      );
+    }
+
+    await updateScheduledPublication(ctx, parsed.data);
+
+    // Le signal reste utile pour une publication déjà démarrée qui patiente
+    // sur son timer, cas des publications créées avant les Schedules. Son
+    // absence n'est pas une erreur: le Schedule porte déjà l'échéance.
+    await rescheduleWorkflow(parsed.data.publicationId, parsed.data.scheduledAt).catch(
+      () => {},
     );
-    await rescheduleWorkflow(parsed.data.publicationId, parsed.data.scheduledAt);
   } catch (error) {
     if (error instanceof StaleVersionError) return { ok: false, error: error.message };
     return { ok: false, error: (error as Error).message };
@@ -211,7 +245,8 @@ export async function publishMissedNowAction(publicationId: string): Promise<voi
   const { platform } = await requeueMissedPublication(ctx, publicationId);
   await unschedulePublication(publicationId);
   await cancelPublishWorkflow(publicationId);
-  await startPublishWorkflow({ id: publicationId, platform });
+  if (platform === "TELEGRAM") await startTelegramPublishWorkflow(publicationId);
+  else await startPublishWorkflow({ id: publicationId, platform });
   revalidatePath("/publications");
 }
 

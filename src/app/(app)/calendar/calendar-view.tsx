@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { reschedulePublicationAction } from "@/app/actions/publications";
 import { cn } from "cn";
 
 export type CalendarEvent = {
@@ -29,6 +31,8 @@ export type CalendarEvent = {
   itemCount: number;
   coverVariantId: string | null;
   rating: "SFW" | "SUGGESTIVE" | "NSFW";
+  /** Verrou optimiste: renvoyé tel quel à la reprogrammation (7.4). */
+  version: number;
 };
 
 type Scale = "day" | "week" | "month";
@@ -49,6 +53,15 @@ const CHIP_HEIGHT = 44;
 const COLLISION_MINUTES = Math.round((CHIP_HEIGHT / HOUR_HEIGHT) * 60);
 
 /**
+ * Pas d'aimantation au dépôt.
+ *
+ * Une heure pleine serait trop grossier pour équilibrer une journée, la minute
+ * trop fine pour être visée à la souris. Le quart d'heure est le compromis que
+ * tous les agendas retiennent.
+ */
+const SNAP_MINUTES = 15;
+
+/**
  * Calendrier des publications.
  *
  * Trois échelles, comme un agenda: le jour pour arbitrer un créneau à la
@@ -64,12 +77,26 @@ export function CalendarView({ events }: { events: CalendarEvent[] }) {
   const [scale, setScale] = useState<Scale>("week");
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [opened, setOpened] = useState<CalendarEvent | null>(null);
+  const [dragging, setDragging] = useState<CalendarEvent | null>(null);
+  const [, startTransition] = useTransition();
+
+  /**
+   * Déplacements affichés avant confirmation du serveur.
+   *
+   * Sans ça, la tuile reviendrait à sa place le temps de l'aller-retour, ce
+   * qui donne l'impression que le geste a échoué. En cas de rejet — verrou de
+   * version, publication déjà partie — l'entrée est retirée et la tuile
+   * reprend sa place d'elle-même.
+   */
+  const [moved, setMoved] = useState<Record<string, string>>({});
 
   const days = useMemo(() => visibleDays(scale, anchor), [scale, anchor]);
 
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
-    for (const event of events) {
+    for (const raw of events) {
+      const override = moved[raw.id];
+      const event = override ? { ...raw, scheduledAt: override } : raw;
       const key = dayKey(new Date(event.scheduledAt));
       const bucket = map.get(key);
       if (bucket) bucket.push(event);
@@ -79,10 +106,47 @@ export function CalendarView({ events }: { events: CalendarEvent[] }) {
       bucket.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
     }
     return map;
-  }, [events]);
+  }, [events, moved]);
 
   function compose(at: Date) {
     router.push(`/composer?at=${encodeURIComponent(at.toISOString())}`);
+  }
+
+  /**
+   * Reprogramme un envoi déposé sur un nouveau créneau.
+   *
+   * Seules les publications `SCHEDULED` sont déplaçables: une publiée est
+   * partie, et une échouée demande une décision, pas un glissement.
+   */
+  function move(event: CalendarEvent, to: Date) {
+    if (event.status !== "SCHEDULED") return;
+
+    const iso = to.toISOString();
+    setMoved((current) => ({ ...current, [event.id]: iso }));
+
+    const form = new FormData();
+    form.set("publicationId", event.id);
+    form.set("expectedVersion", String(event.version));
+    form.set("caption", event.caption);
+    // L'action attend une heure locale, comme le champ du composeur.
+    form.set("scheduledAt", localInput(to));
+
+    startTransition(async () => {
+      const result = await reschedulePublicationAction(null, form);
+      if (result.ok) {
+        toast.success(
+          `${event.name || "Publication"} moved to ${to.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}`,
+        );
+        router.refresh();
+      } else {
+        setMoved((current) => {
+          const next = { ...current };
+          delete next[event.id];
+          return next;
+        });
+        toast.error(result.error);
+      }
+    });
   }
 
   return (
@@ -140,9 +204,25 @@ export function CalendarView({ events }: { events: CalendarEvent[] }) {
       </header>
 
       {scale === "month" ? (
-        <MonthGrid days={days} byDay={byDay} onCompose={compose} onOpen={setOpened} />
+        <MonthGrid
+          days={days}
+          byDay={byDay}
+          onCompose={compose}
+          onOpen={setOpened}
+          dragging={dragging}
+          onDragStart={setDragging}
+          onDrop={move}
+        />
       ) : (
-        <TimeGrid days={days} byDay={byDay} onCompose={compose} onOpen={setOpened} />
+        <TimeGrid
+          days={days}
+          byDay={byDay}
+          onCompose={compose}
+          onOpen={setOpened}
+          dragging={dragging}
+          onDragStart={setDragging}
+          onDrop={move}
+        />
       )}
 
       <EventDialog event={opened} onClose={() => setOpened(null)} />
@@ -157,11 +237,17 @@ function TimeGrid({
   byDay,
   onCompose,
   onOpen,
+  dragging,
+  onDragStart,
+  onDrop,
 }: {
   days: Date[];
   byDay: Map<string, CalendarEvent[]>;
   onCompose: (at: Date) => void;
   onOpen: (event: CalendarEvent) => void;
+  dragging: CalendarEvent | null;
+  onDragStart: (event: CalendarEvent | null) => void;
+  onDrop: (event: CalendarEvent, to: Date) => void;
 }) {
   const hours = Array.from(
     { length: LAST_HOUR - FIRST_HOUR },
@@ -221,9 +307,28 @@ function TimeGrid({
                   key={hour}
                   type="button"
                   onClick={() => onCompose(at(day, hour))}
+                  onDragOver={(domEvent) => {
+                    // Sans ce preventDefault, le navigateur refuse le dépôt.
+                    if (dragging) domEvent.preventDefault();
+                  }}
+                  onDrop={(domEvent) => {
+                    if (!dragging) return;
+                    domEvent.preventDefault();
+                    const bounds = domEvent.currentTarget.getBoundingClientRect();
+                    const ratio = (domEvent.clientY - bounds.top) / bounds.height;
+                    const minutes =
+                      Math.round((ratio * 60) / SNAP_MINUTES) * SNAP_MINUTES;
+                    const target = at(day, hour);
+                    target.setMinutes(Math.min(45, Math.max(0, minutes)));
+                    onDrop(dragging, target);
+                    onDragStart(null);
+                  }}
                   style={{ height: HOUR_HEIGHT }}
                   aria-label={`Schedule at ${String(hour).padStart(2, "0")}:00`}
-                  className="block w-full border-b transition-colors hover:bg-accent/40"
+                  className={cn(
+                    "block w-full border-b transition-colors",
+                    dragging ? "hover:bg-primary/20" : "hover:bg-accent/40",
+                  )}
                 />
               ))}
 
@@ -232,6 +337,7 @@ function TimeGrid({
                   key={placed.event.id}
                   event={placed.event}
                   onOpen={onOpen}
+                  onDragStart={onDragStart}
                   overlap={{ index: placed.column, total: placed.columns }}
                 />
               ))}
@@ -246,10 +352,12 @@ function TimeGrid({
 function EventChip({
   event,
   onOpen,
+  onDragStart,
   overlap,
 }: {
   event: CalendarEvent;
   onOpen: (event: CalendarEvent) => void;
+  onDragStart: (event: CalendarEvent | null) => void;
   overlap: { index: number; total: number };
 }) {
   const date = new Date(event.scheduledAt);
@@ -261,9 +369,19 @@ function EventChip({
   // en largeur plutôt que d'en cacher un.
   const width = 100 / overlap.total;
 
+  // Seule une publication encore programmée se déplace: une publiée est
+  // partie, une échouée demande une décision et pas un glissement.
+  const movable = event.status === "SCHEDULED";
+
   return (
     <button
       type="button"
+      draggable={movable}
+      onDragStart={(domEvent) => {
+        onDragStart(event);
+        domEvent.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnd={() => onDragStart(null)}
       onClick={() => onOpen(event)}
       style={{
         top,
@@ -272,6 +390,7 @@ function EventChip({
       }}
       className={cn(
         "absolute z-10 mx-0.5 flex h-11 flex-col justify-center gap-0.5 overflow-hidden rounded border-l-2 px-1.5 text-left text-[11px] transition-shadow hover:shadow-md",
+        movable && "cursor-grab active:cursor-grabbing",
         statusClasses(event.status),
       )}
     >
@@ -292,11 +411,17 @@ function MonthGrid({
   byDay,
   onCompose,
   onOpen,
+  dragging,
+  onDragStart,
+  onDrop,
 }: {
   days: Date[];
   byDay: Map<string, CalendarEvent[]>;
   onCompose: (at: Date) => void;
   onOpen: (event: CalendarEvent) => void;
+  dragging: CalendarEvent | null;
+  onDragStart: (event: CalendarEvent | null) => void;
+  onDrop: (event: CalendarEvent, to: Date) => void;
 }) {
   const month = days[Math.floor(days.length / 2)]?.getMonth();
 
@@ -321,9 +446,24 @@ function MonthGrid({
           return (
             <div
               key={day.toISOString()}
+              onDragOver={(domEvent) => {
+                if (dragging) domEvent.preventDefault();
+              }}
+              onDrop={(domEvent) => {
+                if (!dragging) return;
+                domEvent.preventDefault();
+                // En vue mois on change de jour, pas d'heure: la cadence se
+                // décide ici, l'heure exacte se règle en vue jour ou semaine.
+                const source = new Date(dragging.scheduledAt);
+                const target = startOfDay(day);
+                target.setHours(source.getHours(), source.getMinutes());
+                onDrop(dragging, target);
+                onDragStart(null);
+              }}
               className={cn(
                 "group/day relative min-h-0 border-b border-l p-1 first:border-l-0",
                 outside && "bg-muted/20",
+                dragging && "hover:bg-primary/10",
               )}
             >
               {/* Toute la case est cliquable, pas seulement le numéro: c'est
@@ -354,9 +494,16 @@ function MonthGrid({
                   <button
                     key={event.id}
                     type="button"
+                    draggable={event.status === "SCHEDULED"}
+                    onDragStart={(domEvent) => {
+                      onDragStart(event);
+                      domEvent.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => onDragStart(null)}
                     onClick={() => onOpen(event)}
                     className={cn(
                       "flex w-full items-center gap-1 truncate rounded border-l-2 px-1 py-0.5 text-left text-[10px]",
+                      event.status === "SCHEDULED" && "cursor-grab active:cursor-grabbing",
                       statusClasses(event.status),
                     )}
                   >
@@ -523,6 +670,18 @@ function dayKey(date: Date) {
 
 function isToday(date: Date) {
   return dayKey(date) === dayKey(new Date());
+}
+
+/**
+ * Heure locale au format que l'action attend.
+ *
+ * Surtout pas `toISOString()`, qui renvoie de l'UTC: l'action le relit comme
+ * une heure locale et décale l'échéance — la méprise qui a déjà envoyé une
+ * publication une heure trop tard.
+ */
+function localInput(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function time(date: Date) {

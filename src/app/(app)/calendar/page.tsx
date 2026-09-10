@@ -36,6 +36,7 @@ export default async function CalendarPage() {
             publication.targetLabel ??
             `${publication.channelAccount.platform.charAt(0)}${publication.channelAccount.platform.slice(1).toLowerCase()} · ${publication.channelAccount.persona.name}`,
           scheduledAt: publication.scheduledAt.toISOString(),
+          version: publication.version,
           starPrice: publication.starPrice,
           itemCount: publication.items.length,
           coverVariantId: publication.items[0]?.variant.id ?? null,
