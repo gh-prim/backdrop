@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MediaThumb } from "@/components/media-thumb";
 import { AudioPicker, type SelectedAudio } from "@/components/audio-picker";
 import { HashtagPicker } from "@/components/hashtag-picker";
+import { HASHTAG_LIMIT, extractHashtags } from "@/lib/hashtags-shared";
 import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
@@ -246,6 +247,21 @@ export function ComposerForm({
     );
   }
 
+  /**
+   * Hashtags tapés dans la légende commune.
+   *
+   * Ils comptent dans le même plafond que ceux choisis dans l'onglet Instagram,
+   * et partent vers **tous** les canaux — Telegram compris, où une traîne de
+   * croisillons n'a aucun sens. Le signaler à la frappe évite de le découvrir
+   * au moment de l'envoi.
+   */
+  const typedHashtags = useMemo(() => extractHashtags(caption), [caption]);
+  const totalHashtagCount = useMemo(
+    () => new Set([...typedHashtags, ...hashtags]).size,
+    [typedHashtags, hashtags],
+  );
+  const hashtagsOverflow = totalHashtagCount > HASHTAG_LIMIT;
+
   const steps = useMemo(
     () => [
       ...BASE_STEPS.map((entry) => ({ ...entry, channel: null as ChannelOption | null })),
@@ -272,7 +288,9 @@ export function ComposerForm({
           ? channelIds.length > 0
           : currentStep.key === "media"
             ? selected.length > 0
-            : true;
+            : currentStep.key === "caption"
+              ? !hashtagsOverflow
+              : true;
 
   const isLast = stepIndex === steps.length - 1;
 
@@ -635,6 +653,30 @@ export function ComposerForm({
                 <p className="text-xs text-muted-foreground">
                   {caption.length} / 2200 · shared by every channel of this send
                 </p>
+
+                {typedHashtags.length > 0 && (
+                  <p
+                    className={cn(
+                      "flex items-start gap-1.5 rounded-md border p-2 text-xs",
+                      hashtagsOverflow
+                        ? "border-destructive/50 text-destructive"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>
+                      {typedHashtags.length} hashtag
+                      {typedHashtags.length > 1 ? "s" : ""} typed here
+                      {hashtags.length > 0 && ` + ${hashtags.length} picked`} ={" "}
+                      {totalHashtagCount} / {HASHTAG_LIMIT}.
+                      {hashtagsOverflow
+                        ? " Remove some before going further."
+                        : instagramChannel
+                          ? " The Instagram tab is the place for them — from here they also reach every other channel."
+                          : " They will be sent as plain text: no channel of this send reads hashtags."}
+                    </span>
+                  </p>
+                )}
               </div>
 
             </div>
