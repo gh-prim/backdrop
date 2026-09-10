@@ -24,6 +24,7 @@ qui rétablit le comportement prévu par TDLib.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from typing import Optional
@@ -33,6 +34,50 @@ from aiotdlib import tdjson as _tdjson
 from backdrop_telegram.tdlib import patches
 
 logger = logging.getLogger(__name__)
+
+class _SharedTDJson(_tdjson.TDJson):
+    """
+    Le `TDJson` du processus, dont la boucle de réception ne meurt pas avec un
+    client.
+
+    En amont, `unsubscribe_updates` annule la boucle dès que le **dernier**
+    client se retire — logique quand chaque client a son propre `TDJson`,
+    désastreuse quand ils le partagent:
+
+      1. la reprise d'une persona échoue (pas encore de base TDLib);
+      2. son client se ferme, se désabonne, et emporte la boucle;
+      3. le client de login s'abonne dans la foulée. `_listen_task` n'est pas
+         encore *terminée*, seulement annulée: aucune boucle n'est recréée;
+      4. l'ancienne tâche meurt enfin et, dans son `except CancelledError`,
+         **vide la liste des abonnés** — y compris le nouveau venu.
+
+    Résultat: plus personne ne reçoit d'événement. Le login attend un état
+    d'autorisation qui n'arrivera jamais, et échoue sur un délai qui ne
+    désigne pas sa cause. C'est exactement ce qu'on observe sur une instance
+    fraîche, où la reprise échoue toujours avant le premier login.
+
+    La boucle appartient donc au processus: seul `stop()` la termine.
+    """
+
+    def subscribe_updates(self, client_id: int, client) -> None:
+        task = self._listen_task
+        # `cancelling()` compte les annulations demandées mais pas encore
+        # abouties: une tâche dans cet état ne consommera plus rien.
+        if task is None or task.done() or task.cancelling() > 0:
+            self._listen_task = asyncio.create_task(self._listen_updates())
+        self._subscribed_clients[client_id] = client
+
+    def unsubscribe_updates(self, client_id: int) -> None:
+        self._subscribed_clients.pop(client_id, None)
+
+    def stop(self) -> None:
+        """Arrêt du processus: là, et seulement là, la boucle se termine."""
+        task = self._listen_task
+        self._listen_task = None
+        self._subscribed_clients.clear()
+        if task is not None and not task.done():
+            task.cancel()
+
 
 _lock = threading.Lock()
 _shared: Optional["_tdjson.TDJson"] = None
@@ -52,7 +97,7 @@ def shared_tdjson() -> "_tdjson.TDJson":
         if _shared is None:
             patches.install()
             path = _library_path or _tdjson._get_bundled_tdjson_lib_path()
-            _shared = _tdjson.TDJson(library_path=path)
+            _shared = _SharedTDJson(library_path=path)
             logger.info("TDJson partagé créé (%s)", path)
         return _shared
 
@@ -74,6 +119,14 @@ def install_shared_receiver() -> None:
 
     _tdjson.TDJsonClient.create = classmethod(create)
     logger.debug("fabrique TDJsonClient redirigée vers le TDJson partagé")
+
+
+def stop_shared() -> None:
+    """Ferme la boucle partagée. Réservé à l'arrêt du worker."""
+    global _shared
+    with _lock:
+        if _shared is not None:
+            _shared.stop()
 
 
 def reset_for_tests() -> None:

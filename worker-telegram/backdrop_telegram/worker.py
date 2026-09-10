@@ -117,6 +117,9 @@ async def main() -> None:
         # TDLib doit écrire sa base avant que le processus ne disparaisse.
         logger.info("fermeture des clients Telegram")
         await pool.close_all()
+        # La boucle de réception appartient au processus, pas aux clients:
+        # c'est ici, et seulement ici, qu'elle s'arrête.
+        gateway.stop_shared()
 
 
 if __name__ == "__main__":
