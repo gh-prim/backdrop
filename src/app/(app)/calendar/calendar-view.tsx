@@ -130,7 +130,9 @@ export function CalendarView({ events }: { events: CalendarEvent[] }) {
     form.set("expectedVersion", String(event.version));
     form.set("caption", event.caption);
     // L'action attend une heure locale, comme le champ du composeur.
-    form.set("scheduledAt", localInput(to));
+    // Un instant, pas une heure murale: le serveur refuse d'interpréter dans
+    // son propre fuseau (voir `schedule-time`).
+    form.set("scheduledAt", to.toISOString());
 
     startTransition(async () => {
       const result = await reschedulePublicationAction(null, form);
@@ -690,10 +692,6 @@ function isToday(date: Date) {
  * une heure locale et décale l'échéance — la méprise qui a déjà envoyé une
  * publication une heure trop tard.
  */
-function localInput(date: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 function time(date: Date) {
   return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });

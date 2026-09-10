@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { hasTimezone } from "@/lib/schedule-time";
 import { PubKind, PubStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { HASHTAG_LIMIT, totalHashtags } from "@/lib/hashtags";
@@ -31,7 +32,12 @@ const createSchema = z.object({
   kind: z.enum(PubKind),
   name: z.string().min(1, "Name required.").max(120),
   caption: z.string().max(2200, "2200 characters maximum on Instagram."),
-  scheduledAt: z.coerce.date(),
+  // Un instant, pas une heure murale: voir `schedule-time`.
+  scheduledAt: z
+    .string()
+    .refine(hasTimezone, "The deadline must carry a timezone.")
+    .transform((value) => new Date(value))
+    .refine((date) => !Number.isNaN(date.getTime()), "Invalid deadline."),
   variantIds: z.array(z.string().min(1)).min(1, "At least one media."),
   telegramChatId: z.string().optional(),
   telegramTargetLabel: z.string().optional(),
@@ -62,7 +68,7 @@ export async function schedulePublicationAction(
     kind: formData.get("kind"),
     name: String(formData.get("name") ?? "").trim(),
     caption: String(formData.get("caption") ?? ""),
-    scheduledAt: publishNow ? new Date() : formData.get("scheduledAt"),
+    scheduledAt: publishNow ? new Date().toISOString() : formData.get("scheduledAt"),
     variantIds: formData.getAll("variantIds").map(String),
     telegramChatId: String(formData.get("telegramChatId") ?? "").trim() || undefined,
     telegramTargetLabel:
@@ -175,7 +181,12 @@ const updateSchema = z.object({
   publicationId: z.string().min(1),
   expectedVersion: z.coerce.number().int().min(0),
   caption: z.string().max(2200),
-  scheduledAt: z.coerce.date(),
+  // Un instant, pas une heure murale: voir `schedule-time`.
+  scheduledAt: z
+    .string()
+    .refine(hasTimezone, "The deadline must carry a timezone.")
+    .transform((value) => new Date(value))
+    .refine((date) => !Number.isNaN(date.getTime()), "Invalid deadline."),
 });
 
 /** Réenregistrement sous verrou optimiste (7.4). */

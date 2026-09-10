@@ -15,6 +15,7 @@ import { AlbumPicker } from "@/components/album-picker";
 import { HashtagPicker } from "@/components/hashtag-picker";
 import { HASHTAG_LIMIT, extractHashtags } from "@/lib/hashtags-shared";
 import { reduceAlbumPick } from "@/lib/albums-shared";
+import { localInputToInstant, toLocalInput } from "@/lib/schedule-time";
 import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
@@ -74,17 +75,6 @@ const PLATFORM_LABEL: Record<string, string> = {
   TELEGRAM: "Telegram",
   FANVUE: "Fanvue",
 };
-
-/**
- * Valeur du champ `datetime-local`, au format que l'élément attend.
- *
- * Construit à la main plutôt que par `toISOString()`: celui-ci renvoie de
- * l'UTC, que le navigateur afficherait tel quel comme une heure locale.
- */
-function toLocalInput(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 function defaultScheduledAt(): string {
   const at = new Date(Date.now() + 60 * 60 * 1000);
@@ -369,7 +359,13 @@ export function ComposerForm({
       {/* Tout l'état du wizard est réémis à la soumission finale. */}
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="name" value={name} />
-      <input type="hidden" name="scheduledAt" value={scheduledAt} />
+      {/* L'instant, pas l'heure murale: le fuseau de l'opérateur ne se devine
+          pas côté serveur (voir `schedule-time`). */}
+      <input
+        type="hidden"
+        name="scheduledAt"
+        value={localInputToInstant(scheduledAt)}
+      />
       {dryRun && <input type="hidden" name="dryRun" value="1" />}
       {/* Concaténés à la légende de la seule publication Instagram, côté
           serveur: la légende commune reste propre pour les autres canaux. */}

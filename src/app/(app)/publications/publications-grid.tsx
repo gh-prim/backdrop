@@ -26,6 +26,7 @@ import {
   type ActionResult,
 } from "@/app/actions/publications";
 import { cn } from "cn";
+import { localInputToInstant, toLocalInput } from "@/lib/schedule-time";
 
 export type CardLeg = {
   platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE";
@@ -506,6 +507,11 @@ function RescheduleForm({
 }) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(
     async (prev, formData) => {
+      // L'heure murale saisie est traduite en instant **ici**, où le fuseau
+      // de l'opérateur est connu. Le serveur refuse une valeur sans fuseau
+      // plutôt que de l'interpréter dans le sien (voir `schedule-time`).
+      const local = String(formData.get("scheduledAtLocal") ?? "");
+      formData.set("scheduledAt", localInputToInstant(local));
       const result = await reschedulePublicationAction(prev, formData);
       if (result.ok) onDone();
       return result;
@@ -538,9 +544,9 @@ function RescheduleForm({
         </label>
         <Input
           id="pub-date"
-          name="scheduledAt"
+          name="scheduledAtLocal"
           type="datetime-local"
-          defaultValue={toLocalInput(card.scheduledAt)}
+          defaultValue={toLocalInput(new Date(card.scheduledAt))}
           className="h-8 w-56"
         />
       </div>
@@ -566,8 +572,3 @@ function formatDate(iso: string) {
   });
 }
 
-function toLocalInput(iso: string) {
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
