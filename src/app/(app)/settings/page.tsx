@@ -9,8 +9,7 @@ import { FixedHeightPage, TabsShell } from "@/components/tabs-shell";
 import { InviteForm } from "./invite-form";
 import { PersonaForm } from "./persona-form";
 import { InvitationRow } from "./invitation-row";
-import { InstagramForm } from "./instagram-form";
-import { TelegramForm } from "./telegram-form";
+import { ChannelsPanel } from "./channels-panel";
 
 export default async function SettingsPage() {
   const ctx = await requireOrgContext();
@@ -129,57 +128,13 @@ export default async function SettingsPage() {
             value: "channels",
             label: "Channels",
             content: (
-              <div className="space-y-4">
-                <ul className="divide-y text-sm">
-                  {channels.map((channel) => (
-                    <li key={channel.id} className="flex items-center gap-2 py-2">
-                      <span className="font-medium">{channel.platform}</span>
-                      <span className="text-muted-foreground">
-                        {personaNames.get(channel.personaId)}
-                      </span>
-                      <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                        max {channel.maxRating}
-                      </Badge>
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {channel.state === "connected" &&
-                          `connected · expires in ${channel.expiresInDays} d`}
-                        {channel.state === "expiring" &&
-                          `reconnect within ${channel.expiresInDays} d`}
-                        {channel.state === "expired" && "expired"}
-                        {channel.state === "unknown" && "unknown state"}
-                      </span>
-                    </li>
-                  ))}
-                  {channels.length === 0 && (
-                    <li className="py-2 text-xs text-muted-foreground">
-                      No channel connected.
-                    </li>
-                  )}
-                </ul>
-
-                {isOwner ? (
-                  <div className="border-t pt-4">
-                    <InstagramForm personas={personas} />
-
-                    <div className="mt-5 space-y-3 border-t pt-4">
-                      <h3 className="text-sm font-medium">Telegram</h3>
-                      <TelegramForm
-                        personas={personas}
-                        configuredPersonaIds={telegramApps.map((app) => app.personaId)}
-                      />
-                    </div>
-
-                    <p className="mt-4 text-xs text-muted-foreground">
-                      Fanvue lands in phase 4.
-                    </p>
-                  </div>
-                ) : (
-                  <p className="border-t pt-4 text-xs text-muted-foreground">
-                    Only an owner can configure a ChannelAccount. Credentials are never
-                    shown, whatever the role.
-                  </p>
-                )}
-              </div>
+              <ChannelsPanel
+                channels={channels}
+                personas={personas}
+                personaNames={Object.fromEntries(personaNames)}
+                telegramPersonaIds={telegramApps.map((app) => app.personaId)}
+                isOwner={isOwner}
+              />
             ),
           },
         ]}
