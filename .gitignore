@@ -40,3 +40,6 @@ test-results/
 worker-telegram/.venv/
 worker-telegram/**/__pycache__/
 worker-telegram/uv.lock
+
+# Session Telegram chiffrée, produite par le login. Jamais versionnée.
+worker-telegram/.session.enc

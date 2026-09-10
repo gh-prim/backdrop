@@ -11,8 +11,9 @@ La sortie est une string session, chiffrée au format Node (voir crypto.py) et
 accompagnée de son empreinte. Les deux voyagent ensemble: une session relue
 avec une autre empreinte que celle de sa création est une session grillée.
 
-La session n'est jamais affichée en clair: elle donne un accès complet au
-compte, sans mot de passe et sans second facteur.
+Le résultat est écrit chiffré dans `.session.enc`, jamais affiché: une session
+donne un accès complet au compte, sans mot de passe ni second facteur, et ce
+qui passe à l'écran finit dans un historique de terminal.
 """
 
 from __future__ import annotations
@@ -21,11 +22,33 @@ import asyncio
 import base64
 import os
 import sys
+from pathlib import Path
 
 from hydrogram import Client
 
 from backdrop_telegram import fingerprint
 from backdrop_telegram.crypto import encrypt_credentials
+
+
+REPO = Path(__file__).resolve().parents[2]
+SESSION_FILE = Path(__file__).resolve().parents[1] / ".session.enc"
+
+
+def load_dotenv() -> None:
+    """
+    Charge le .env du dépôt. Le login est un outil de développement lancé à la
+    main: exiger un `export` préalable ne protégerait rien et ferait échouer la
+    commande une fois sur deux.
+    """
+    path = REPO / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
 
 
 def env(name: str) -> str:
@@ -36,6 +59,7 @@ def env(name: str) -> str:
 
 
 async def main() -> None:
+    load_dotenv()
     api_id = int(env("TELEGRAM_API_ID"))
     api_hash = env("TELEGRAM_API_HASH")
     marks = fingerprint.current()
@@ -54,25 +78,16 @@ async def main() -> None:
         me = await app.get_me()
         session = await app.export_session_string()
 
-    payload = {"session": session, **marks}
-    blob = base64.b64encode(encrypt_credentials(payload)).decode()
+    payload = {"session": session, "userId": me.id, "username": me.username, **marks}
+    SESSION_FILE.write_bytes(base64.b64encode(encrypt_credentials(payload)))
+    SESSION_FILE.chmod(0o600)
 
     print()
     print(f"connecté: {me.first_name} (@{me.username}) id={me.id}")
     print(f"empreinte: {marks['deviceModel']} / {marks['systemVersion']} / {marks['appVersion']}")
+    print(f"session chiffrée écrite dans {SESSION_FILE.relative_to(REPO)}")
     print()
-    print("Credentials chiffrés (base64), à enregistrer sur le ChannelAccount:")
-    print(blob)
-    print()
-    print(
-        "La session en clair n'est pas affichée: elle ouvre le compte sans mot "
-        "de passe ni second facteur. Pour le sondage 4.2.6, exporter la variable "
-        "avec --reveal-session."
-    )
-
-    if "--reveal-session" in sys.argv:
-        print()
-        print("TELEGRAM_SESSION=" + session)
+    print("Rien d'autre à recopier: la suite relira ce fichier.")
 
 
 if __name__ == "__main__":

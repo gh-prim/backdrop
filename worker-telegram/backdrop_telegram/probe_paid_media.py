@@ -7,20 +7,23 @@ API et suppose un solde de bot, qui n'a pas d'équivalent pour un compte
 utilisateur. Ce script tranche la question sur des comptes réels, et consigne
 l'erreur exacte.
 
-Il est volontairement isolé du reste du dépôt: pas de Prisma, pas de Temporal,
-pas d'import applicatif. On veut une réponse, pas une intégration.
+Il reste isolé de l'application: pas de Prisma, pas de Temporal, pas de
+workflow. On veut une réponse, pas une intégration. Seuls le chiffrement et
+l'empreinte sont partagés, parce que les dupliquer créerait deux vérités.
 
 Prérequis
 ---------
-    pip install hydrogram tgcrypto
-    export TELEGRAM_API_ID=...          # le couple unique de l'application (4.2.1)
-    export TELEGRAM_API_HASH=...
-    export TELEGRAM_SESSION=...         # string session de la persona de test
+    uv run --no-project python -m backdrop_telegram.login   # une seule fois
+
     export TG_TEST_CHANNEL=@mon_channel_de_test
     export TG_TEST_USER=@mon_compte_de_test
-    export TG_TEST_FILE=./tests/fixtures/teaser.jpg
+    export TG_TEST_FILE=../tests/fixtures/teaser.jpg
 
-    python scripts/telegram_paid_media_probe.py
+    uv run --no-project python -m backdrop_telegram.probe_paid_media
+
+La session est relue chiffrée depuis `.session.enc` et ne transite jamais par
+une variable d'environnement, où elle serait lisible par tout process du
+système et par n'importe quel `ps`.
 
 Consigner la sortie intégrale dans docs/findings/telegram-paid-media-dm.md.
 """
@@ -35,11 +38,8 @@ import traceback
 from hydrogram import Client
 from hydrogram import raw
 
-# Fingerprint figé (4.2.3). Ces valeurs ne doivent jamais changer sur la durée
-# de vie d'une session: on ne laisse pas Hydrogram prendre ses défauts.
-DEVICE_MODEL = "Backdrop Probe"
-SYSTEM_VERSION = "1.0"
-APP_VERSION = "backdrop 0.1.0"
+from backdrop_telegram import session_file
+from backdrop_telegram.login import load_dotenv
 
 STARS_AMOUNT = 50
 
@@ -94,21 +94,25 @@ async def send_paid(app: Client, target: str, reusable, label: str) -> None:
 
 
 async def main() -> None:
+    load_dotenv()
     api_id = int(env("TELEGRAM_API_ID"))
     api_hash = env("TELEGRAM_API_HASH")
-    session = env("TELEGRAM_SESSION")
     channel = env("TG_TEST_CHANNEL")
     user = env("TG_TEST_USER")
     path = env("TG_TEST_FILE")
+
+    # L'empreinte vient de la session, pas des constantes: rejouer une session
+    # sous une autre empreinte que celle de sa création la grille (4.2.3).
+    stored = session_file.load()
 
     app = Client(
         name="backdrop-probe",
         api_id=api_id,
         api_hash=api_hash,
-        session_string=session,
-        device_model=DEVICE_MODEL,
-        system_version=SYSTEM_VERSION,
-        app_version=APP_VERSION,
+        session_string=stored["session"],
+        device_model=stored["deviceModel"],
+        system_version=stored["systemVersion"],
+        app_version=stored["appVersion"],
         in_memory=True,
     )
 
