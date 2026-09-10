@@ -125,8 +125,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?absente du .env — openssl rand -base64 32}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?absent du .env — openssl rand -base64 32}
       # Vue depuis le navigateur, pas depuis le conteneur: c'est l'URL sur
       # laquelle les cookies de session sont posés.
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://localhost:3443}
@@ -194,7 +194,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-backdrop}:${POSTGRES_PASSWORD:-backdrop}@postgres:5432/${POSTGRES_DB:-backdrop}?schema=public
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?absente du .env — openssl rand -base64 32}
       MEDIA_ROOT: /media
       SCHEDULE_TOLERANCE_MINUTES: ${SCHEDULE_TOLERANCE_MINUTES:-45}
       META_APP_ID: ${META_APP_ID:-}
@@ -244,7 +244,7 @@ services:
       TELEGRAM_SESSION_ROOT: /sessions
       # api_id et api_hash ne sont pas ici: ils vivent en base, chiffrés,
       # saisis depuis l'application (4.2.1). Seule la clé maître transite.
-      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY}
+      CREDENTIALS_MASTER_KEY: ${CREDENTIALS_MASTER_KEY:?absente du .env — openssl rand -base64 32}
       MEDIA_ROOT: /media
     volumes:
       - ${MEDIA_HOST_PATH:-./media}:/media

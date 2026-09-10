@@ -77,6 +77,37 @@ tout usage réel.**
 
 ## Déployer sur un serveur
 
+### Où vit la configuration
+
+**Dans `.env`, à côté du `docker-compose.yml`. Jamais dans le YAML.**
+
+Compose lit ce fichier tout seul et remplace les `${VARIABLE}` du
+`docker-compose.yml` au moment du `up`. Le YAML est versionné et ne contient
+donc aucun secret: il ne fait que **désigner** les variables.
+
+Deux couches à ne pas confondre:
+
+| | Où | Rôle |
+|---|---|---|
+| Interpolation Compose | `${SITE_ADDRESS:-localhost}` dans le YAML | façonne le fichier lui-même: ports publiés, chemins montés |
+| Environnement du conteneur | bloc `environment:` du service | ce que le processus voit à l'intérieur |
+
+La conséquence pratique: **une variable ajoutée à `.env` n'atteint pas un
+conteneur tant qu'elle n'est pas listée dans son bloc `environment:`.** Le
+fichier `.env` sert aussi à l'outillage sur l'hôte (`pnpm dev`, la CLI Prisma,
+les scripts), qui le lit directement — d'où la confusion possible: ce qui
+marche en développement sur l'hôte peut manquer dans le conteneur.
+
+`.env` n'est pas versionné. Sur le serveur, il se crée à partir de
+`.env.example`, qui liste tout ce qui compte avec des valeurs de départ.
+
+Les deux secrets sans valeur par défaut — `CREDENTIALS_MASTER_KEY` et
+`BETTER_AUTH_SECRET` — font échouer `docker compose up` avec leur nom et la
+commande qui les génère. Un démarrage qui réussit sans eux ne serait qu'un
+échec repoussé au premier envoi.
+
+### Construire et lancer
+
 Tout se construit sur place, aucune image à publier:
 
 ```bash
