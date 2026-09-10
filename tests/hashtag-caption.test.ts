@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { captionWithHashtags, totalHashtags } from "@/lib/hashtags";
-import { MAX_HASHTAGS_PER_POST } from "@/lib/hashtags-shared";
+import { HASHTAG_LIMIT, MAX_HASHTAGS_PER_POST } from "@/lib/hashtags-shared";
 
 /**
  * Les hashtags ne se tapent plus dans la légende: elle est commune à tout
@@ -50,5 +50,20 @@ describe("plafond de 30 hashtags", () => {
     const picked = Array.from({ length: MAX_HASHTAGS_PER_POST }, (_, i) => `tag${i}`);
     expect(totalHashtags("", picked)).toBe(MAX_HASHTAGS_PER_POST);
     expect(totalHashtags("#extra", picked)).toBe(MAX_HASHTAGS_PER_POST + 1);
+  });
+});
+
+describe("règle maison: trois hashtags", () => {
+  it("reste bien en deçà du plafond d'Instagram", () => {
+    // Deux notions distinctes: 30 est un fait sur Instagram et son code
+    // d'erreur, 3 est un choix éditorial. Les confondre ferait perdre la
+    // raison de chacun.
+    expect(HASHTAG_LIMIT).toBeLessThan(MAX_HASHTAGS_PER_POST);
+    expect(HASHTAG_LIMIT).toBe(3);
+  });
+
+  it("compte les hashtags tapés dans la légende dans la même limite", () => {
+    expect(totalHashtags("#a #b", ["c"])).toBe(3);
+    expect(totalHashtags("#a #b", ["c", "d"])).toBeGreaterThan(HASHTAG_LIMIT);
   });
 });

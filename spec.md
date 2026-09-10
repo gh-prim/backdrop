@@ -154,7 +154,9 @@ Le second plafond dicte la conception: une validation à la frappe épuiserait l
 
 **Les hashtags ne se tapent pas dans la légende commune.** Un envoi multi-canal partage une seule légende, et Telegram n'a rien à faire d'une traîne de croisillons. Ils sont donc choisis dans l'**étape Instagram** du composeur, parmi ceux déjà connus — gratuits, puisque leur identifiant est en base — et concaténés à la légende de la **seule publication Instagram** au moment de sa création.
 
-Le premier plafond est vérifié côté serveur sur le total réel, hashtags tapés dans la légende **et** choisis dans l'onglet, sans doublon. Ne compter que les seconds laisserait passer un dépassement qu'Instagram refuse à l'envoi, très loin de sa cause.
+**Backdrop s'en tient à trois hashtags par publication.** C'est un choix éditorial, pas une contrainte technique, et les deux constantes restent séparées: si la règle maison change, celle d'Instagram et son code d'erreur, eux, ne bougent pas.
+
+La limite est vérifiée côté serveur sur le total réel, hashtags tapés dans la légende **et** choisis dans l'onglet, sans doublon. Ne compter que les seconds laisserait passer un dépassement, très loin de sa cause.
 
 `GET /{ig-hashtag-id}/top_media` donne les likes des meilleurs posts d'un hashtag. Leur médiane est un signal de **concurrence**, pas de volume: un hashtag dont les top posts font des milliers de likes est un hashtag où une petite audience n'apparaîtra jamais.
 

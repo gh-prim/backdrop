@@ -1,8 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { MAX_HASHTAGS_PER_POST, extractHashtags } from "@/lib/hashtags-shared";
+import { HASHTAG_LIMIT, MAX_HASHTAGS_PER_POST, extractHashtags } from "@/lib/hashtags-shared";
 
-export { MAX_HASHTAGS_PER_POST, extractHashtags };
+export { HASHTAG_LIMIT, MAX_HASHTAGS_PER_POST, extractHashtags };
 
 /**
  * Hashtags Instagram: extraction, limites et budget d'interrogation.

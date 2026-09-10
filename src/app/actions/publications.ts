@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { PubKind, PubStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { MAX_HASHTAGS_PER_POST, totalHashtags } from "@/lib/hashtags";
+import { HASHTAG_LIMIT, totalHashtags } from "@/lib/hashtags";
 import { requireOrgContext } from "@/lib/session";
 import {
   StaleVersionError,
@@ -40,7 +40,7 @@ const createSchema = z.object({
   starPrice: z.coerce.number().int().min(1).max(25000).optional(),
   dryRun: z.coerce.boolean().optional(),
   // Instagram plafonne à 30 hashtags par publication.
-  hashtags: z.array(z.string().min(1)).max(30).optional(),
+  hashtags: z.array(z.string().min(1)).max(HASHTAG_LIMIT).optional(),
   audioId: z.string().optional(),
   audioVolume: z.coerce.number().int().min(0).max(100).optional(),
   videoVolume: z.coerce.number().int().min(0).max(100).optional(),
@@ -88,14 +88,14 @@ export async function schedulePublicationAction(
     return { ok: false, error: "Choose a Telegram destination before sending." };
   }
 
-  // Instagram refuse la publication au-delà de 30 hashtags (erreur 100/2207040),
-  // il ne se contente pas d'ignorer le surplus. Le dire ici, où l'opérateur
-  // peut retirer un hashtag, plutôt qu'à l'envoi.
+  // Règle maison: trois hashtags au plus. Bien en deçà du plafond d'Instagram,
+  // qui refuserait la publication au-delà de trente (erreur 100/2207040). Le
+  // total compte ceux tapés dans la légende **et** ceux choisis dans l'onglet.
   const total = totalHashtags(parsed.data.caption, parsed.data.hashtags ?? []);
-  if (total > MAX_HASHTAGS_PER_POST) {
+  if (total > HASHTAG_LIMIT) {
     return {
       ok: false,
-      error: `${total} hashtags between the caption and the Instagram tab: Instagram refuses a post above ${MAX_HASHTAGS_PER_POST}.`,
+      error: `${total} hashtags between the caption and the Instagram tab: ${HASHTAG_LIMIT} at most.`,
     };
   }
 

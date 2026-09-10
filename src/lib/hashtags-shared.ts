@@ -13,6 +13,16 @@
 export const MAX_HASHTAGS_PER_POST = 30;
 
 /**
+ * Plafond retenu pour Backdrop: **trois**.
+ *
+ * Choix éditorial, pas contrainte technique — d'où la constante séparée. Le
+ * confondre avec le plafond d'Instagram ferait perdre la raison de chacun: si
+ * la règle maison change demain, celle d'Instagram et son code d'erreur, eux,
+ * ne bougent pas.
+ */
+export const HASHTAG_LIMIT = 3;
+
+/**
  * Extrait les hashtags d'une légende.
  *
  * Instagram accepte lettres, chiffres et tiret bas, y compris accentués. Un

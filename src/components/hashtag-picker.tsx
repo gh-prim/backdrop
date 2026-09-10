@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "cn";
 
-import { MAX_HASHTAGS_PER_POST, extractHashtags } from "@/lib/hashtags-shared";
+import { HASHTAG_LIMIT, extractHashtags } from "@/lib/hashtags-shared";
 
 /**
  * Choix des hashtags Instagram.
@@ -68,7 +68,7 @@ export function HashtagPicker({
     () => new Set([...inCaption, ...selected]).size,
     [inCaption, selected],
   );
-  const full = total >= MAX_HASHTAGS_PER_POST;
+  const full = total >= HASHTAG_LIMIT;
 
   // Les retenus d'abord: à trente hashtags, retrouver ce qu'on a coché dans une
   // liste triée par concurrence devient un travail.
@@ -83,7 +83,7 @@ export function HashtagPicker({
 
   function toggle(name: string) {
     if (selected.includes(name)) onChange(selected.filter((x) => x !== name));
-    else if (!full) onChange([...selected, name]);
+      else if (!full) onChange([...selected, name]);
   }
 
   function add() {
@@ -118,7 +118,7 @@ export function HashtagPicker({
           Hashtags
         </h4>
         <span className={cn("text-xs", full ? "text-destructive" : "text-muted-foreground")}>
-          {total} / {MAX_HASHTAGS_PER_POST} on this post
+          {total} / {HASHTAG_LIMIT} on this post
           {inCaption.length > 0 && ` · ${inCaption.length} typed in the caption`}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">
@@ -195,7 +195,8 @@ export function HashtagPicker({
               Add
             </Button>
             <span className="text-xs text-muted-foreground">
-              A new hashtag costs one lookup. Reusing a saved one costs nothing.
+              A new hashtag costs one lookup; reusing a saved one costs nothing.
+              {" "}Three per post at most.
             </span>
           </div>
 

@@ -407,7 +407,10 @@ export function ComposerForm({
                       )}
                     >
                       {active && <Check className="size-3.5" />}
-                      <span className="font-medium">{channel.platform}</span>
+                      <PlatformLogo platform={channel.platform} className="size-4" />
+                      <span className="font-medium">
+                        {PLATFORM_LABEL[channel.platform] ?? channel.platform}
+                      </span>
                       <Badge variant="outline" className="h-4 px-1 text-[9px]">
                         max {channel.maxRating}
                       </Badge>
