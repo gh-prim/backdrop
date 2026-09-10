@@ -132,3 +132,55 @@ export async function albumRatios(ctx: OrgContext, albumId: string) {
     .filter((ratio) => perAsset.every((ratios) => ratios.has(ratio)))
     .sort();
 }
+
+/**
+ * Contenu d'un album, dans l'ordre où il a été composé.
+ *
+ * Renvoie les variantes de chaque média et non une seule vignette: la page
+ * doit pouvoir dire dans quels cadrages l'album est envoyable, et lesquels
+ * manquent à qui.
+ */
+export async function getAlbumDetail(ctx: OrgContext, albumId: string) {
+  const album = await prisma.album.findFirst({
+    where: { id: albumId, persona: { organizationId: ctx.organizationId } },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+      persona: { select: { id: true, name: true, handle: true } },
+      items: {
+        orderBy: { position: "asc" },
+        select: {
+          position: true,
+          asset: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              rating: true,
+              localPath: true,
+              variants: { select: { id: true, ratio: true }, orderBy: { ratio: "asc" } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!album) return null;
+
+  const perAsset = album.items.map(
+    (item) => new Set(item.asset.variants.map((variant) => variant.ratio)),
+  );
+  const everyRatio = [...new Set(perAsset.flatMap((ratios) => [...ratios]))].sort();
+
+  return {
+    ...album,
+    /** Cadrages disponibles, et pour chacun ce qui manque encore. */
+    ratios: everyRatio.map((ratio) => ({
+      ratio,
+      have: perAsset.filter((ratios) => ratios.has(ratio)).length,
+      total: perAsset.length,
+    })),
+  };
+}

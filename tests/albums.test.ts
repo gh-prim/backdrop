@@ -8,7 +8,7 @@ import {
   createPersona,
   createVariant,
 } from "./helpers";
-import { albumRatios, listAlbums, resolveAlbum } from "@/lib/albums";
+import { albumRatios, getAlbumDetail, listAlbums, resolveAlbum } from "@/lib/albums";
 import { reduceAlbumPick } from "@/lib/albums-shared";
 
 /**
@@ -73,6 +73,20 @@ describe("albums", () => {
     expect(listed.count).toBe(2);
   });
 
+  it("dit, ratio par ratio, ce qui manque pour l'envoyer entier", async () => {
+    const complet = await createVariant(personaId, ctx.userId, Rating.SFW, ["4:5", "9:16"]);
+    const partiel = await createVariant(personaId, ctx.userId, Rating.SFW, ["4:5"]);
+    const created = await album("Vestiaire", [complet.assetId, partiel.assetId]);
+
+    const detail = await getAlbumDetail(ctx as never, created.id);
+    // Le compte importe autant que la liste: « 9:16 » présent sur un seul
+    // média ne veut pas dire que l'album part en 9:16.
+    expect(detail?.ratios).toEqual([
+      { ratio: "4:5", have: 2, total: 2 },
+      { ratio: "9:16", have: 1, total: 2 },
+    ]);
+  });
+
   it("reste invisible depuis une autre organisation", async () => {
     const variant = await createVariant(personaId, ctx.userId, Rating.SFW);
     const created = await album("Vestiaire", [variant.assetId]);
@@ -81,6 +95,7 @@ describe("albums", () => {
     expect(await listAlbums(autre as never)).toEqual([]);
     expect(await resolveAlbum(autre as never, created.id, "4:5")).toBeNull();
     expect(await albumRatios(autre as never, created.id)).toEqual([]);
+    expect(await getAlbumDetail(autre as never, created.id)).toBeNull();
   });
 });
 

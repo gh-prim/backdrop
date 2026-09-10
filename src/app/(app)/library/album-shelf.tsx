@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Images, Pencil, Trash2 } from "lucide-react";
@@ -81,15 +82,24 @@ function AlbumTile({
 
   return (
     <div className="group/album space-y-1.5">
-      <AlbumMosaic
-        variantIds={album.mosaic}
-        rating={album.rating}
-        className="aspect-square"
-      />
+      {/* Ouvrir l'album, c'est voir ce qu'il contient et dans quel ordre il
+          partira: la mosaïque n'en montre que quatre vignettes. */}
+      <Link href={`/library/albums/${album.id}`} className="block">
+        <AlbumMosaic
+          variantIds={album.mosaic}
+          rating={album.rating}
+          className="aspect-square transition-opacity hover:opacity-90"
+        />
+      </Link>
 
       <div className="flex items-start gap-1">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{album.name}</p>
+          <Link
+            href={`/library/albums/${album.id}`}
+            className="block truncate text-sm font-medium hover:underline"
+          >
+            {album.name}
+          </Link>
           <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Images className="size-3" />
             {album.count} · {album.personaName}
