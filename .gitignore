@@ -35,3 +35,8 @@ media/
 coverage/
 playwright-report/
 test-results/
+
+# Worker Telegram (Python)
+worker-telegram/.venv/
+worker-telegram/**/__pycache__/
+worker-telegram/uv.lock
