@@ -30,10 +30,10 @@ export const GRAPH_VERSION = envOr("META_GRAPH_VERSION", "v25.0");
 const GRAPH_BASE = envOr("META_GRAPH_BASE", "https://graph.facebook.com");
 
 /**
- * Cadrages du fil: de 1.91:1 (paysage) à 4:5 (portrait). Tout ce qui est plus
- * haut est recadré pour entrer, donc amputé.
+ * Cadrages du fil: de 1.91:1 (paysage) à 3:4 (portrait), depuis 2026. Tout ce
+ * qui est plus haut est recadré pour entrer, donc amputé.
  */
-export const INSTAGRAM_FEED_RATIOS = ["1:1", "4:5"] as const;
+export const INSTAGRAM_FEED_RATIOS = ["1:1", "3:4", "4:5"] as const;
 
 /** Le 9:16 appartient aux Reels et aux Stories, pas au fil. */
 export const INSTAGRAM_REEL_RATIOS = ["9:16"] as const;

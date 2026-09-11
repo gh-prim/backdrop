@@ -29,6 +29,9 @@ export function absolutePath(relativePath: string): string {
 
 const RATIO_VALUES: Record<string, number> = {
   "1:1": 1,
+  // Le plus haut que le fil Instagram accepte depuis 2026: à partir d'un
+  // master 1440x1920, il se publie sans rien perdre.
+  "3:4": 3 / 4,
   "4:5": 4 / 5,
   "9:16": 9 / 16,
 };

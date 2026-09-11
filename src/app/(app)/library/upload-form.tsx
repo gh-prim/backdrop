@@ -13,7 +13,7 @@ import type { PersonaOption } from "@/lib/persona";
 import { ALL_PERSONAS } from "@/lib/persona";
 import { cn } from "cn";
 
-const RATIOS = ["4:5", "9:16", "1:1"];
+const RATIOS = ["4:5", "3:4", "9:16", "1:1"];
 const ACCEPTED = ".jpg,.jpeg,.png,.mp4,.mov";
 
 /**
@@ -45,7 +45,18 @@ type QueueItem = {
   previewUrl: string | null;
   status: "queued" | "uploading" | "done" | "failed";
   message?: string;
+  /** Largeur du fichier source, quand elle a pu être lue. */
+  width?: number;
 };
+
+/**
+ * Largeur en deçà de laquelle les dérivations sont agrandies.
+ *
+ * Le pipeline vise 1080 px: une source plus étroite est interpolée, donc plus
+ * molle, et Instagram recompresse par-dessus. Le dire au dépôt évite de le
+ * découvrir sur une photo déjà publiée.
+ */
+const MIN_USEFUL_WIDTH = 1080;
 
 function humanSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
@@ -96,14 +107,27 @@ export function UploadForm({
 
   function addFiles(files: FileList | null) {
     if (!files) return;
-    setQueue((current) => [
-      ...current,
-      ...Array.from(files).map((file) => ({
-        file,
-        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-        status: "queued" as const,
-      })),
-    ]);
+    const ajouts = Array.from(files).map((file) => ({
+      file,
+      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      status: "queued" as const,
+    }));
+    setQueue((current) => [...current, ...ajouts]);
+
+    // La largeur se lit dans le navigateur, avant tout envoi: c'est le seul
+    // moment où l'opérateur peut encore régénérer le fichier.
+    for (const ajout of ajouts) {
+      if (!ajout.previewUrl) continue;
+      const image = new Image();
+      image.onload = () => {
+        setQueue((current) =>
+          current.map((entry) =>
+            entry.file === ajout.file ? { ...entry, width: image.naturalWidth } : entry,
+          ),
+        );
+      };
+      image.src = ajout.previewUrl;
+    }
   }
 
   /**
@@ -246,8 +270,16 @@ export function UploadForm({
                 <p className="truncate text-sm">{item.file.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {humanSize(item.file.size)}
+                  {item.width ? ` · ${item.width} px wide` : ""}
                   {item.message && ` — ${item.message}`}
                 </p>
+                {item.width !== undefined && item.width < MIN_USEFUL_WIDTH && (
+                  <p className="text-xs text-destructive">
+                    Under {MIN_USEFUL_WIDTH} px: derivations will be upscaled,
+                    so softer. Generating at 1440 × 1920 yields 4:5, 3:4 and
+                    9:16 with no upscaling at all.
+                  </p>
+                )}
               </div>
 
               {item.status === "uploading" && (

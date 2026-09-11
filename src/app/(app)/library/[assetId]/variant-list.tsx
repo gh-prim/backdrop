@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MediaThumb } from "@/components/media-thumb";
 
-const ALL_RATIOS = ["4:5", "9:16", "1:1"];
+const ALL_RATIOS = ["4:5", "3:4", "9:16", "1:1"];
 
 export function VariantList({
   assetId,
