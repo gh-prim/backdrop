@@ -67,3 +67,61 @@ describe("flux d'inbox", () => {
     expect(worker).toContain(`NOTIFY_CHANNEL = "${channel}"`);
   });
 });
+
+describe("médias reçus", () => {
+  const ROUTE = readFileSync(
+    "src/app/api/inbox/media/[attachmentId]/route.ts",
+    "utf8",
+  );
+  const SHELL = readFileSync("src/app/(app)/inbox/inbox-shell.tsx", "utf8");
+  const FETCHER = readFileSync(
+    "worker-telegram/backdrop_telegram/inbox_media.py",
+    "utf8",
+  );
+
+  it("ne sort du volume sous aucun prétexte", () => {
+    // Le chemin vient de la base, mais il a été construit à partir de données
+    // reçues de l'extérieur.
+    expect(ROUTE).toContain("absolute.startsWith(MEDIA_ROOT + sep)");
+  });
+
+  it("exige une session et le scope d'organisation", () => {
+    expect(ROUTE).toContain("getOrgContext");
+    expect(ROUTE).toContain("organizationId: ctx.organizationId");
+  });
+
+  it("ne laisse pas un document reçu s'exécuter dans l'onglet", () => {
+    expect(ROUTE).toContain("X-Content-Type-Options");
+  });
+
+  it("floute ce qui vient de l'extérieur", () => {
+    // Un média reçu n'a aucun classement: personne ne l'a jugé SFW, et
+    // plusieurs opérateurs partagent l'écran.
+    expect(SHELL).toContain("incoming && !revealed");
+    expect(SHELL).toContain("blur-xl");
+  });
+
+  it("nomme le fichier par son identifiant, jamais par celui de l'expéditeur", () => {
+    // Un nom de fichier venu d'ailleurs est une chaîne hostile.
+    expect(FETCHER).toContain('f"{attachment_id}{suffix}"');
+  });
+
+  it("respecte le plafond de téléchargement", () => {
+    expect(FETCHER).toContain("MAX_DOWNLOAD_BYTES");
+    expect(FETCHER).toMatch(/size > inbox_store\.MAX_DOWNLOAD_BYTES/);
+  });
+
+  it("télécharge après avoir écrit le message, pas avant", () => {
+    const ingest = readFileSync(
+      "worker-telegram/backdrop_telegram/inbox.py",
+      "utf8",
+    );
+    // Télécharger d'abord ferait attendre l'affichage du fil le temps d'une
+    // vidéo — et le handler est partagé par toutes les personas.
+    const record = ingest.indexOf("record_message");
+    const fetch = ingest.indexOf("inbox_media.fetch_later");
+    expect(record).toBeGreaterThan(-1);
+    expect(fetch).toBeGreaterThan(record);
+    expect(FETCHER).toContain("asyncio.create_task");
+  });
+});

@@ -27,7 +27,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from backdrop_telegram import inbox_store
+from backdrop_telegram import inbox_media, inbox_store
 from backdrop_telegram.db import connect
 
 logger = logging.getLogger(__name__)
@@ -104,10 +104,16 @@ async def _ingest(client: Any, message: Any) -> None:
             # exactement ce qu'on veut qu'il fasse sans conséquence.
             return
 
+        # L'objet fichier de TDLib ne va pas en base — il n'y survivrait pas à
+        # la session — mais il est nécessaire au téléchargement, qui a lieu
+        # après, une fois le message affiché.
+        to_fetch = []
         for position, item in enumerate(_attachments_of(message)):
-            await inbox_store.attach(
+            file = item.pop("file", None)
+            attachment_id = await inbox_store.attach(
                 conn, message_id=message_id, position=position, **item
             )
+            to_fetch.append({"id": attachment_id, "kind": item["kind"], "file": file})
 
         await inbox_store.touch_conversation(
             conn,
@@ -120,6 +126,10 @@ async def _ingest(client: Any, message: Any) -> None:
             await inbox_store.notify(
                 conn, persona_id=persona_id, conversation_id=conversation_id
             )
+
+    # Hors de la transaction, et sans attendre: le fil doit apparaître à
+    # l'instant où le message arrive, pas à la fin d'un téléchargement.
+    await inbox_media.fetch_later(client, persona_id, conversation_id, to_fetch)
 
     logger.info(
         "message %s persona=%s chat=%s: %s",
@@ -425,6 +435,7 @@ def _attachments_of(message: Any) -> list[dict[str, Any]]:
     return [
         {
             "kind": kind,
+            "file": file,
             "remote_file_id": _remote_id(file),
             "mime_type": getattr(holder, "mime_type", None),
             "size_bytes": getattr(getattr(file, "size", None), "real_value", None)

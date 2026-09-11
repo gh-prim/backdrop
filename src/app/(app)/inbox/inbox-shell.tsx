@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CornerUpLeft, Paperclip, Send, X } from "lucide-react";
+import { CornerUpLeft, EyeOff, Paperclip, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sendMessageAction, markReadAction } from "@/app/actions/inbox";
 import { PlatformLogo } from "@/components/platform-logo";
@@ -328,13 +328,18 @@ function Bubble({
             message.status === "FAILED" && "ring-1 ring-destructive",
           )}
         >
-          {message.attachments.length > 0 && (
-            <p className="mb-1 flex items-center gap-1 text-[11px] opacity-80">
-              <Paperclip className="size-3" />
-              {message.attachments.map((attachment) => attachment.kind.toLowerCase()).join(", ")}
-            </p>
+          {message.attachments.map((attachment) => (
+            <Attachment
+              key={attachment.id}
+              attachment={attachment}
+              incoming={!outgoing}
+            />
+          ))}
+          {message.text || (
+            message.attachments.length === 0 && (
+              <span className="opacity-60">no text</span>
+            )
           )}
-          {message.text || <span className="opacity-60">no text</span>}
         </div>
 
         <div className="flex items-center gap-1.5 px-1">
@@ -378,6 +383,93 @@ function Bubble({
       </div>
       {!outgoing && <ReplyButton onReply={onReply} />}
     </div>
+  );
+}
+
+/**
+ * Une pièce jointe reçue.
+ *
+ * Floutée par défaut quand elle vient de l'extérieur, et révélée au clic: un
+ * média reçu n'a **aucun** classement — personne ne l'a jugé SFW — et vous
+ * êtes plusieurs devant l'écran. C'est la même règle que pour les vignettes
+ * de la bibliothèque (6.1), appliquée là où elle compte le plus.
+ *
+ * Tant que le fichier n'est pas rapatrié, on annonce sa nature plutôt que de
+ * laisser un cadre vide: le téléchargement suit le message de quelques
+ * secondes, et un média trop lourd reste chez Telegram pour de bon.
+ */
+function Attachment({
+  attachment,
+  incoming,
+}: {
+  attachment: Message["attachments"][number];
+  incoming: boolean;
+}) {
+  const [revealed, setRevealed] = useState(false);
+
+  if (!attachment.hasFile) {
+    return (
+      <p className="mb-1 flex items-center gap-1 text-[11px] opacity-70">
+        <Paperclip className="size-3" />
+        {attachment.kind.toLowerCase()}
+        <span className="opacity-60">· not downloaded</span>
+      </p>
+    );
+  }
+
+  const source = `/api/inbox/media/${attachment.id}`;
+
+  if (attachment.kind === "VIDEO") {
+    return (
+      // eslint-disable-next-line jsx-a11y/media-has-caption
+      <video
+        src={source}
+        controls
+        className="mb-1 max-h-64 w-full rounded"
+        preload="metadata"
+      />
+    );
+  }
+
+  if (attachment.kind === "VOICE") {
+    return <audio src={source} controls className="mb-1 w-56" />;
+  }
+
+  if (attachment.kind === "DOCUMENT") {
+    return (
+      <a
+        href={source}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-1 flex items-center gap-1 text-[11px] underline"
+      >
+        <Paperclip className="size-3" />
+        {attachment.kind.toLowerCase()}
+      </a>
+    );
+  }
+
+  const hidden = incoming && !revealed;
+
+  return (
+    <button
+      type="button"
+      onClick={() => (hidden ? setRevealed(true) : window.open(source, "_blank"))}
+      className="relative mb-1 block overflow-hidden rounded"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={source}
+        alt=""
+        className={cn("max-h-64 w-auto transition", hidden && "scale-110 blur-xl")}
+      />
+      {hidden && (
+        <span className="absolute inset-0 flex items-center justify-center gap-1 bg-background/40 text-[11px] text-foreground">
+          <EyeOff className="size-3" />
+          Reveal
+        </span>
+      )}
+    </button>
   );
 }
 
