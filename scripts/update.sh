@@ -30,6 +30,36 @@ else
   pull() { git -C "$REPO" pull --ff-only; }
 fi
 
+# Chaque mise à jour laisse les images précédentes de web et des workers sans
+# tag, et elles ne disparaissent pas seules: c'est ce qui a rempli le disque.
+# Une construction qui manque de place échoue au milieu de l'extraction d'une
+# couche, avec un message qui ne dit pas quoi faire — autant refuser avant.
+FREE_GB_MIN=6
+docker_free_gb() {
+  local root
+  root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker)"
+  df -BG --output=avail "$root" 2>/dev/null | tail -1 | tr -dc '0-9'
+}
+
+say "Place disponible"
+FREE_GB="$(docker_free_gb)"
+if [ -n "$FREE_GB" ]; then
+  echo "${FREE_GB} Go libres pour Docker."
+  if [ "$FREE_GB" -lt "$FREE_GB_MIN" ]; then
+    cat >&2 <<MSG
+
+Moins de ${FREE_GB_MIN} Go libres: la construction échouerait en cours
+d'extraction. À récupérer, du plus sûr au plus radical:
+
+  docker builder prune -f          # cache de construction
+  docker image prune -f            # images sans tag, déjà remplacées
+  docker system df                 # voir ce qui reste, et par quoi
+
+MSG
+    exit 1
+  fi
+fi
+
 say "Récupération du code"
 pull
 
@@ -41,6 +71,11 @@ docker compose build
 # sorti avec succès.
 say "Redémarrage de la stack"
 docker compose up -d
+
+# Seulement maintenant: tant que `up -d` n'a pas réussi, les images
+# précédentes sont le seul retour en arrière disponible.
+say "Nettoyage des images remplacées"
+docker image prune -f
 
 say "Migrations appliquées"
 docker compose logs migrate --tail 5
