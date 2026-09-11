@@ -94,9 +94,15 @@ docker compose logs migrate --tail 5
 # dépôt mais à ce que l'application sert elle-même.
 say "Version servie"
 ATTENDUE="$(grep -m1 '"version"' package.json | cut -d'"' -f4)"
+# Interrogé depuis l'hôte, sur le port publié: l'image web est minimale et
+# n'embarque ni curl ni wget. Une vérification qui suppose des outils dans le
+# conteneur échouerait toujours, et bloquerait tous les déploiements au lieu
+# d'en signaler un seul.
+PORT_WEB="$(docker compose port web 3000 2>/dev/null | cut -d: -f2)"
+PORT_WEB="${PORT_WEB:-3110}"
 SERVIE=""
 for _ in $(seq 1 30); do
-  SERVIE="$(docker compose exec -T web wget -qO- http://127.0.0.1:3000/api/version 2>/dev/null \
+  SERVIE="$(curl -fsS --max-time 3 "http://127.0.0.1:${PORT_WEB}/api/version" 2>/dev/null \
     | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
   [ -n "$SERVIE" ] && break
   sleep 2

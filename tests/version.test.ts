@@ -29,6 +29,10 @@ describe("version de l'applicatif", () => {
   it("update.sh échoue si l'application ne sert pas la version attendue", () => {
     const script = readFileSync("scripts/update.sh", "utf8");
     expect(script).toContain("/api/version");
+    // Depuis l'hôte: l'image web est minimale et n'embarque ni curl ni wget.
+    // Une vérification qui suppose ces outils dans le conteneur bloquerait
+    // tous les déploiements au lieu d'en signaler un seul.
+    expect(script).not.toMatch(/exec -T web (wget|curl)/);
     // Sans ce `exit 1`, le script annoncerait « À jour » sur une image périmée
     // — exactement ce qui est arrivé le 2026-09-11.
     expect(script).toMatch(/Déploiement incomplet[\s\S]{0,400}exit 1/);
