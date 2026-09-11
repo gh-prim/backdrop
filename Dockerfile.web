@@ -28,24 +28,6 @@ ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-# Cible dédiée aux migrations: le schéma est appliqué par un conteneur qui
-# s'arrête, jamais par le serveur web à son démarrage. Deux répliques web qui
-# migrent en même temps se marcheraient dessus.
-FROM node:24-bookworm-slim AS migrate
-RUN corepack enable
-RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
-COPY prisma ./prisma
-# `src` sert au seed, qui passe par Better Auth pour créer le premier owner:
-# sur un serveur il n'y a ni pnpm ni sources hors conteneur.
-COPY src ./src
-RUN pnpm exec prisma generate
-CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
-
 FROM node:24-bookworm-slim AS runtime
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl ca-certificates \

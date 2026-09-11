@@ -110,3 +110,33 @@ describe("garde-fous du disque", () => {
     expect(UPDATE).toContain("docker builder prune -af");
   });
 });
+
+describe("images Docker", () => {
+  const WORKER = readFileSync("Dockerfile.worker", "utf8");
+  const WEB = readFileSync("Dockerfile.web", "utf8");
+  const COMPOSE = readFileSync("docker-compose.yml", "utf8");
+
+  it("migrations et worker descendent de la même étape", () => {
+    // Deux Dockerfile distincts donnaient deux node_modules complets sans une
+    // couche en commun: 2,6 Go d'un côté, 1,7 Go de l'autre, pour les mêmes
+    // paquets. Mesuré après: 13 couches sur 13 partagées.
+    expect(WORKER).toContain("FROM deps AS migrate");
+    expect(WORKER).toContain("FROM deps AS worker");
+    expect(WEB).not.toContain("AS migrate");
+  });
+
+  it("les migrations ne portent pas ffmpeg", () => {
+    // 150 Mo de codecs pour appliquer un schéma: l'installation vient après
+    // la séparation des cibles, pas avant.
+    const split = WORKER.indexOf("FROM deps AS migrate");
+    const ffmpeg = WORKER.indexOf("ffmpeg \\");
+    expect(ffmpeg).toBeGreaterThan(split);
+  });
+
+  it("les services pointent la bonne cible", () => {
+    // Sans `target`, Docker construit la **dernière** étape du fichier: le
+    // service migrate deviendrait un worker, silencieusement.
+    const targets = [...COMPOSE.matchAll(/dockerfile: Dockerfile\.worker\n\s*target: (\w+)/g)];
+    expect(targets.map((m) => m[1]).sort()).toEqual(["migrate", "migrate", "worker"]);
+  });
+});

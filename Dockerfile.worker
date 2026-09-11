@@ -1,26 +1,50 @@
-# worker-node: activités TypeScript (Instagram, ffmpeg, R2, Fanvue).
-# Scalable horizontalement, contrairement au worker Telegram de la phase 2.
-FROM node:24-bookworm-slim
+# Worker Node **et** migrations, dans une seule image.
+#
+# Les deux partaient auparavant de Dockerfile distincts, donc de deux
+# `node_modules` complets sans une couche en commun: 2,6 Go d'un côté, 1,7 Go
+# de l'autre, pour les mêmes paquets. Sur un serveur de 30 Go, cette
+# duplication suffisait à faire échouer une construction sur deux.
+#
+# Ici les deux cibles descendent de la même étape `deps`. La seconde copie ne
+# coûte rien, et `migrate` n'embarque pas ffmpeg — qui n'arrive qu'après, dans
+# la cible qui s'en sert.
 
-# ffmpeg est une dépendance de premier ordre, pas un outil de confort:
-# `+faststart` et les recadrages conditionnent l'acceptation des vidéos par
-# Instagram (spec 4.1.7).
+FROM node:24-bookworm-slim AS deps
+# openssl: le client Prisma en a besoin pour choisir son moteur.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg openssl ca-certificates \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-
 RUN corepack enable
-
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 RUN pnpm install --frozen-lockfile
 
 COPY prisma ./prisma
 RUN pnpm exec prisma generate
 
-COPY tsconfig.json ./
+# `src` sert aux deux: le worker importe les modules partagés, et le seed
+# passe par Better Auth pour créer le premier owner. Sur un serveur il n'y a
+# ni pnpm ni sources hors conteneur (9.8).
 COPY src ./src
+
+# Cible des migrations: le schéma est appliqué par un conteneur qui s'arrête,
+# jamais par le serveur web à son démarrage. Deux répliques web qui migrent en
+# même temps se marcheraient dessus.
+FROM deps AS migrate
+CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
+
+# Worker: activités TypeScript (Instagram, ffmpeg, R2, Fanvue).
+# Scalable horizontalement, contrairement au worker Telegram de la phase 2.
+FROM deps AS worker
+# ffmpeg est une dépendance de premier ordre, pas un outil de confort:
+# `+faststart` et les recadrages conditionnent l'acceptation des vidéos par
+# Instagram (spec 4.1.7). Installé ici et pas dans `deps`: les migrations
+# n'ont aucune raison de porter 150 Mo de codecs.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY worker ./worker
 
 ENV NODE_ENV=production
