@@ -173,10 +173,19 @@ export async function cancelPublishWorkflow(publicationId: string): Promise<void
 export async function startIngestWorkflow(input: {
   assetId: string;
   ratio: string;
+  /** Position verticale du recadrage, 0 (haut) à 100 (bas). */
+  cropOffset?: number | null;
 }): Promise<string> {
   const client = await temporalClient();
   const handle = await client.workflow.start("ingestVariant", {
-    workflowId: ingestWorkflowId(`${input.assetId}:${input.ratio}`),
+    // Le cadrage fait partie de l'identité de l'exécution: sans lui, recadrer
+    // à nouveau le même ratio se heurterait au workflow déjà terminé.
+    workflowId: ingestWorkflowId(
+      `${input.assetId}:${input.ratio}` +
+        (input.cropOffset === undefined || input.cropOffset === null
+          ? ""
+          : `:${input.cropOffset}`),
+    ),
     taskQueue: TASK_QUEUE.node,
     args: [input],
   });

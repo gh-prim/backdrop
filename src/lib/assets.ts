@@ -111,6 +111,7 @@ export async function getAssetDetail(ctx: OrgContext, assetId: string) {
           r2Key: true,
           tgSourceMessageId: true,
           fvMediaUuid: true,
+          cropOffset: true,
           createdAt: true,
         },
       },

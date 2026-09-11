@@ -240,6 +240,12 @@ model Variant {
   tgSourceMessageId BigInt?
   /// Media Fanvue après upload multipart, une fois le statut `ready` (4.3.5).
   fvMediaUuid       String?
+  /// Position verticale du recadrage, de 0 (haut) à 100 (bas). Null = centre.
+  ///
+  /// Le centre est un défaut, pas une vérité: un sujet dans le tiers haut y
+  /// perd la tête. Mémorisé ici pour qu'une re-dérivation reproduise le même
+  /// cadrage, et pour que l'interface sache où placer son curseur.
+  cropOffset        Int?
   createdAt         DateTime @default(now())
 
   asset            Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)

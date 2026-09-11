@@ -4,6 +4,7 @@ import { mkdir, stat } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { ApplicationFailure } from "@temporalio/activity";
+import { clampOffset, cropFilter } from "./crop";
 import { Rating } from "@prisma/client";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "../../src/lib/db";
@@ -27,16 +28,8 @@ export function absolutePath(relativePath: string): string {
   return join(MEDIA_ROOT, relativePath);
 }
 
-const RATIO_VALUES: Record<string, number> = {
-  "1:1": 1,
-  // Le plus haut que le fil Instagram accepte depuis 2026: à partir d'un
-  // master 1440x1920, il se publie sans rien perdre.
-  "3:4": 3 / 4,
-  "4:5": 4 / 5,
-  "9:16": 9 / 16,
-};
+export { clampOffset, cropFilter, RATIO_VALUES } from "./crop";
 
-const TARGET_WIDTH = 1080;
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv"]);
 
 export function isVideoPath(path: string): boolean {
@@ -123,26 +116,13 @@ export async function probeMedia(relativePath: string): Promise<MediaProbe> {
   }
 }
 
-/**
- * Recadrage centré vers le ratio cible, puis mise à l'échelle.
- * `-2` sur la hauteur garantit un nombre pair, exigé par yuv420p.
- */
-function cropFilter(ratio: string): string {
-  const value = RATIO_VALUES[ratio];
-  if (!value) {
-    throw ApplicationFailure.create({
-      message: `Unsupported ratio: ${ratio}`,
-      nonRetryable: true,
-    });
-  }
-  return `crop='min(iw,ih*${value})':'min(ih,iw/${value})',scale=${TARGET_WIDTH}:-2`;
-}
-
 export type TranscodeInput = {
   sourcePath: string;
   ratio: string;
   /** Chemin relatif de sortie, sans extension. */
   outputBase: string;
+  /** Position verticale du recadrage, 0 (haut) à 100 (bas). Défaut: centre. */
+  cropOffset?: number | null;
 };
 
 export async function transcodeVariant(
@@ -155,7 +135,7 @@ export async function transcodeVariant(
 
   await mkdir(dirname(output), { recursive: true });
 
-  const filter = cropFilter(input.ratio);
+  const filter = cropFilter(input.ratio, input.cropOffset);
   const args = video
     ? [
         "-y", "-i", source,
@@ -195,22 +175,41 @@ export async function createVariantRecord(input: {
   assetId: string;
   ratio: string;
   localPath: string;
+  cropOffset?: number | null;
 }): Promise<{ variantId: string }> {
   const existing = await prisma.variant.findFirst({
     where: { assetId: input.assetId, ratio: input.ratio },
-    select: { id: true },
+    select: { id: true, cropOffset: true },
   });
 
   if (existing) {
+    const offset = clampOffset(input.cropOffset);
+    // Les pointeurs distants désignent des pixels, pas un Variant: Telegram et
+    // Fanvue gardent leur propre copie. Recadrer autrement les périme, et les
+    // réutiliser republierait l'ancien cadrage. Un même cadrage ré-encodé, lui,
+    // donne la même image: on garde le cache.
+    const reframed = clampOffset(existing.cropOffset) !== offset;
+
     await prisma.variant.update({
       where: { id: existing.id },
-      data: { localPath: input.localPath },
+      // Le cadrage est mémorisé avec le fichier: sans lui, l'interface
+      // afficherait un curseur au centre pour une image recadrée en haut.
+      data: {
+        localPath: input.localPath,
+        cropOffset: offset,
+        ...(reframed ? { tgSourceMessageId: null, fvMediaUuid: null } : {}),
+      },
     });
     return { variantId: existing.id };
   }
 
   const variant = await prisma.variant.create({
-    data: { assetId: input.assetId, ratio: input.ratio, localPath: input.localPath },
+    data: {
+      assetId: input.assetId,
+      ratio: input.ratio,
+      localPath: input.localPath,
+      cropOffset: clampOffset(input.cropOffset),
+    },
     select: { id: true },
   });
   return { variantId: variant.id };

@@ -92,6 +92,8 @@ export async function deleteAssetAction(assetId: string): Promise<ActionResult> 
 export async function deriveVariantAction(
   assetId: string,
   ratio: string,
+  /** Position verticale du recadrage, 0 (haut) à 100 (bas). */
+  cropOffset?: number,
 ): Promise<ActionResult> {
   const ctx = await requireOrgContext();
 
@@ -102,7 +104,7 @@ export async function deriveVariantAction(
   if (!asset) return { ok: false, error: "Asset not found." };
 
   try {
-    await startIngestWorkflow({ assetId, ratio });
+    await startIngestWorkflow({ assetId, ratio, cropOffset });
   } catch (error) {
     const message = (error as Error).message ?? "";
     if (!message.includes("already started")) {
@@ -111,5 +113,11 @@ export async function deriveVariantAction(
   }
 
   revalidatePath(`/library/${assetId}`);
-  return { ok: true, message: `${ratio} derivation started.` };
+  return {
+    ok: true,
+    message:
+      cropOffset === undefined
+        ? `${ratio} derivation started.`
+        : `${ratio} re-cropped at ${cropOffset}%. It replaces the current file.`,
+  };
 }

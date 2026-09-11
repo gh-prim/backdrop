@@ -14,7 +14,18 @@ const act = proxyActivities<typeof activities>({
   retry: { maximumAttempts: 3, initialInterval: "5 seconds" },
 });
 
-export type IngestVariantInput = { assetId: string; ratio: string };
+export type IngestVariantInput = {
+  assetId: string;
+  ratio: string;
+  /**
+   * Position verticale du recadrage, 0 (haut) à 100 (bas). Absent: centre.
+   *
+   * Voyage jusqu'ici plutôt que d'être relu en base: une re-dérivation doit
+   * pouvoir demander un cadrage **différent** de celui enregistré, sans quoi
+   * il n'y aurait aucun moyen de le corriger.
+   */
+  cropOffset?: number | null;
+};
 
 export type IngestVariantResult = {
   variantId: string;
@@ -33,6 +44,7 @@ export async function ingestVariant(
   const { localPath } = await act.transcodeVariant({
     sourcePath: asset.localPath,
     ratio: input.ratio,
+    cropOffset: input.cropOffset,
     outputBase: `variants/${asset.personaId}/${input.assetId}-${input.ratio.replace(":", "x")}`,
   });
 
@@ -40,6 +52,7 @@ export async function ingestVariant(
     assetId: input.assetId,
     ratio: input.ratio,
     localPath,
+    cropOffset: input.cropOffset,
   });
 
   const upload = await act.uploadVariantToR2(variantId);

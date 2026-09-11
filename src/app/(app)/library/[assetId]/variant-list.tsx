@@ -9,6 +9,70 @@ import { MediaThumb } from "@/components/media-thumb";
 
 const ALL_RATIOS = ["4:5", "3:4", "9:16", "1:1"];
 
+/**
+ * Où tombe le recadrage, et comment le déplacer.
+ *
+ * ffmpeg recadre au centre par défaut — ce qui coupe autant en haut qu'en bas
+ * et décapite un sujet placé dans le tiers haut. Le curseur déplace la fenêtre
+ * du haut vers le bas, et la re-dérivation remplace le fichier.
+ *
+ * Seules les variantes plus étroites que l'original ont quelque chose à
+ * déplacer: sur un cadrage identique à la source, il n'y a rien à couper.
+ */
+function CropOffset({
+  assetId,
+  variant,
+  disabled,
+  onDone,
+}: {
+  assetId: string;
+  variant: { id: string; ratio: string; cropOffset: number | null };
+  disabled: boolean;
+  onDone: (message: string) => void;
+}) {
+  const [offset, setOffset] = useState(variant.cropOffset ?? 50);
+  const [pending, startTransition] = useTransition();
+  const changed = offset !== (variant.cropOffset ?? 50);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-muted-foreground">haut</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={offset}
+          disabled={disabled || pending}
+          onChange={(event) => setOffset(Number(event.target.value))}
+          className="h-1 flex-1"
+          aria-label={`Vertical crop for ${variant.ratio}`}
+        />
+        <span className="text-[10px] text-muted-foreground">bas</span>
+      </div>
+
+      {changed && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 w-full text-xs"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              const result = await deriveVariantAction(assetId, variant.ratio, offset);
+              onDone(result.ok ? (result.message ?? "Re-cropped.") : result.error);
+            })
+          }
+        >
+          {pending ? "Re-cropping…" : `Re-crop at ${offset}%`}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function VariantList({
   assetId,
   rating,
@@ -22,6 +86,8 @@ export function VariantList({
     onR2: boolean;
     onTelegram: boolean;
     onFanvue: boolean;
+    /** Position verticale du recadrage, 0 (haut) à 100 (bas). */
+    cropOffset: number | null;
   }[];
 }) {
   const [pending, startTransition] = useTransition();
@@ -46,6 +112,13 @@ export function VariantList({
                 rating={rating}
                 ratio={variant.ratio}
                 className="aspect-[4/5]"
+              />
+
+              <CropOffset
+                assetId={assetId}
+                variant={variant}
+                disabled={pending}
+                onDone={setMessage}
               />
               <div className="flex flex-wrap gap-1">
                 {/* Où ce Variant est disponible, donc ce qu'il peut alimenter. */}

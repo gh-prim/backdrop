@@ -92,6 +92,7 @@ export default async function AssetPage({
                   onR2: Boolean(variant.r2Key),
                   onTelegram: variant.tgSourceMessageId !== null,
                   onFanvue: Boolean(variant.fvMediaUuid),
+                  cropOffset: variant.cropOffset,
                 }))}
               />
             ),

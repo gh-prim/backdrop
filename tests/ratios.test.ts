@@ -9,12 +9,12 @@ import { INSTAGRAM_FEED_RATIOS, INSTAGRAM_REEL_RATIOS } from "@/lib/channels/ins
  * une publication sans média: l'erreur ne se voit qu'au moment de l'envoi,
  * très loin du choix.
  */
-const MEDIA = readFileSync("worker/activities/media.ts", "utf8");
+const MEDIA = readFileSync("worker/activities/crop.ts", "utf8");
 
 function ratiosDerivables(): string[] {
   const bloc = MEDIA.slice(
-    MEDIA.indexOf("const RATIO_VALUES"),
-    MEDIA.indexOf("const TARGET_WIDTH"),
+    MEDIA.indexOf("RATIO_VALUES"),
+    MEDIA.indexOf("TARGET_WIDTH"),
   );
   return [...bloc.matchAll(/"([0-9]+:[0-9]+)"/g)].map((m) => m[1]);
 }
