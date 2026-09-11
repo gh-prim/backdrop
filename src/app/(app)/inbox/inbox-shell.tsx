@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Paperclip } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { PlatformLogo } from "@/components/platform-logo";
+import { unreadLabel } from "@/lib/unread-shared";
 import { cn } from "cn";
 
 type Conversation = {
@@ -57,9 +57,11 @@ export function InboxShell({
   const router = useRouter();
 
   return (
-    <div className="grid h-[calc(100svh-8rem)] grid-cols-[300px_minmax(0,1fr)] gap-4">
-      <aside className="flex min-h-0 flex-col rounded-lg border">
-        <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
+    // Une seule séparation, verticale, entre les deux colonnes. Encadrer
+    // chacune ajoutait quatre traits pour ne rien distinguer de plus.
+    <div className="grid h-[calc(100svh-7rem)] grid-cols-[320px_minmax(0,1fr)]">
+      <aside className="flex min-h-0 flex-col border-r">
+        <div className="flex shrink-0 items-center justify-between px-3 py-2">
           <h1 className="text-sm font-bold">Inbox</h1>
           <span className="text-[11px] text-muted-foreground">
             {conversations.length} chat{conversations.length > 1 ? "s" : ""}
@@ -78,7 +80,7 @@ export function InboxShell({
                 type="button"
                 onClick={() => router.push(`/inbox?c=${conversation.id}`)}
                 className={cn(
-                  "flex w-full items-start gap-2 border-b px-3 py-2 text-left transition",
+                  "flex w-full items-start gap-2 px-3 py-2 text-left transition",
                   conversation.id === activeId ? "bg-accent" : "hover:bg-accent/50",
                 )}
               >
@@ -92,9 +94,9 @@ export function InboxShell({
                       {conversation.title}
                     </span>
                     {conversation.unreadCount > 0 && (
-                      <Badge className="h-4 shrink-0 px-1 text-[9px]">
-                        {conversation.unreadCount}
-                      </Badge>
+                      <span className="ml-auto inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                        {unreadLabel(conversation.unreadCount)}
+                      </span>
                     )}
                   </span>
                   <span className="block truncate text-[11px] text-muted-foreground">
@@ -107,14 +109,14 @@ export function InboxShell({
         </div>
       </aside>
 
-      <section className="flex min-h-0 flex-col rounded-lg border">
+      <section className="flex min-h-0 flex-col">
         {!thread ? (
           <p className="m-auto text-xs text-muted-foreground">
             Pick a conversation on the left.
           </p>
         ) : (
           <>
-            <div className="shrink-0 border-b px-4 py-2">
+            <div className="shrink-0 px-4 py-3">
               <h2 className="text-sm font-bold">{thread.title}</h2>
               {thread.username && (
                 <p className="text-[11px] text-muted-foreground">@{thread.username}</p>

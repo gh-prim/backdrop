@@ -266,6 +266,47 @@ async def on_reactions(client: Any, update: Any) -> None:
         )
 
 
+async def enrich_names(client: Any) -> None:
+    """
+    Donne un nom aux fils qui n'en ont pas.
+
+    Appelé au démarrage du worker, une fois par persona. Sans lui, une
+    conversation créée avant qu'on sache résoudre un interlocuteur resterait
+    « Unnamed chat » jusqu'à ce que quelqu'un y écrive — et sur un fil qui
+    dort, cela veut dire jamais.
+
+    Tolérant par ligne: un interlocuteur qu'on ne sait plus résoudre — compte
+    supprimé, par exemple — ne doit pas empêcher de nommer les autres.
+    """
+    persona_id = client.persona_id
+    channel_account = await inbox_store.channel_account_id(persona_id)
+    if channel_account is None:
+        return
+
+    async with await connect() as conn:
+        rows = await inbox_store.nameless(conn, channel_account)
+        for row in rows:
+            if not row["title"]:
+                title = await _chat_title(client, row["chat"])
+                if title:
+                    await inbox_store.set_conversation_title(
+                        conn, conversation_id=row["id"], title=title
+                    )
+
+            if row["contact_id"] and not row["displayName"]:
+                identity = await _identity_of(client, int(row["user_id"]))
+                if identity["displayName"] or identity["username"]:
+                    await inbox_store.set_contact_identity(
+                        conn,
+                        contact_id=row["contact_id"],
+                        display_name=identity["displayName"],
+                        username=identity["username"],
+                    )
+
+    if rows:
+        logger.info("%d fil(s) nommé(s) pour persona=%s", len(rows), persona_id)
+
+
 async def _identity_of(client: Any, user_id: int) -> dict[str, Optional[str]]:
     """
     Le nom et le pseudo de quelqu'un.

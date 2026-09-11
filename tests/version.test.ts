@@ -43,3 +43,16 @@ describe("version de l'applicatif", () => {
     expect(layout).toContain("APP_VERSION");
   });
 });
+
+describe("pastille de non-lus", () => {
+  it("tronque au-delà de dix", async () => {
+    const { unreadLabel } = await import("@/lib/unread-shared");
+    expect(unreadLabel(0)).toBe("0");
+    expect(unreadLabel(9)).toBe("9");
+    expect(unreadLabel(10)).toBe("10");
+    // Au-delà, le chiffre exact n'apprend plus rien, et la pastille garderait
+    // une largeur variable qui ferait sauter la navigation.
+    expect(unreadLabel(11)).toBe("10+");
+    expect(unreadLabel(4000)).toBe("10+");
+  });
+});

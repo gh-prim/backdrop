@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { requireOrgContext } from "@/lib/session";
 import { getSelectedPersonaId, listPersonas } from "@/lib/persona-scope";
+import { ALL_PERSONAS } from "@/lib/persona";
+import { countUnread } from "@/lib/inbox";
+import { unreadLabel } from "@/lib/unread-shared";
 import { PersonaSwitcher } from "@/components/persona-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { TaskMenu } from "@/components/task-menu";
 import { APP_VERSION } from "@/lib/version";
+import { AppMain } from "@/components/app-main";
 
 /**
  * Le composeur n'y figure pas: c'est une action, pas une destination. On
@@ -20,6 +24,7 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
+
 export default async function AppLayout({
   children,
   modal,
@@ -31,6 +36,12 @@ export default async function AppLayout({
   const ctx = await requireOrgContext();
   const personas = await listPersonas(ctx);
   const selectedId = await getSelectedPersonaId(personas);
+  // Compté au rendu de la barre: le badge suit donc la navigation. Le tenir à
+  // jour sans recharger viendra avec le flux d'événements.
+  const unread = await countUnread(
+    ctx,
+    selectedId === ALL_PERSONAS ? undefined : selectedId,
+  );
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -53,9 +64,16 @@ export default async function AppLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="relative rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 {item.label}
+                {item.href === "/inbox" && unread > 0 && (
+                  // Rouge, et seulement ici: c'est la seule information de
+                  // l'application qui demande une réponse de quelqu'un.
+                  <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                    {unreadLabel(unread)}
+                  </span>
+                )}
               </Link>
             ))}
           </nav>
@@ -67,7 +85,7 @@ export default async function AppLayout({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</main>
+      <AppMain>{children}</AppMain>
 
       {/* La version, en bas à gauche et discrète. Elle ne sert qu'à une chose:
           distinguer « déployé » de « supposé déployé », sans ouvrir un

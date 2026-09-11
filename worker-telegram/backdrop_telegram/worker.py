@@ -70,7 +70,7 @@ async def open_connected_personas() -> None:
             )
             continue
         try:
-            await pool.open(
+            client = await pool.open(
                 persona_id=persona_id,
                 api_id=entry["apiId"],
                 api_hash=entry["apiHash"],
@@ -78,6 +78,15 @@ async def open_connected_personas() -> None:
             )
         except Exception as error:  # noqa: BLE001
             logger.error("persona %s non rouverte: %s", persona_id, error)
+            continue
+
+        # Les fils créés avant qu'on sache résoudre un interlocuteur restent
+        # anonymes jusqu'à ce que quelqu'un y écrive. Sur un fil qui dort,
+        # cela veut dire jamais: on les nomme au démarrage.
+        try:
+            await inbox.enrich_names(client)
+        except Exception as error:  # noqa: BLE001 — un nom n'est pas une panne
+            logger.warning("noms non complétés pour %s: %s", persona_id, error)
 
 
 async def main() -> None:

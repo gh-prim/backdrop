@@ -358,3 +358,48 @@ async def notify(conn: Any, *, persona_id: str, conversation_id: str) -> None:
     """
     payload = json.dumps({"personaId": persona_id, "conversationId": conversation_id})
     await conn.execute("select pg_notify(%s, %s)", (NOTIFY_CHANNEL, payload))
+
+
+async def nameless(conn: Any, channel_account: str) -> list[dict[str, Any]]:
+    """
+    Les fils et contacts encore sans nom.
+
+    Une conversation créée avant que l'on sache résoudre un interlocuteur reste
+    anonyme jusqu'à ce que quelqu'un y écrive: l'inbox affiche alors une
+    colonne d'inconnus. On les rattrape au démarrage plutôt que d'attendre un
+    message qui ne viendra peut-être jamais.
+    """
+    rows = await (
+        await conn.execute(
+            'select c.id, c."externalId" as chat, c.title, '
+            'k.id as contact_id, k."externalId" as user_id, k."displayName" '
+            'from "Conversation" c '
+            'left join "Contact" k on k.id = c."contactId" '
+            'where c."channelAccountId" = %s '
+            '  and (c.title is null or k."displayName" is null) '
+            "limit 200",
+            (channel_account,),
+        )
+    ).fetchall()
+    return list(rows)
+
+
+async def set_conversation_title(conn: Any, *, conversation_id: str, title: str) -> None:
+    await conn.execute(
+        'update "Conversation" set title = %s, "updatedAt" = now() where id = %s',
+        (title, conversation_id),
+    )
+
+
+async def set_contact_identity(
+    conn: Any,
+    *,
+    contact_id: str,
+    display_name: Optional[str],
+    username: Optional[str],
+) -> None:
+    await conn.execute(
+        'update "Contact" set "displayName" = coalesce(%s, "displayName"), '
+        'username = coalesce(%s, username), "updatedAt" = now() where id = %s',
+        (display_name, username, contact_id),
+    )
