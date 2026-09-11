@@ -308,6 +308,7 @@ export async function listPublishableVariants(ctx: OrgContext, personaId: string
       ratio: true,
       r2Key: true,
       localPath: true,
+      cropOffset: true,
       asset: { select: { id: true, rating: true } },
     },
     orderBy: { createdAt: "desc" },

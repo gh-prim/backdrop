@@ -21,6 +21,7 @@ import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
 import { FanvuePanel } from "./fanvue-panel";
 import { ChannelFraming } from "./channel-framing";
+import { CropControl } from "./crop-control";
 import { useComposerClose } from "./composer-close";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -36,10 +37,13 @@ type ChannelOption = {
 
 type VariantOption = {
   id: string;
+  assetId: string;
   ratio: string;
   rating: Rating;
   hasPublicUrl: boolean;
   isVideo: boolean;
+  /** Position verticale du recadrage déjà appliquée. Null = centre. */
+  cropOffset: number | null;
 };
 
 const RATING_RANK: Record<Rating, number> = { SFW: 0, SUGGESTIVE: 1, NSFW: 2 };
@@ -261,11 +265,39 @@ export function ComposerForm({
     [variants, ratioFilter, typeFilter],
   );
 
-  /** Le média dont on montre le cadrage par canal: le premier choisi. */
-  const firstSelected = useMemo(
-    () => variants.find((variant) => variant.id === selected[0]) ?? null,
-    [variants, selected],
-  );
+  /**
+   * Le média dont on montre — et dont on corrige — le cadrage.
+   *
+   * Par défaut le premier choisi, mais pas seulement: sur un carrousel, la
+   * photo mal cadrée n'est presque jamais la première, et ne pouvoir corriger
+   * que celle-là obligerait à défaire la sélection pour l'atteindre.
+   */
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const previewed = useMemo(() => {
+    const id = previewId && selected.includes(previewId) ? previewId : selected[0];
+    return variants.find((variant) => variant.id === id) ?? null;
+  }, [variants, selected, previewId]);
+
+  /**
+   * Cadrages obtenus depuis l'ouverture du compositeur.
+   *
+   * Le rendu initial vient du serveur; une re-dérivation ne le met pas à jour
+   * puisque le modal ne se recharge pas. On retient donc ici ce qu'on a nous-
+   * même déclenché, et on s'en sert aussi pour casser le cache de l'image.
+   */
+  const [recropped, setRecropped] = useState<
+    Record<string, { offset: number; version: number }>
+  >({});
+
+  function rememberRecrop(variantId: string, offset: number) {
+    setRecropped((previous) => ({
+      ...previous,
+      // Le numéro de version compte les recadrages, il ne reprend pas le
+      // décalage: recadrer en haut donnerait `0`, que le navigateur traite
+      // comme « pas de paramètre » et qui resservirait l'image en cache.
+      [variantId]: { offset, version: (previous[variantId]?.version ?? 0) + 1 },
+    }));
+  }
 
   /** Un Reel sur une photo déclenche un rendu vidéo au moment de la publication. */
   const selectionIsVideo = selected.every(
@@ -810,6 +842,7 @@ export function ComposerForm({
                           rating={variant.rating}
                           ratio={variant.ratio}
                           className="aspect-[4/5]"
+                          version={recropped[variant.id]?.version}
                         />
                         {index >= 0 && kind === "CAROUSEL" && (
                           <span className="absolute right-1 top-1 rounded bg-primary px-1 text-[10px] font-bold text-primary-foreground">
@@ -831,19 +864,53 @@ export function ComposerForm({
             </div>
           )}
 
-          {currentStep.key === "media" && firstSelected && chosenChannels.length > 0 && (
-            <div className="border-t pt-3">
+          {currentStep.key === "media" && previewed && chosenChannels.length > 0 && (
+            <div className="space-y-2 border-t pt-3">
               <ChannelFraming
-                variant={firstSelected}
+                variant={previewed}
                 platforms={chosenChannels.map((channel) => channel.platform)}
                 kind={kind}
+                version={recropped[previewed.id]?.version}
               />
+
               {selected.length > 1 && (
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Shown for the first media; the same framing applies to the{" "}
-                  {selected.length - 1} others.
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">
+                    Framing for
+                  </span>
+                  {selected.map((id, index) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setPreviewId(id)}
+                      className={cn(
+                        "size-6 rounded border text-[10px] font-bold",
+                        id === previewed.id
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:border-foreground",
+                      )}
+                    >
+                      {index + 1}
+                    </button>
+                  ))}
+                </div>
               )}
+
+              {/* Le curseur agit sur le média affiché au-dessus, et sur lui
+                  seul: deux photos d'un même carrousel n'ont aucune raison de
+                  vouloir le même point de coupe. */}
+              <CropControl
+                // Remonter le cadrage appliqué remet le curseur à sa place
+                // sans effet de synchronisation.
+                key={`${previewed.id}:${recropped[previewed.id]?.offset ?? previewed.cropOffset ?? 50}`}
+                variant={{
+                  id: previewed.id,
+                  assetId: previewed.assetId,
+                  ratio: previewed.ratio,
+                  cropOffset: recropped[previewed.id]?.offset ?? previewed.cropOffset,
+                }}
+                onRecropped={rememberRecrop}
+              />
             </div>
           )}
 

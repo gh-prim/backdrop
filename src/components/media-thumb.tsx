@@ -52,11 +52,20 @@ export function MediaThumb({
   rating,
   ratio,
   className,
+  version,
 }: {
   variantId: string;
   rating: "SFW" | "SUGGESTIVE" | "NSFW";
   ratio?: string;
   className?: string;
+  /**
+   * À incrémenter quand les pixels changent sous une URL inchangée.
+   *
+   * Un Variant recadré garde son identifiant, donc son adresse: sans ce
+   * paramètre le navigateur resservirait l'ancienne image depuis son cache,
+   * et le recadrage aurait l'air de n'avoir rien fait.
+   */
+  version?: number;
 }) {
   const sensitive = rating !== "SFW";
   const [revealed, setRevealed] = useState(false);
@@ -77,7 +86,7 @@ export function MediaThumb({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`/api/media/${variantId}`}
+        src={version ? `/api/media/${variantId}?v=${version}` : `/api/media/${variantId}`}
         alt=""
         className={cn(
           "h-full w-full object-cover transition",

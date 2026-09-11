@@ -123,3 +123,28 @@ export async function deriveVariantAction(
         : `Re-cropping ${ratio} at ${cropOffset}%. It replaces the current file.`,
   };
 }
+
+/**
+ * Où en est le recadrage d'un Variant.
+ *
+ * La re-dérivation passe par Temporal: elle rend la main avant que ffmpeg
+ * n'ait écrit quoi que ce soit. L'interface a donc besoin de savoir quand le
+ * fichier a vraiment changé, sinon elle afficherait l'ancien cadrage en
+ * prétendant le contraire. `cropOffset` n'est écrit qu'à la fin: le voir
+ * bouger, c'est la preuve que le nouveau fichier existe.
+ */
+export async function variantCropOffsetAction(
+  variantId: string,
+): Promise<{ cropOffset: number | null } | null> {
+  const ctx = await requireOrgContext();
+
+  const variant = await prisma.variant.findFirst({
+    where: {
+      id: variantId,
+      asset: { persona: { organizationId: ctx.organizationId } },
+    },
+    select: { cropOffset: true },
+  });
+
+  return variant ?? null;
+}

@@ -58,8 +58,10 @@ export async function ComposerPanel({
           }))}
         variants={variants.map((variant) => ({
           id: variant.id,
+          assetId: variant.asset.id,
           ratio: variant.ratio,
           rating: variant.asset.rating,
+          cropOffset: variant.cropOffset,
           hasPublicUrl: Boolean(variant.r2Key),
           isVideo: /\.(mp4|mov|m4v)$/i.test(variant.localPath),
         }))}

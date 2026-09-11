@@ -30,10 +30,13 @@ export function ChannelFraming({
   variant,
   platforms,
   kind,
+  version,
 }: {
   variant: { id: string; ratio: string; rating: string };
   platforms: Platform[];
   kind: string;
+  /** Incrémentée après un recadrage: l'URL du média, elle, ne change pas. */
+  version?: number;
 }) {
   if (platforms.length === 0) return null;
 
@@ -59,6 +62,7 @@ export function ChannelFraming({
                 variantId={variant.id}
                 rating={variant.rating as "SFW" | "SUGGESTIVE" | "NSFW"}
                 className="size-full [&_img]:object-cover"
+                version={version}
               />
             </div>
 
