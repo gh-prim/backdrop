@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CornerUpLeft, EyeOff, Paperclip, Send, X } from "lucide-react";
+import { CornerUpLeft, Download, EyeOff, Paperclip, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  importHistoryAction,
   markReadAction,
   mediaForConversationAction,
   sendMediaAction,
@@ -62,10 +63,13 @@ export function InboxShell({
   conversations,
   activeId,
   thread,
+  personaId,
 }: {
   conversations: Conversation[];
   activeId: string | null;
   thread: Thread | null;
+  /** Null quand « toutes les personas » est sélectionné: l'import vise un compte. */
+  personaId: string | null;
 }) {
   const router = useRouter();
   const bottom = useRef<HTMLDivElement>(null);
@@ -124,12 +128,15 @@ export function InboxShell({
     // Une seule séparation, verticale, entre les deux colonnes. Encadrer
     // chacune ajoutait quatre traits pour ne rien distinguer de plus.
     <div className="grid h-[calc(100svh-7rem)] grid-cols-[320px_minmax(0,1fr)]">
-      <aside className="flex min-h-0 flex-col border-r">
+      <aside className="relative flex min-h-0 flex-col border-r">
         <div className="flex shrink-0 items-center justify-between px-3 py-2">
           <h1 className="text-sm font-bold">Inbox</h1>
-          <span className="text-[11px] text-muted-foreground">
-            {conversations.length} chat{conversations.length > 1 ? "s" : ""}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground">
+              {conversations.length} chat{conversations.length > 1 ? "s" : ""}
+            </span>
+            <ImportButton personaId={personaId} />
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -461,6 +468,56 @@ function MediaPicker({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Rapatrier les conversations qui existaient avant.
+ *
+ * L'écoute ne rattrape rien: elle commence le jour où on l'allume. Le bouton
+ * reste disponible ensuite — relancer l'import est sans risque, l'écriture
+ * côté worker étant idempotente — et sert alors à récupérer un fil resté en
+ * dehors des cinquante premiers.
+ */
+function ImportButton({ personaId }: { personaId: string | null }) {
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
+
+  if (!personaId) return null;
+
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="h-6 px-1.5 text-[11px]"
+        disabled={pending}
+        title="Import the conversations that already exist on Telegram"
+        onClick={() =>
+          startTransition(async () => {
+            const result = await importHistoryAction(personaId);
+            setMessage(
+              result.ok
+                ? // Le workflow met des minutes: annoncer « importé » serait
+                  // faux, et l'écran se remplit tout seul au fil des fils.
+                  "Importing… threads appear as they arrive."
+                : result.error,
+            );
+            router.refresh();
+          })
+        }
+      >
+        <Download className="size-3" />
+        {pending ? "…" : "Import"}
+      </Button>
+      {message && (
+        <span className="absolute left-3 top-9 z-10 rounded bg-popover px-2 py-1 text-[10px] text-muted-foreground shadow">
+          {message}
+        </span>
+      )}
+    </>
   );
 }
 

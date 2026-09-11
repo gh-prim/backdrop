@@ -360,3 +360,27 @@ class SendTelegramMessage:
             start_to_close_timeout=timedelta(seconds=60),
             retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=2)),
         )
+
+
+@workflow.defn(name="telegramImportHistory")
+class TelegramImportHistory:
+    """
+    Import des conversations existantes.
+
+    Un seul appel, mais généreusement borné en temps: cinquante fils de cent
+    messages sur une session fraîche, c'est TDLib qui redescend l'historique
+    depuis le serveur, et cela prend des minutes plutôt que des secondes.
+
+    Une seule tentative: une reprise repartirait du début, et l'activité est
+    idempotente — relancer l'import depuis l'écran ne coûte rien et laisse la
+    décision à l'opérateur plutôt qu'à une politique de réessai.
+    """
+
+    @workflow.run
+    async def run(self, input: dict[str, Any]) -> dict[str, Any]:
+        return await workflow.execute_activity(
+            "importTelegramHistory",
+            input,
+            start_to_close_timeout=timedelta(minutes=30),
+            retry_policy=NO_RETRY,
+        )

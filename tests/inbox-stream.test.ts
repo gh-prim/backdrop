@@ -185,3 +185,55 @@ describe("envoi de médias", () => {
     expect(SHELL).toContain("`/api/media/${attachment.variantId}`");
   });
 });
+
+describe("import de l'historique", () => {
+  const IMPORT = readFileSync(
+    "worker-telegram/backdrop_telegram/import_activities.py",
+    "utf8",
+  );
+  const ACTIONS = readFileSync("src/app/actions/inbox.ts", "utf8");
+  const CLIENT = readFileSync("src/temporal/client.ts", "utf8");
+
+  it("n'importe que les conversations privées", () => {
+    // La liste de TDLib contient aussi les channels que la persona diffuse:
+    // les importer noierait l'inbox sous ses propres publications.
+    expect(IMPORT).toContain("chatTypePrivate");
+    expect(IMPORT).toContain("_is_private");
+  });
+
+  it("passe par le même décodage que l'ingestion", () => {
+    // Dupliquer la lecture des messages garantirait qu'elle diverge: un jour
+    // l'un saurait lire les emojis animés et l'autre non.
+    for (const shared of ["inbox._text_of", "inbox._attachments_of", "inbox._reply_to"]) {
+      expect(IMPORT).toContain(shared);
+    }
+    expect(IMPORT).toContain("inbox_store.record_message");
+  });
+
+  it("ne télécharge aucun média", () => {
+    // Cinquante fils de cent messages tireraient plusieurs gigaoctets sans
+    // que personne ne l'ait demandé.
+    expect(IMPORT).not.toContain("inbox_media");
+    expect(IMPORT).toContain('item.pop("file", None)');
+  });
+
+  it("ne fabrique pas de faux non-lus", () => {
+    // Ce sont des messages déjà vus sur le téléphone: une pastille à
+    // cinquante au premier démarrage serait une fausse alerte.
+    expect(IMPORT).toMatch(/touch_conversation\([\s\S]{0,200}incoming=False/);
+  });
+
+  it("avance dans l'historique au lieu de reboucler", () => {
+    // Réutiliser le curseur tel quel rejouerait la même page indéfiniment.
+    expect(IMPORT).toContain("if oldest == from_message_id:");
+  });
+
+  it("un import déjà lancé se signale au lieu d'échouer", () => {
+    expect(CLIENT).toContain("tg-import:");
+    expect(CLIENT).toMatch(/AlreadyStartedError\) return "running"/);
+  });
+
+  it("refuse une persona sans compte Telegram", () => {
+    expect(ACTIONS).toContain("This persona has no Telegram account connected.");
+  });
+});

@@ -548,3 +548,26 @@ export async function startSendTelegramMessage(input: {
     if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
   }
 }
+
+/**
+ * Import des conversations déjà existantes (inbox Telegram).
+ *
+ * L'identifiant de workflow est la persona: deux imports simultanés sur le
+ * même compte feraient descendre deux fois le même historique, et TDLib n'y
+ * gagnerait rien. Un « already started » signifie donc « c'est en cours », et
+ * l'écran doit le dire plutôt que d'annoncer une erreur.
+ */
+export async function startTelegramImport(personaId: string): Promise<"started" | "running"> {
+  const client = await temporalClient();
+  try {
+    await client.workflow.start("telegramImportHistory", {
+      workflowId: `tg-import:${personaId}`,
+      taskQueue: TASK_QUEUE.telegram,
+      args: [{ personaId }],
+    });
+    return "started";
+  } catch (error) {
+    if (error instanceof WorkflowExecutionAlreadyStartedError) return "running";
+    throw error;
+  }
+}

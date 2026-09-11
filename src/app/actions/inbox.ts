@@ -13,7 +13,7 @@ const RATING_RANK: Record<Rating, number> = {
 };
 import { prisma } from "@/lib/db";
 import { requireOrgContext } from "@/lib/session";
-import { startSendTelegramMessage } from "@/temporal/client";
+import { startSendTelegramMessage, startTelegramImport } from "@/temporal/client";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -262,6 +262,42 @@ export async function sendMediaAction(
       data: { status: MessageStatus.FAILED, failReason: "Could not start the send." },
     });
     return { ok: false, error: "The media could not be queued. Try again." };
+  }
+
+  revalidatePath("/inbox");
+  return { ok: true };
+}
+
+/**
+ * Importe les conversations déjà existantes.
+ *
+ * L'écoute ne rattrape rien: elle commence le jour où on l'allume. Un compte
+ * qui discute depuis des mois arriverait dans un outil vide, et personne ne
+ * fait confiance à une inbox qui ignore tout ce qui précède.
+ *
+ * Relançable sans précaution: l'écriture est idempotente côté worker, et un
+ * import déjà en cours se signale au lieu d'échouer.
+ */
+export async function importHistoryAction(personaId: string): Promise<ActionResult> {
+  const ctx = await requireOrgContext();
+
+  const account = await prisma.channelAccount.findFirst({
+    where: {
+      personaId,
+      platform: "TELEGRAM",
+      persona: { organizationId: ctx.organizationId },
+    },
+    select: { id: true },
+  });
+  if (!account) {
+    return { ok: false, error: "This persona has no Telegram account connected." };
+  }
+
+  try {
+    await startTelegramImport(personaId);
+  } catch {
+    // Le détail interne ne sort pas vers le navigateur (9.7).
+    return { ok: false, error: "The import could not start. Is the worker running?" };
   }
 
   revalidatePath("/inbox");

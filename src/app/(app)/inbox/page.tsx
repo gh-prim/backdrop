@@ -29,6 +29,7 @@ export default async function InboxPage({
 
   return (
     <InboxShell
+      personaId={personaId ?? null}
       conversations={conversations.map((conversation) => ({
         id: conversation.id,
         title:
