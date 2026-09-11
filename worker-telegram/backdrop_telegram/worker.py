@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from aiotdlib.api import API
 from temporalio.client import Client
 from temporalio.worker import Worker
 
@@ -82,7 +83,17 @@ async def open_connected_personas() -> None:
 async def main() -> None:
     config.load_dotenv()
     gateway.configure()
-    pool.on_message(inbox.on_message)
+    # Cinq updates, pas une. L'arrivée d'un message ne suffit pas à tenir un
+    # fil juste: il faut aussi le passage de l'identifiant temporaire au
+    # définitif, les corrections, les effacements et les réactions.
+    for update_type, handler in (
+        (API.Types.UPDATE_NEW_MESSAGE, inbox.on_message),
+        (API.Types.UPDATE_MESSAGE_SEND_SUCCEEDED, inbox.on_send_succeeded),
+        (API.Types.UPDATE_MESSAGE_CONTENT, inbox.on_message_edited),
+        (API.Types.UPDATE_DELETE_MESSAGES, inbox.on_messages_deleted),
+        (API.Types.UPDATE_MESSAGE_REACTIONS, inbox.on_reactions),
+    ):
+        pool.on_update(update_type, handler)
 
     client = await Client.connect(
         config.temporal_address(), namespace=config.temporal_namespace()

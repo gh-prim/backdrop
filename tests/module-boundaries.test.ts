@@ -20,6 +20,7 @@ const SERVER_ONLY_MODULES = [
   "@/lib/invitations",
   "@/lib/assets",
   "@/lib/publications",
+  "@/lib/inbox",
   "@/lib/persona-scope",
   "@/lib/session",
   "@/temporal/client",

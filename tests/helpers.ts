@@ -9,6 +9,7 @@ export async function resetDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
       "FanvueApp", "AlbumItem", "Album", "PublicationItem", "Publication", "DmDelivery", "DmCampaignItem", "DmCampaign",
+      "MessageReaction", "MessageAttachment", "Message", "Conversation", "Contact",
       "TelegramSubscriber", "MetricSnapshot", "FanvueEarning", "Variant", "Asset",
       "ChannelAccount", "Persona", "member", "invitation", "session", "account",
       "user", "organization"

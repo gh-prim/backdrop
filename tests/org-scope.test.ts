@@ -71,6 +71,39 @@ describe("isolation par organisation", () => {
     expect(await resolvePersona(personaA, ctx)).not.toBeNull();
   });
 
+  it("l'inbox ne laisse pas lire le fil d'une autre organisation", async () => {
+    const { listConversations, getConversation, countUnread } = await import(
+      "@/lib/inbox"
+    );
+    const channelB = await createChannel(personaB, Platform.TELEGRAM, Rating.NSFW);
+    const intruse = await prisma.conversation.create({
+      data: {
+        channelAccountId: channelB.id,
+        externalId: "424242",
+        title: "Conversation privée",
+        unreadCount: 3,
+        lastMessageAt: new Date(),
+      },
+      select: { id: true },
+    });
+
+    const ctx = {
+      userId: userA,
+      userName: "Test",
+      userEmail: "a@test.local",
+      organizationId: orgA,
+      role: "owner" as const,
+    };
+
+    // Le fil existe — et reste invisible depuis l'autre organisation, même en
+    // forgeant son identifiant. C'est le contenu le plus sensible de l'outil.
+    expect(await prisma.conversation.findUnique({ where: { id: intruse.id } }))
+      .not.toBeNull();
+    expect(await listConversations(ctx)).toEqual([]);
+    expect(await getConversation(ctx, intruse.id)).toBeNull();
+    expect(await countUnread(ctx)).toBe(0);
+  });
+
   it("listChannelStatus ne traverse jamais la frontière d'organisation", async () => {
     const { listChannelStatus } = await import("@/lib/channels");
     await createChannel(personaA, Platform.INSTAGRAM, Rating.SFW);

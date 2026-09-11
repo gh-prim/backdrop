@@ -33,18 +33,22 @@ class PersonaPool:
     def __init__(self) -> None:
         self._clients: dict[str, PersonaTelegram] = {}
         self._lock = asyncio.Lock()
-        self._on_message: Optional[MessageHandler] = None
+        self._handlers: list[tuple[str, MessageHandler]] = []
 
-    def on_message(self, handler: MessageHandler) -> None:
+    def on_update(self, update_type: str, handler: MessageHandler) -> None:
         """
         Handler appliqué à toute persona du pool, présente ou future.
 
         Enregistré ici plutôt que sur chaque client: une persona connectée
         après le démarrage doit être écoutée sans que personne n'y pense.
         """
-        self._on_message = handler
+        self._handlers.append((update_type, handler))
         for client in self._clients.values():
-            client.on_message(handler)
+            client.on_update(update_type, handler)
+
+    def _listen(self, client: PersonaTelegram) -> None:
+        for update_type, handler in self._handlers:
+            client.on_update(update_type, handler)
 
     async def open(
         self,
@@ -72,8 +76,7 @@ class PersonaPool:
                 # répertoire de la persona.
                 await client.close()
                 raise
-            if self._on_message is not None:
-                client.on_message(self._on_message)
+            self._listen(client)
 
             self._clients[persona_id] = client
             logger.info(
@@ -98,8 +101,7 @@ class PersonaPool:
             previous = self._clients.get(persona_id)
             self._clients[persona_id] = client
 
-        if self._on_message is not None:
-            client.on_message(self._on_message)
+        self._listen(client)
 
         # Un client précédent détiendrait encore le verrou du répertoire.
         if previous is not None and previous is not client:

@@ -68,6 +68,33 @@ enum DeliveryStatus {
   FAILED
 }
 
+/// Sens d'un message dans un fil.
+///
+/// OUT couvre **aussi** ce que la persona envoie depuis son téléphone: le
+/// worker le reçoit comme n'importe quel autre message, et l'ignorer ferait
+/// mentir le fil — on répondrait deux fois à ce qui a déjà une réponse.
+enum MessageDirection {
+  IN
+  OUT
+}
+
+/// PENDING: la ligne existe avant l'appel à Telegram, pour que l'écran
+/// affiche le message sans attendre. SENT quand TDLib a confirmé.
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum AttachmentKind {
+  PHOTO
+  VIDEO
+  VOICE
+  DOCUMENT
+  STICKER
+  OTHER
+}
+
 model Persona {
   id               String   @id @default(cuid())
   organizationId   String
@@ -89,6 +116,7 @@ model Persona {
   fanvueEarnings      FanvueEarning[]
   telegramApp         TelegramApp?
   albums              Album[]
+  contacts            Contact[]
 
   @@index([organizationId])
 }
@@ -150,9 +178,10 @@ model ChannelAccount {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  persona      Persona            @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  publications Publication[]
-  hashtags     InstagramHashtag[]
+  persona       Persona            @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  publications  Publication[]
+  hashtags      InstagramHashtag[]
+  conversations Conversation[]
 
   @@unique([personaId, platform, externalId])
   @@index([personaId])
@@ -251,6 +280,7 @@ model Variant {
   asset            Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
   publicationItems PublicationItem[]
   dmCampaignItems  DmCampaignItem[]
+  attachments      MessageAttachment[]
 
   @@index([assetId])
 }
@@ -430,6 +460,153 @@ model DmDelivery {
   @@index([campaignId, status])
 }
 
+/// Un interlocuteur, sur n'importe quelle plateforme.
+///
+/// Séparé de `TelegramSubscriber` et non fusionné avec lui: un subscriber est
+/// une cible de campagne, avec son statut d'envoi et son historique de
+/// livraisons. Un contact est quelqu'un à qui l'on parle. Les deux désignent
+/// souvent la même personne, et se rejoignent par `tgUserId` — mais confondre
+/// « ne plus recevoir de campagnes » avec « ne plus pouvoir écrire » serait
+/// une erreur qu'on ne rattraperait plus.
+model Contact {
+  id          String   @id @default(cuid())
+  personaId   String
+  platform    Platform
+  /// user_id Telegram | IGSID | identifiant Fanvue.
+  externalId  String
+  displayName String?
+  username    String?
+  /// Vignette d'avatar sur le volume local. Jamais servie sans authentification.
+  avatarPath  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  persona       Persona        @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  messages      Message[]
+  reactions     MessageReaction[]
+
+  @@unique([personaId, platform, externalId])
+  @@index([personaId, platform])
+}
+
+/// Un fil de discussion.
+///
+/// Rattaché au `ChannelAccount` et non à la persona: c'est le compte qui tient
+/// la session, et c'est lui qu'on déconnecte. Une persona qui reconnecte un
+/// autre compte Telegram ne doit pas hériter des fils du précédent.
+model Conversation {
+  id               String    @id @default(cuid())
+  channelAccountId String
+  contactId        String?
+  /// chat_id Telegram. Négatif pour un groupe, positif pour un privé.
+  externalId       String
+  title            String?
+  /// Dernier message, entrant ou sortant: c'est l'ordre de la liste.
+  lastMessageAt    DateTime?
+  unreadCount      Int       @default(0)
+  archived         Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  channelAccount ChannelAccount @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  contact        Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  messages       Message[]
+
+  @@unique([channelAccountId, externalId])
+  @@index([channelAccountId, archived, lastMessageAt])
+}
+
+/// Un message dans un fil.
+///
+/// `externalId` est nullable le temps d'un aller-retour: la ligne est écrite
+/// avant l'appel à Telegram pour que l'écran affiche tout de suite, et
+/// l'identifiant distant n'arrive qu'ensuite. `idempotencyKey` est ce qui
+/// permet de retrouver cette ligne-là quand la confirmation revient, et
+/// d'éviter qu'un renvoi après incident ne publie deux fois.
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  /// message_id Telegram. Absent tant que l'envoi n'est pas confirmé.
+  externalId     String?
+  direction      MessageDirection
+  status         MessageStatus    @default(SENT)
+  /// Auteur côté interlocuteur. Null sur un message sortant.
+  authorId       String?
+  /// Opérateur qui a écrit, sur un sortant émis depuis Backdrop. Null si la
+  /// persona a répondu depuis son téléphone.
+  sentByUserId   String?
+  text           String           @default("")
+  replyToId      String?
+  idempotencyKey String?          @unique
+  failReason     String?
+  sentAt         DateTime         @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       Contact?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  sentBy       User?               @relation("MessageSentBy", fields: [sentByUserId], references: [id], onDelete: SetNull)
+  replyTo      Message?            @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies      Message[]           @relation("MessageReply")
+  attachments  MessageAttachment[]
+  reactions    MessageReaction[]
+
+  @@unique([conversationId, externalId])
+  @@index([conversationId, sentAt])
+}
+
+/// Une pièce jointe.
+///
+/// `variantId` est renseigné quand le média vient de la bibliothèque: c'est ce
+/// qui permet de savoir qu'une photo a déjà été envoyée à quelqu'un. Un média
+/// **reçu** n'a pas de Variant — il n'est pas à nous, et il n'a pas de rating,
+/// donc l'écran le floute comme n'importe quel contenu non classé.
+model MessageAttachment {
+  id         String         @id @default(cuid())
+  messageId  String
+  kind       AttachmentKind
+  /// Chemin relatif sur le volume média. Absent tant que le téléchargement
+  /// n'a pas eu lieu, ou si le plafond de rétention l'a purgé.
+  localPath  String?
+  thumbPath  String?
+  /// file_id TDLib, pour retélécharger sans repasser par l'historique.
+  remoteFileId String?
+  variantId  String?
+  mimeType   String?
+  sizeBytes  Int?
+  width      Int?
+  height     Int?
+  durationSeconds Int?
+  position   Int            @default(0)
+  createdAt  DateTime       @default(now())
+
+  message Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  variant Variant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([messageId, position])
+  @@index([variantId])
+}
+
+/// Une réaction posée sur un message.
+///
+/// `byUs` distingue ce que la persona a posé de ce que l'interlocuteur a posé.
+/// Sans ce drapeau, retirer une réaction retirerait parfois celle de l'autre.
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  emoji     String
+  byUs      Boolean  @default(false)
+  contactId String?
+  createdAt DateTime @default(now())
+
+  message Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  contact Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([messageId, emoji, contactId])
+  @@index([messageId])
+}
+
 model MetricSnapshot {
   id            String   @id @default(cuid())
   personaId     String
@@ -492,6 +669,7 @@ model User {
   assetsCreated       Asset[]       @relation("AssetCreatedBy")
   publicationsCreated Publication[] @relation("PublicationCreatedBy")
   dmCampaignsCreated  DmCampaign[]  @relation("DmCampaignCreatedBy")
+  messagesSent        Message[]     @relation("MessageSentBy")
 
   @@unique([email])
   @@map("user")

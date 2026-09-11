@@ -251,7 +251,20 @@ class PersonaTelegram:
         existe précisément pour l'isoler.
         """
 
+        return self.on_update(API.Types.UPDATE_NEW_MESSAGE, handler)
+
+    def on_update(self, update_type: str, handler: MessageHandler):
+        """
+        Branche un handler sur un type d'update quelconque.
+
+        L'inbox en écoute cinq: l'arrivée d'un message ne suffit pas à tenir un
+        fil juste. Il faut aussi savoir qu'un identifiant temporaire est devenu
+        définitif, qu'un texte a été corrigé, qu'un message a disparu et qu'une
+        réaction a été posée — sans quoi l'écran montre un fil plausible et
+        faux.
+        """
+
         async def bridge(_raw, update) -> None:
             await handler(self, update)
 
-        return self.raw.add_event_handler(bridge, API.Types.UPDATE_NEW_MESSAGE)
+        return self.raw.add_event_handler(bridge, update_type)
