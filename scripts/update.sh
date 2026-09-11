@@ -34,7 +34,7 @@ fi
 # tag, et elles ne disparaissent pas seules: c'est ce qui a rempli le disque.
 # Une construction qui manque de place échoue au milieu de l'extraction d'une
 # couche, avec un message qui ne dit pas quoi faire — autant refuser avant.
-FREE_GB_MIN=6
+FREE_GB_MIN=4
 docker_free_gb() {
   local root
   root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker)"
@@ -62,6 +62,22 @@ fi
 
 say "Récupération du code"
 pull
+
+# Borné **avant** la construction, pas seulement après. Le cache monte à une
+# dizaine de gigaoctets pendant un build; le purger une fois celui-ci terminé
+# arrive trop tard quand c'est lui qui a rempli le disque. Et un cache
+# interrompu se déclare « 0 B récupérable » tant qu'on ne le purge pas
+# entièrement: d'où `-a`, qui coûte une reconstruction complète mais reste
+# moins cher qu'un déploiement qui échoue à mi-course.
+say "Cache de construction"
+if [ "$FREE_GB" != "" ] && [ "$FREE_GB" -lt 12 ]; then
+  echo "Moins de 12 Go libres: purge complète du cache avant de construire."
+  docker builder prune -af >/dev/null 2>&1 || true
+else
+  docker builder prune -f --max-used-space 5GB >/dev/null 2>&1 \
+    || docker builder prune -f --keep-storage 5GB >/dev/null 2>&1 \
+    || true
+fi
 
 say "Construction des images"
 docker compose build

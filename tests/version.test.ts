@@ -74,3 +74,39 @@ describe("confirmation d'un envoi", () => {
     expect(SHELL).toContain("PENDING_POLLS");
   });
 });
+
+describe("garde-fous du disque", () => {
+  const COMPOSE = readFileSync("docker-compose.yml", "utf8");
+  const UPDATE = readFileSync("scripts/update.sh", "utf8");
+
+  it("chaque service plafonne son journal", () => {
+    // `json-file` ne tourne pas ses fichiers par défaut: le journal d'un
+    // conteneur allumé en permanence grandit jusqu'à remplir le disque, et il
+    // ne figure dans aucune colonne de `docker system df`.
+    // Le bloc `services:` seul: l'ancre et les volumes ne sont pas des
+    // services et n'ont rien à plafonner.
+    const block = COMPOSE.slice(
+      COMPOSE.indexOf("\nservices:"),
+      COMPOSE.indexOf("\nvolumes:"),
+    );
+    const services = [...block.matchAll(/^ {2}([a-z][a-z-]*):$/gm)].map((m) => m[1]);
+    const capped = [...block.matchAll(/<<: \*logs/g)];
+    expect(services.length).toBeGreaterThan(5);
+    expect(capped).toHaveLength(services.length);
+  });
+
+  it("le cache de construction est borné avant le build, pas seulement après", () => {
+    // Le purger une fois le build terminé arrive trop tard quand c'est lui
+    // qui a rempli le disque.
+    const cache = UPDATE.indexOf("Cache de construction");
+    const build = UPDATE.indexOf("docker compose build");
+    expect(cache).toBeGreaterThan(-1);
+    expect(cache).toBeLessThan(build);
+  });
+
+  it("purge entièrement le cache quand la place manque", () => {
+    // Un cache interrompu se déclare « 0 B récupérable » tant qu'on ne le
+    // purge pas entièrement.
+    expect(UPDATE).toContain("docker builder prune -af");
+  });
+});

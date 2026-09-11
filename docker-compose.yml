@@ -4,8 +4,22 @@
 # web et les deux workers. Le service `migrate` s'exécute une fois et rend la
 # main; web et workers l'attendent, plutôt que de migrer chacun au démarrage.
 
+# Journaux plafonnés, appliqués à tous les services.
+#
+# Le pilote `json-file` de Docker ne tourne pas ses fichiers par défaut: le
+# journal d'un conteneur allumé en permanence grandit jusqu'à remplir le
+# disque, et il ne figure dans aucune des colonnes de `docker system df`. On
+# le découvre donc par une construction qui échoue, jamais par une mesure.
+x-logs: &logs
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   postgres:
+    <<: *logs
     image: postgres:17
     restart: unless-stopped
     environment:
@@ -24,6 +38,7 @@ services:
 
   # Base Temporal, strictement séparée du schéma applicatif (7.1).
   postgres-temporal:
+    <<: *logs
     image: postgres:17
     restart: unless-stopped
     environment:
@@ -43,6 +58,7 @@ services:
   # basculer sur temporalio/server + temporalio/admin-tools et piloter
   # `temporal-sql-tool` explicitement.
   temporal:
+    <<: *logs
     image: temporalio/auto-setup:1.29.7
     restart: unless-stopped
     depends_on:
@@ -64,6 +80,7 @@ services:
       start_period: 30s
 
   temporal-ui:
+    <<: *logs
     image: temporalio/ui:2.53.3
     restart: unless-stopped
     depends_on:
@@ -78,6 +95,7 @@ services:
   # Sert à exercer la chaîne complète sans compte Cloudflare. En production,
   # ce service n'existe pas: R2_ENDPOINT reste vide et l'adapter vise R2.
   minio:
+    <<: *logs
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     profiles: ["dev"]
     restart: unless-stopped
@@ -98,6 +116,7 @@ services:
 
   # Migrations du schéma applicatif. S'exécute une fois, puis sort.
   migrate:
+    <<: *logs
     build:
       context: .
       dockerfile: Dockerfile.web
@@ -114,6 +133,7 @@ services:
   # Sur un serveur il n'y a ni Node ni sources hors conteneur, et le seed est
   # le seul point d'entrée du premier compte (9.8).
   seed:
+    <<: *logs
     profiles: ["tools"]
     build:
       context: .
@@ -134,6 +154,7 @@ services:
     command: ["pnpm", "tsx", "prisma/seed.ts"]
 
   web:
+    <<: *logs
     build:
       context: .
       dockerfile: Dockerfile.web
@@ -178,6 +199,7 @@ services:
   # Façade HTTPS. Fanvue refuse un redirect_uri en clair, même en
   # développement (4.3.2): l'application se sert donc derrière ce proxy.
   proxy:
+    <<: *logs
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
@@ -203,6 +225,7 @@ services:
       - caddy-data:/data
 
   worker-node:
+    <<: *logs
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -246,6 +269,7 @@ services:
   # donc une contrainte de correction, pas un réglage de performance, et le
   # registre des logins en attente n'est atteignable que sous cette condition.
   worker-telegram:
+    <<: *logs
     build:
       context: ./worker-telegram
       dockerfile: Dockerfile
