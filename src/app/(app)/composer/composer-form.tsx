@@ -20,6 +20,7 @@ import { cn } from "cn";
 import { PlatformLogo } from "@/components/platform-logo";
 import { TelegramTargetPicker } from "./telegram-target";
 import { FanvuePanel } from "./fanvue-panel";
+import { ChannelFraming } from "./channel-framing";
 import { useComposerClose } from "./composer-close";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -258,6 +259,12 @@ export function ComposerForm({
         return true;
       }),
     [variants, ratioFilter, typeFilter],
+  );
+
+  /** Le média dont on montre le cadrage par canal: le premier choisi. */
+  const firstSelected = useMemo(
+    () => variants.find((variant) => variant.id === selected[0]) ?? null,
+    [variants, selected],
   );
 
   /** Un Reel sur une photo déclenche un rendu vidéo au moment de la publication. */
@@ -820,6 +827,22 @@ export function ComposerForm({
                 </div>
               )}
                 </>
+              )}
+            </div>
+          )}
+
+          {currentStep.key === "media" && firstSelected && chosenChannels.length > 0 && (
+            <div className="border-t pt-3">
+              <ChannelFraming
+                variant={firstSelected}
+                platforms={chosenChannels.map((channel) => channel.platform)}
+                kind={kind}
+              />
+              {selected.length > 1 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Shown for the first media; the same framing applies to the{" "}
+                  {selected.length - 1} others.
+                </p>
               )}
             </div>
           )}
