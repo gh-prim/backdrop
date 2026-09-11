@@ -381,14 +381,25 @@ def _text_of(message: Any) -> str:
 def _text_of_content(content: Any) -> str:
     if content is None:
         return ""
+
     # Un message texte porte `.text.text`; une photo ou une vidéo portent la
     # même structure sous `.caption`.
     for attribute in ("text", "caption"):
         holder = getattr(content, attribute, None)
         value = getattr(holder, "text", None)
-        if isinstance(value, str):
+        if isinstance(value, str) and value:
             return value
-    return ""
+
+    # Un emoji envoyé seul n'est pas un message texte: Telegram en fait un
+    # `messageAnimatedEmoji`, dont le caractère vit dans `.emoji`. Sans cette
+    # ligne, un « 👍 » s'affichait comme un message vide — ce qui est
+    # exactement ce qu'on voyait sur le premier message reçu. Un sticker porte
+    # le même champ, et c'est le meilleur résumé qu'on puisse en donner avant
+    # de l'avoir téléchargé.
+    emoji = getattr(content, "emoji", None) or getattr(
+        getattr(content, "sticker", None), "emoji", None
+    )
+    return emoji if isinstance(emoji, str) else ""
 
 
 def _sent_at(message: Any) -> datetime:
@@ -447,7 +458,19 @@ def _attachments_of(message: Any) -> list[dict[str, Any]]:
     ]
 
 
+#: Les formats de sticker qu'un navigateur sait afficher. Le `.tgs` est du
+#: Lottie compressé: le télécharger donnerait une image cassée à l'écran, et
+#: l'emoji que porte le sticker dit déjà ce qu'il faut en comprendre.
+DISPLAYABLE_STICKERS = {"stickerFormatWebp", "stickerFormatWebm"}
+
+
 def _media_of(content: Any) -> tuple[Optional[str], Any]:
+    # Un emoji animé n'a pas de pièce jointe: son caractère est le message.
+    # Le traiter comme un sticker rapatrierait un fichier Lottie pour afficher
+    # ce qu'une police rend déjà.
+    if getattr(content, "animated_emoji", None) is not None:
+        return None, None
+
     for attribute, kind in (
         ("photo", "PHOTO"),
         ("video", "VIDEO"),
@@ -459,9 +482,20 @@ def _media_of(content: Any) -> tuple[Optional[str], Any]:
         ("audio", "DOCUMENT"),
     ):
         holder = getattr(content, attribute, None)
-        if holder is not None:
-            return kind, holder
+        if holder is None:
+            continue
+        if kind == "STICKER" and not _sticker_is_displayable(holder):
+            return None, None
+        return kind, holder
     return None, None
+
+
+def _sticker_is_displayable(sticker: Any) -> bool:
+    fmt = getattr(getattr(sticker, "format", None), "ID", None)
+    # Format inconnu: on tente, quitte à ce que l'écran affiche l'emoji à la
+    # place. Refuser par défaut ferait disparaître des stickers parfaitement
+    # affichables au prochain format que TDLib ajoute.
+    return fmt is None or fmt in DISPLAYABLE_STICKERS
 
 
 def _largest_file(holder: Any) -> Any:

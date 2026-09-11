@@ -41,6 +41,18 @@ function setBlurDisabled(value: boolean) {
 }
 
 /**
+ * La préférence de flou, pour qui n'affiche pas une vignette.
+ *
+ * L'inbox montre des médias reçus, qui ne sont pas des Variants et n'ont donc
+ * pas de vignette. Elle doit pourtant obéir au **même** réglage: deux
+ * comportements de flou dans la même application, c'est un réglage qui ment
+ * quelque part.
+ */
+export function useBlurDisabled(): boolean {
+  return useSyncExternalStore(subscribe, blurDisabledSnapshot, serverSnapshot);
+}
+
+/**
  * Vignette d'un média (spec 6.1).
  *
  * Les Assets NSFW et SUGGESTIVE sont floutés par défaut, révélés au clic.

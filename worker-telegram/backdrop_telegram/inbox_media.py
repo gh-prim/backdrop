@@ -42,7 +42,9 @@ EXTENSIONS = {
     "PHOTO": ".jpg",
     "VIDEO": ".mp4",
     "VOICE": ".ogg",
-    "STICKER": ".webp",
+    # Vide volontairement: un sticker est webp ou webm selon le cas, et
+    # imposer une extension mentirait sur le contenu du fichier.
+    "STICKER": "",
     "DOCUMENT": "",
 }
 

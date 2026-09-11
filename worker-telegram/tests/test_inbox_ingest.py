@@ -288,3 +288,83 @@ def test_une_identite_introuvable_ne_fait_pas_perdre_le_message():
 def test_le_titre_du_fil_vient_de_telegram():
     chat = SimpleNamespace(title="Carolina ❤")
     assert asyncio.run(inbox._chat_title(fake_client(chat=chat), 42)) == "Carolina ❤"
+
+
+# --- emojis et stickers -------------------------------------------------------
+
+
+def test_un_emoji_envoye_seul_n_est_pas_un_message_vide():
+    # Telegram en fait un `messageAnimatedEmoji`: le caractère vit dans
+    # `.emoji`, pas dans `.text.text`. Sans cela, « 👍 » s'affichait comme un
+    # message sans contenu — ce qu'on a vu sur le premier message reçu.
+    contenu = SimpleNamespace(animated_emoji=SimpleNamespace(sticker=None), emoji="👍")
+    assert inbox._text_of(message(content=contenu)) == "👍"
+
+
+def test_un_emoji_anime_ne_rapatrie_aucun_fichier():
+    # Son caractère est le message: télécharger un Lottie pour afficher ce
+    # qu'une police rend déjà n'a aucun sens.
+    contenu = SimpleNamespace(animated_emoji=SimpleNamespace(sticker=None), emoji="🔥")
+    assert inbox._attachments_of(message(content=contenu)) == []
+
+
+def test_un_sticker_webp_est_rapatrie():
+    sticker = SimpleNamespace(
+        emoji="😎",
+        format=SimpleNamespace(ID="stickerFormatWebp"),
+        sticker=SimpleNamespace(remote=SimpleNamespace(id="stk")),
+    )
+    pieces = inbox._attachments_of(message(content=SimpleNamespace(sticker=sticker)))
+    assert len(pieces) == 1
+    assert pieces[0]["kind"] == "STICKER"
+
+
+def test_un_sticker_lottie_laisse_parler_son_emoji():
+    # `.tgs` est du Lottie compressé: le télécharger donnerait une image
+    # cassée à l'écran.
+    sticker = SimpleNamespace(
+        emoji="🎉",
+        format=SimpleNamespace(ID="stickerFormatTgs"),
+        sticker=SimpleNamespace(remote=SimpleNamespace(id="stk")),
+    )
+    contenu = SimpleNamespace(sticker=sticker)
+    assert inbox._attachments_of(message(content=contenu)) == []
+    assert inbox._text_of(message(content=contenu)) == "🎉"
+
+
+def test_un_format_de_sticker_inconnu_est_tente():
+    # Refuser par défaut ferait disparaître les stickers du prochain format
+    # que TDLib ajoutera.
+    sticker = SimpleNamespace(
+        emoji="🆕",
+        format=None,
+        sticker=SimpleNamespace(remote=SimpleNamespace(id="stk")),
+    )
+    assert len(inbox._attachments_of(message(content=SimpleNamespace(sticker=sticker)))) == 1
+
+
+def test_un_emoji_dans_un_texte_reste_du_texte():
+    assert inbox._text_of(message(content=SimpleNamespace(
+        text=SimpleNamespace(text="salut 👋 ça va ?")
+    ))) == "salut 👋 ça va ?"
+
+
+def test_une_legende_de_photo_prime_sur_l_emoji_du_contenu():
+    # Une photo légendée ne doit pas afficher un emoji à la place de sa
+    # légende: l'ordre de lecture compte.
+    contenu = SimpleNamespace(
+        photo=SimpleNamespace(sizes=[]),
+        caption=SimpleNamespace(text="regarde"),
+        emoji="👍",
+    )
+    assert inbox._text_of(message(content=contenu)) == "regarde"
+
+
+def test_un_gif_est_traite_comme_une_video():
+    animation = SimpleNamespace(
+        mime_type="video/mp4",
+        animation=SimpleNamespace(remote=SimpleNamespace(id="gif")),
+        duration=3,
+    )
+    pieces = inbox._attachments_of(message(content=SimpleNamespace(animation=animation)))
+    assert pieces and pieces[0]["kind"] == "VIDEO"

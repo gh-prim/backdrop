@@ -101,6 +101,13 @@ describe("médias reçus", () => {
     expect(SHELL).toContain("blur-xl");
   });
 
+  it("obéit à la préférence de flou déjà réglée, pas à une seconde", () => {
+    // Deux comportements de flou dans la même application, c'est un réglage
+    // qui ment quelque part.
+    expect(SHELL).toContain("useBlurDisabled");
+    expect(SHELL).toContain("!blurDisabled");
+  });
+
   it("nomme le fichier par son identifiant, jamais par celui de l'expéditeur", () => {
     // Un nom de fichier venu d'ailleurs est une chaîne hostile.
     expect(FETCHER).toContain('f"{attachment_id}{suffix}"');

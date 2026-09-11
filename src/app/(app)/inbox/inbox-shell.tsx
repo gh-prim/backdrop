@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { sendMessageAction, markReadAction } from "@/app/actions/inbox";
 import { PlatformLogo } from "@/components/platform-logo";
 import { unreadLabel } from "@/lib/unread-shared";
+import { useBlurDisabled } from "@/components/media-thumb";
 import { cn } from "cn";
 
 /** Au-delà, ce n'est plus un envoi lent: c'est un worker à l'arrêt. */
@@ -406,6 +407,7 @@ function Attachment({
   incoming: boolean;
 }) {
   const [revealed, setRevealed] = useState(false);
+  const blurDisabled = useBlurDisabled();
 
   if (!attachment.hasFile) {
     return (
@@ -421,7 +423,6 @@ function Attachment({
 
   if (attachment.kind === "VIDEO") {
     return (
-      // eslint-disable-next-line jsx-a11y/media-has-caption
       <video
         src={source}
         controls
@@ -449,7 +450,7 @@ function Attachment({
     );
   }
 
-  const hidden = incoming && !revealed;
+  const hidden = incoming && !revealed && !blurDisabled;
 
   return (
     <button
