@@ -1,13 +1,18 @@
 """
-Nœud ComfyUI: choisir une fois le format, obtenir les deux résolutions.
+Nœud ComfyUI: choisir un format de publication, obtenir sa résolution.
 
-Une génération se fait en deux temps — une passe de base, puis un hires fix
-qui agrandit. Les deux tailles doivent s'accorder, et c'est là que les erreurs
-se logent: une base au mauvais rapport donne un cadrage qui ne correspond à
-rien, et une cible trop petite oblige Backdrop à interpoler.
+`width` et `height` sont la **taille finale**, celle que Backdrop recevra:
+c'est la seule qui compte pour publier. Branchées sur un Empty Latent, elles
+génèrent directement à cette taille.
 
-Ce nœud rend les deux à partir d'un seul choix. Les bases sont des multiples
-de 32 au rapport exact — ce que SDXL et Flux avalent sans déformer.
+`base_width` et `base_height` ne servent qu'aux workflows en deux temps — une
+passe à taille réduite, puis un hires fix qui agrandit jusqu'à la cible. Un
+modèle de diffusion compose mal très au-dessus de sa résolution
+d'entraînement, d'où l'usage. Si ton workflow n'a pas de hires, ignore ces
+deux sorties: elles ne dérangent rien.
+
+Les bases sont des multiples de 32 au rapport exact — ce que SDXL et Flux
+avalent sans déformer.
 """
 
 from __future__ import annotations
@@ -39,16 +44,20 @@ class BackdropFormat:
                 "format": (list(PRESETS.keys()), {"default": DEFAUT}),
                 # Décoché: la passe de base sert directement de sortie, sans
                 # hires. Utile pour un test rapide, pas pour publier.
+                # Coché: la génération démarre à `base_*` puis monte à la
+                # taille finale. Décoché: elle se fait directement à la taille
+                # finale, et les sorties `base_*` valent la cible.
                 "hires": ("BOOLEAN", {"default": True}),
             }
         }
 
+    # La taille finale d'abord: c'est ce qu'on branche dans neuf cas sur dix.
     RETURN_TYPES = ("INT", "INT", "INT", "INT", "STRING")
     RETURN_NAMES = (
+        "width",
+        "height",
         "base_width",
         "base_height",
-        "target_width",
-        "target_height",
         "info",
     )
     FUNCTION = "resolve"
@@ -61,15 +70,18 @@ class BackdropFormat:
     def resolve(self, format: str, hires: bool):
         base_w, base_h, cible_w, cible_h, usage = PRESETS[format]
 
+        # Sans passe de hires, la génération se fait d'emblée à la taille
+        # finale: la base vaut alors la cible, et brancher l'une ou l'autre
+        # revient au même.
         if not hires:
-            cible_w, cible_h = base_w, base_h
+            base_w, base_h = cible_w, cible_h
 
         facteur = cible_w / base_w
         info = (
-            f"{usage} · base {base_w}x{base_h} → {cible_w}x{cible_h} "
-            f"(x{facteur:.2f})"
+            f"{usage} · {cible_w}x{cible_h}"
+            + (f" depuis {base_w}x{base_h} (x{facteur:.2f})" if facteur > 1 else "")
         )
-        return (base_w, base_h, cible_w, cible_h, info)
+        return (cible_w, cible_h, base_w, base_h, info)
 
 
 NODE_CLASS_MAPPINGS = {"BackdropFormat": BackdropFormat}

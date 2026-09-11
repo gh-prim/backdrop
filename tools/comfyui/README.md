@@ -1,8 +1,16 @@
 # Nœud ComfyUI — format de sortie
 
-Un nœud, un choix: il rend la résolution de la passe de base **et** celle du
-hires, toujours au même rapport. Plus de format décidé deux fois, à deux
-endroits, avec un écart qu'on découvre sur la photo publiée.
+Un nœud, un choix: il rend la résolution du format de publication.
+
+`width` et `height` sont la **taille finale**, celle que Backdrop recevra. Si
+ton workflow génère directement à cette taille, ce sont les deux seules
+sorties dont tu as besoin.
+
+`base_width` et `base_height` ne servent qu'aux workflows en deux temps: une
+passe à taille réduite, puis un hires fix qui agrandit jusqu'à la cible — un
+modèle compose mal très au-dessus de sa résolution d'entraînement. Sans hires,
+décoche l'interrupteur: la base vaut alors la cible, et les deux paires de
+sorties sont identiques.
 
 ## Installer
 
@@ -14,12 +22,22 @@ Puis relancer ComfyUI. Le nœud apparaît sous **Backdrop · format de sortie**.
 
 ## Brancher
 
+**Sans hires** — le cas simple:
+
 ```
-Backdrop · format de sortie
+Backdrop · format de sortie   (hires décoché)
+   ├── width  ─┐
+   └── height ─┴─→ Empty Latent Image  →  KSampler
+```
+
+**Avec hires** — deux passes:
+
+```
+Backdrop · format de sortie   (hires coché)
    ├── base_width  ─┐
    ├── base_height ─┴─→ Empty Latent Image  →  KSampler (passe 1)
-   ├── target_width  ─┐
-   ├── target_height ─┴─→ Upscale Image / Latent Upscale  →  KSampler (hires)
+   ├── width  ─┐
+   ├── height ─┴─→ Upscale Image / Latent Upscale  →  KSampler (hires)
    └── info  →  (facultatif) Preview Text: rappelle le facteur appliqué
 ```
 
