@@ -18,7 +18,7 @@ from typing import Any
 
 from temporalio import activity
 
-from backdrop_telegram.db import connect
+from backdrop_telegram.db import connect, media_root
 from backdrop_telegram.tdlib import pool
 
 logger = logging.getLogger(__name__)
@@ -52,13 +52,24 @@ async def send_telegram_message(input: dict[str, Any]) -> dict[str, Any]:
         # Une reprise de workflow après incident: le message est déjà parti.
         return {"sent": True, "alreadySent": True}
 
+    media = await _media_of(message_id)
+
     try:
-        remote_id = await _send(
-            persona_id=row["personaId"],
-            chat_id=int(row["chat"]),
-            text=row["text"],
-            reply_to=int(row["reply_to"]) if row["reply_to"] else None,
-        )
+        if media:
+            remote_id = await _send_media(
+                persona_id=row["personaId"],
+                chat_id=int(row["chat"]),
+                caption=row["text"] or "",
+                media=media,
+                reply_to=int(row["reply_to"]) if row["reply_to"] else None,
+            )
+        else:
+            remote_id = await _send(
+                persona_id=row["personaId"],
+                chat_id=int(row["chat"]),
+                text=row["text"],
+                reply_to=int(row["reply_to"]) if row["reply_to"] else None,
+            )
     except Exception as error:  # noqa: BLE001 — la cause doit atteindre l'écran
         await _fail(message_id, _reason(error))
         raise
@@ -75,6 +86,102 @@ async def send_telegram_message(input: dict[str, Any]) -> dict[str, Any]:
         )
 
     return {"sent": True, "remoteId": str(remote_id)}
+
+
+async def _media_of(message_id: str) -> list[dict[str, Any]]:
+    """
+    Les fichiers à envoyer, résolus sur le volume.
+
+    Les chemins sont lus **ici**, côté worker, et jamais transportés depuis le
+    navigateur: un chemin qui viendrait du client désignerait ce qu'il veut.
+    """
+    async with await connect() as conn:
+        rows = await (
+            await conn.execute(
+                'select a.kind, v."localPath" '
+                'from "MessageAttachment" a '
+                'join "Variant" v on v.id = a."variantId" '
+                'where a."messageId" = %s and a."variantId" is not null '
+                "order by a.position",
+                (message_id,),
+            )
+        ).fetchall()
+
+    return [
+        {"kind": row["kind"], "path": str(media_root() / row["localPath"])}
+        for row in rows
+    ]
+
+
+async def _send_media(
+    *,
+    persona_id: str,
+    chat_id: int,
+    caption: str,
+    media: list[dict[str, Any]],
+    reply_to: int | None,
+):
+    """
+    Un média part en message simple, plusieurs en album.
+
+    `send_message_album` et non N appels: Telegram afficherait sinon une pile
+    de messages séparés là où l'opérateur a choisi une galerie — et le
+    destinataire recevrait autant de notifications qu'il y a de photos.
+
+    La légende ne se porte que sur le premier élément, ce qui est la
+    convention de Telegram: la répéter l'afficherait sous chaque image.
+    """
+    from aiotdlib.api import (
+        FormattedText,
+        InputFileLocal,
+        InputMessagePhoto,
+        InputMessageReplyToMessage,
+        InputMessageVideo,
+    )
+
+    client = pool.require(persona_id)
+
+    def content(item: dict[str, Any], index: int):
+        legend = FormattedText(text=caption if index == 0 else "", entities=[])
+        if item["kind"] == "VIDEO":
+            return InputMessageVideo(
+                video=InputFileLocal(path=item["path"]),
+                added_sticker_file_ids=[],
+                duration=0,
+                width=0,
+                height=0,
+                supports_streaming=True,
+                caption=legend,
+                has_spoiler=False,
+            )
+        return InputMessagePhoto(
+            photo=InputFileLocal(path=item["path"]),
+            added_sticker_file_ids=[],
+            width=0,
+            height=0,
+            caption=legend,
+            has_spoiler=False,
+        )
+
+    reply = InputMessageReplyToMessage(message_id=reply_to) if reply_to else None
+
+    if len(media) == 1:
+        message = await client.raw.api.send_message(
+            chat_id=chat_id,
+            input_message_content=content(media[0], 0),
+            reply_to=reply,
+        )
+        return message.id
+
+    sent = await client.raw.api.send_message_album(
+        chat_id=chat_id,
+        input_message_contents=[content(item, i) for i, item in enumerate(media)],
+        reply_to=reply,
+    )
+    # L'album rend plusieurs messages; on retient le premier, qui est celui
+    # que l'on montrerait pour retrouver l'envoi.
+    messages = getattr(sent, "messages", None) or []
+    return messages[0].id if messages else None
 
 
 async def _send(*, persona_id: str, chat_id: int, text: str, reply_to: int | None):

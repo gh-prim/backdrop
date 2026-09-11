@@ -4,10 +4,15 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CornerUpLeft, EyeOff, Paperclip, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { sendMessageAction, markReadAction } from "@/app/actions/inbox";
+import {
+  markReadAction,
+  mediaForConversationAction,
+  sendMediaAction,
+  sendMessageAction,
+} from "@/app/actions/inbox";
 import { PlatformLogo } from "@/components/platform-logo";
 import { unreadLabel } from "@/lib/unread-shared";
-import { useBlurDisabled } from "@/components/media-thumb";
+import { MediaThumb, useBlurDisabled } from "@/components/media-thumb";
 import { cn } from "cn";
 
 /** Au-delà, ce n'est plus un envoi lent: c'est un worker à l'arrêt. */
@@ -226,18 +231,31 @@ function Composer({
 }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [chosen, setChosen] = useState<LibraryMedia[]>([]);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
   function send() {
     const trimmed = text.trim();
-    if (!trimmed || pending) return;
+    // Un média peut partir sans légende; un message vide, non.
+    if ((!trimmed && chosen.length === 0) || pending) return;
 
     startTransition(async () => {
       setError(null);
-      const result = await sendMessageAction(conversationId, trimmed, replyTo?.id);
+      const result =
+        chosen.length > 0
+          ? await sendMediaAction(
+              conversationId,
+              chosen.map((media) => media.id),
+              trimmed,
+              replyTo?.id,
+            )
+          : await sendMessageAction(conversationId, trimmed, replyTo?.id);
+
       if (result.ok) {
         setText("");
+        setChosen([]);
         onClearReply();
         router.refresh();
       } else {
@@ -247,7 +265,7 @@ function Composer({
   }
 
   return (
-    <div className="shrink-0 space-y-1.5 px-4 py-3">
+    <div className="relative shrink-0 space-y-1.5 px-4 py-3">
       {replyTo && (
         <div className="flex items-center gap-2 rounded border-l-2 border-primary/50 bg-muted/50 px-2 py-1">
           <CornerUpLeft className="size-3 shrink-0 text-muted-foreground" />
@@ -265,7 +283,43 @@ function Composer({
         </div>
       )}
 
+      {chosen.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {chosen.map((media) => (
+            <button
+              key={media.id}
+              type="button"
+              onClick={() =>
+                setChosen((previous) => previous.filter((item) => item.id !== media.id))
+              }
+              className="relative size-12 overflow-hidden rounded border"
+              title="Remove"
+            >
+              <MediaThumb
+                variantId={media.id}
+                rating={media.rating}
+                className="size-full border-0"
+              />
+              <span className="absolute inset-0 flex items-center justify-center bg-background/60 opacity-0 transition-opacity hover:opacity-100">
+                <X className="size-3" />
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-end gap-2">
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => setPicking(true)}
+          disabled={pending}
+          aria-label="Attach media from the library"
+        >
+          <Paperclip className="size-3.5" />
+        </Button>
+
         <textarea
           rows={1}
           value={text}
@@ -277,14 +331,16 @@ function Composer({
               send();
             }
           }}
-          placeholder={replyTo ? "Reply…" : "Write a message…"}
+          placeholder={
+            chosen.length > 0 ? "Caption (optional)…" : replyTo ? "Reply…" : "Write a message…"
+          }
           className="max-h-32 flex-1 resize-none rounded-md bg-muted px-3 py-2 text-xs outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
         />
         <Button
           type="button"
           size="icon-sm"
           onClick={send}
-          disabled={pending || text.trim().length === 0}
+          disabled={pending || (text.trim().length === 0 && chosen.length === 0)}
           aria-label="Send"
         >
           <Send className="size-3.5" />
@@ -292,6 +348,118 @@ function Composer({
       </div>
 
       {error && <p className="text-[11px] text-destructive">{error}</p>}
+
+      {picking && (
+        <MediaPicker
+          conversationId={conversationId}
+          chosen={chosen}
+          onToggle={(media) =>
+            setChosen((previous) =>
+              previous.some((item) => item.id === media.id)
+                ? previous.filter((item) => item.id !== media.id)
+                : // Telegram plafonne un album à dix, comme un carrousel.
+                  previous.length >= 10
+                  ? previous
+                  : [...previous, media],
+            )
+          }
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+type LibraryMedia = {
+  id: string;
+  ratio: string;
+  rating: "SFW" | "SUGGESTIVE" | "NSFW";
+  isVideo: boolean;
+  blocked: boolean;
+};
+
+/**
+ * Le choix d'un média dans la bibliothèque.
+ *
+ * Chargé à l'ouverture et pas avec la page: deux cents vignettes sur chaque
+ * rendu de l'inbox seraient payées par tout le monde pour un trombone que
+ * personne ne clique la plupart du temps.
+ *
+ * Les médias trop classés pour ce compte sont **montrés et barrés**, pas
+ * masqués: « pourquoi cette photo n'est-elle pas là » est une question qu'on
+ * se pose longtemps, alors qu'un média grisé répond tout seul.
+ */
+function MediaPicker({
+  conversationId,
+  chosen,
+  onToggle,
+  onClose,
+}: {
+  conversationId: string;
+  chosen: LibraryMedia[];
+  onToggle: (media: LibraryMedia) => void;
+  onClose: () => void;
+}) {
+  const [media, setMedia] = useState<LibraryMedia[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void mediaForConversationAction(conversationId).then((result) => {
+      if (alive) setMedia(result);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [conversationId]);
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-20 max-h-80 overflow-y-auto border-t bg-background p-3 shadow-lg">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-medium">
+          Library {chosen.length > 0 && `· ${chosen.length} selected`}
+        </span>
+        <Button type="button" size="sm" variant="ghost" className="h-6 text-xs" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+
+      {media === null ? (
+        <p className="text-[11px] text-muted-foreground">Loading…</p>
+      ) : media.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          No media for this persona yet.
+        </p>
+      ) : (
+        <div className="grid grid-cols-8 gap-1.5">
+          {media.map((item) => {
+            const selected = chosen.some((entry) => entry.id === item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                disabled={item.blocked}
+                onClick={() => onToggle(item)}
+                title={item.blocked ? `${item.rating}: above what this account allows` : undefined}
+                className={cn(
+                  "relative overflow-hidden rounded transition",
+                  item.blocked
+                    ? "cursor-not-allowed opacity-35 grayscale"
+                    : selected
+                      ? "ring-2 ring-primary"
+                      : "hover:opacity-80",
+                )}
+              >
+                <MediaThumb
+                  variantId={item.id}
+                  rating={item.rating}
+                  ratio={item.ratio}
+                  className="aspect-square border-0"
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -409,7 +577,14 @@ function Attachment({
   const [revealed, setRevealed] = useState(false);
   const blurDisabled = useBlurDisabled();
 
-  if (!attachment.hasFile) {
+  // Un média envoyé depuis la bibliothèque n'est pas copié dans le volume
+  // d'inbox: il **est** la variante, et se sert par sa route habituelle. Le
+  // dupliquer ne ferait que deux fichiers à garder en phase.
+  const source = attachment.variantId
+    ? `/api/media/${attachment.variantId}`
+    : `/api/inbox/media/${attachment.id}`;
+
+  if (!attachment.hasFile && !attachment.variantId) {
     return (
       <p className="mb-1 flex items-center gap-1 text-[11px] opacity-70">
         <Paperclip className="size-3" />
@@ -418,8 +593,6 @@ function Attachment({
       </p>
     );
   }
-
-  const source = `/api/inbox/media/${attachment.id}`;
 
   if (attachment.kind === "VIDEO") {
     return (

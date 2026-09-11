@@ -132,3 +132,56 @@ describe("médias reçus", () => {
     expect(FETCHER).toContain("asyncio.create_task");
   });
 });
+
+describe("envoi de médias", () => {
+  const ACTIONS = readFileSync("src/app/actions/inbox.ts", "utf8");
+  const SHELL = readFileSync("src/app/(app)/inbox/inbox-shell.tsx", "utf8");
+  const ACTIVITY = readFileSync(
+    "worker-telegram/backdrop_telegram/dm_activities.py",
+    "utf8",
+  );
+
+  it("refuse ce qui dépasse la classification du compte", () => {
+    // Un compte déclaré SFW ne doit pas laisser partir du NSFW, en
+    // conversation privée pas moins qu'en channel (section 9).
+    expect(ACTIONS).toContain("RATING_RANK");
+    expect(ACTIONS).toMatch(/refused[\s\S]{0,300}exceed it/);
+  });
+
+  it("revérifie côté serveur, sans croire la liste envoyée au navigateur", () => {
+    // La liste des médias affichée par le sélecteur porte déjà `blocked`:
+    // s'y fier suffirait à contourner le garde-fou depuis la console.
+    expect(ACTIONS).toMatch(/prisma\.variant\.findMany[\s\S]{0,400}personaId: conversation\.channelAccount\.personaId/);
+  });
+
+  it("n'envoie que des médias de la persona du fil", () => {
+    expect(ACTIONS).toContain("Some media are not available for this persona.");
+  });
+
+  it("garde l'ordre choisi par l'opérateur", () => {
+    // `findMany` rend l'ordre de la base, pas celui du clic: un album
+    // partirait dans le désordre.
+    expect(ACTIONS).toContain("parsed.data.variantIds.map");
+  });
+
+  it("les chemins de fichiers sont lus par le worker, jamais transportés", () => {
+    // Un chemin venu du navigateur désignerait ce qu'il veut.
+    expect(ACTIVITY).toContain('join "Variant" v on v.id = a."variantId"');
+    expect(ACTIVITY).toContain("media_root()");
+  });
+
+  it("plusieurs médias partent en album, pas en rafale", () => {
+    // Sinon le destinataire reçoit autant de notifications que de photos.
+    expect(ACTIVITY).toContain("send_message_album");
+    expect(ACTIVITY).toMatch(/if len\(media\) == 1:/);
+  });
+
+  it("la légende ne se porte que sur le premier élément", () => {
+    // La répéter l'afficherait sous chaque image.
+    expect(ACTIVITY).toContain("caption if index == 0");
+  });
+
+  it("un média envoyé se sert depuis la bibliothèque, sans copie", () => {
+    expect(SHELL).toContain("`/api/media/${attachment.variantId}`");
+  });
+});
