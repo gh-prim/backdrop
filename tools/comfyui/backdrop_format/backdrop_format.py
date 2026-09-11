@@ -1,87 +1,88 @@
 """
-Nœud ComfyUI: choisir un format de publication, obtenir sa résolution.
+Nœud ComfyUI: un format de publication, un latent prêt à échantillonner.
 
-`width` et `height` sont la **taille finale**, celle que Backdrop recevra:
-c'est la seule qui compte pour publier. Branchées sur un Empty Latent, elles
-génèrent directement à cette taille.
+Remplace « Empty Latent Image »: au lieu de retaper une largeur et une hauteur
+— et de se tromper d'un cadrage qu'on ne découvre qu'une fois la photo
+publiée — on choisit le format de destination, et la résolution qui va avec
+est appliquée.
 
-`base_width` et `base_height` ne servent qu'aux workflows en deux temps — une
-passe à taille réduite, puis un hires fix qui agrandit jusqu'à la cible. Un
-modèle de diffusion compose mal très au-dessus de sa résolution
-d'entraînement, d'où l'usage. Si ton workflow n'a pas de hires, ignore ces
-deux sorties: elles ne dérangent rien.
-
-Les bases sont des multiples de 32 au rapport exact — ce que SDXL et Flux
-avalent sans déformer.
+Les tailles sont celles que Backdrop attend en entrée: multiples de 8 exigés
+par l'espace latent, au rapport exact du canal visé.
 """
 
 from __future__ import annotations
 
-# (base_w, base_h, cible_w, cible_h, à quoi ça sert)
-PRESETS: dict[str, tuple[int, int, int, int, str]] = {
-    # Le format à privilégier: il contient les deux autres sans agrandir.
-    # 4:5 n'y perd que 6 % de hauteur, le 9:16 en sort exact.
-    "master 3:4 — tout dériver sans perte": (864, 1152, 1440, 1920, "master"),
+# Libellé affiché -> (largeur, hauteur)
+FORMATS: dict[str, tuple[int, int]] = {
+    # Le format à privilégier: Backdrop en tire le 9:16 exact, le 4:5 à 6 %
+    # près et le 3:4 sans rien perdre. Aucun agrandissement nulle part.
+    "master 3:4 · 1440x1920 — tout dériver sans perte": (1440, 1920),
     # Reels, Stories, Telegram, Fanvue.
-    "9:16 — vertical plein écran": (720, 1280, 1080, 1920, "reel"),
-    # Le plus haut que le fil Instagram accepte.
-    "3:4 — fil Instagram, hauteur maximale": (864, 1152, 1080, 1440, "feed"),
-    # Le classique du fil.
-    "4:5 — fil Instagram": (896, 1120, 1080, 1350, "feed"),
-    "1:1 — carré": (1024, 1024, 1080, 1080, "feed"),
+    "9:16 · 1080x1920 — vertical plein écran": (1080, 1920),
+    # Le plus haut que le fil Instagram accepte depuis 2026.
+    "3:4 · 1080x1440 — fil Instagram, hauteur maximale": (1080, 1440),
+    # 1088x1360 et non 1080x1350: la hauteur doit être un multiple de 8, or
+    # 1350 ne l'est pas — le latent l'arrondirait à 1344 et le rapport ne
+    # serait plus exactement 4:5. Backdrop redescend ensuite à 1080x1350.
+    "4:5 · 1088x1360 — fil Instagram": (1088, 1360),
+    "1:1 · 1080x1080 — carré": (1080, 1080),
+    # Tailles de première passe, pour un workflow qui fait ensuite un hires.
+    "base 3:4 · 864x1152 — avant hires vers 1440x1920": (864, 1152),
+    "base 9:16 · 720x1280 — avant hires vers 1080x1920": (720, 1280),
 }
 
-DEFAUT = "master 3:4 — tout dériver sans perte"
+DEFAUT = "master 3:4 · 1440x1920 — tout dériver sans perte"
+
+# L'espace latent travaille au huitième de la résolution, et sur quatre canaux
+# pour SD 1.5 et SDXL. Flux et SD3 en attendent seize: pour eux, garder le
+# nœud « EmptySD3LatentImage » et brancher les dimensions à la main.
+FACTEUR_LATENT = 8
+CANAUX = 4
 
 
 class BackdropFormat:
-    """Un choix de format, deux résolutions cohérentes."""
+    """Un choix de format, un latent à la bonne taille."""
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "format": (list(PRESETS.keys()), {"default": DEFAUT}),
-                # Décoché: la passe de base sert directement de sortie, sans
-                # hires. Utile pour un test rapide, pas pour publier.
-                # Coché: la génération démarre à `base_*` puis monte à la
-                # taille finale. Décoché: elle se fait directement à la taille
-                # finale, et les sorties `base_*` valent la cible.
-                "hires": ("BOOLEAN", {"default": True}),
+                "format": (list(FORMATS.keys()), {"default": DEFAUT}),
+                "batch_size": (
+                    "INT",
+                    {"default": 1, "min": 1, "max": 64, "step": 1},
+                ),
             }
         }
 
-    # La taille finale d'abord: c'est ce qu'on branche dans neuf cas sur dix.
-    RETURN_TYPES = ("INT", "INT", "INT", "INT", "STRING")
-    RETURN_NAMES = (
-        "width",
-        "height",
-        "base_width",
-        "base_height",
-        "info",
-    )
-    FUNCTION = "resolve"
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("LATENT",)
+    FUNCTION = "generate"
     CATEGORY = "Backdrop"
     DESCRIPTION = (
-        "Résolutions de génération et de hires pour un format de publication. "
-        "Le master 3:4 se dérive en 4:5, 3:4 et 9:16 sans jamais agrandir."
+        "Latent vide à la taille d'un format de publication. "
+        "Le master 3:4 se dérive en 4:5, 3:4 et 9:16 sans agrandissement."
     )
 
-    def resolve(self, format: str, hires: bool):
-        base_w, base_h, cible_w, cible_h, usage = PRESETS[format]
+    def generate(self, format: str, batch_size: int):
+        import torch
 
-        # Sans passe de hires, la génération se fait d'emblée à la taille
-        # finale: la base vaut alors la cible, et brancher l'une ou l'autre
-        # revient au même.
-        if not hires:
-            base_w, base_h = cible_w, cible_h
+        width, height = FORMATS[format]
 
-        facteur = cible_w / base_w
-        info = (
-            f"{usage} · {cible_w}x{cible_h}"
-            + (f" depuis {base_w}x{base_h} (x{facteur:.2f})" if facteur > 1 else "")
+        try:
+            # Même appareil que le nœud d'origine: sans ça, le latent naît sur
+            # le mauvais périphérique et l'échantillonneur recopie à chaque pas.
+            import comfy.model_management
+
+            device = comfy.model_management.intermediate_device()
+        except Exception:  # noqa: BLE001 — hors de ComfyUI, le CPU suffit
+            device = None
+
+        latent = torch.zeros(
+            [batch_size, CANAUX, height // FACTEUR_LATENT, width // FACTEUR_LATENT],
+            device=device,
         )
-        return (cible_w, cible_h, base_w, base_h, info)
+        return ({"samples": latent},)
 
 
 NODE_CLASS_MAPPINGS = {"BackdropFormat": BackdropFormat}

@@ -1,55 +1,43 @@
 # Nœud ComfyUI — format de sortie
 
-Un nœud, un choix: il rend la résolution du format de publication.
+Remplace **Empty Latent Image**: on choisit un format de publication, il rend
+le latent à la bonne taille.
 
-`width` et `height` sont la **taille finale**, celle que Backdrop recevra. Si
-ton workflow génère directement à cette taille, ce sont les deux seules
-sorties dont tu as besoin.
-
-`base_width` et `base_height` ne servent qu'aux workflows en deux temps: une
-passe à taille réduite, puis un hires fix qui agrandit jusqu'à la cible — un
-modèle compose mal très au-dessus de sa résolution d'entraînement. Sans hires,
-décoche l'interrupteur: la base vaut alors la cible, et les deux paires de
-sorties sont identiques.
+- **format** — la destination (fil Instagram, Reel, master…)
+- **batch_size** — le nombre d'images du lot
+- **sortie: LATENT** — à brancher directement sur le KSampler
 
 ## Installer
 
-```bash
-cp -r tools/comfyui/backdrop_format ~/ComfyUI/custom_nodes/
-```
-
-Puis relancer ComfyUI. Le nœud apparaît sous **Backdrop · format de sortie**.
-
-## Brancher
-
-**Sans hires** — le cas simple:
+Créer le dossier:
 
 ```
-Backdrop · format de sortie   (hires décoché)
-   ├── width  ─┐
-   └── height ─┴─→ Empty Latent Image  →  KSampler
+...\ComfyUI\custom_nodes\backdrop_format\
 ```
 
-**Avec hires** — deux passes:
+et y déposer les deux fichiers:
 
-```
-Backdrop · format de sortie   (hires coché)
-   ├── base_width  ─┐
-   ├── base_height ─┴─→ Empty Latent Image  →  KSampler (passe 1)
-   ├── width  ─┐
-   ├── height ─┴─→ Upscale Image / Latent Upscale  →  KSampler (hires)
-   └── info  →  (facultatif) Preview Text: rappelle le facteur appliqué
-```
+- <https://raw.githubusercontent.com/gh-prim/backdrop/main/tools/comfyui/backdrop_format/backdrop_format.py>
+- <https://raw.githubusercontent.com/gh-prim/backdrop/main/tools/comfyui/backdrop_format/__init__.py>
+
+Redémarrer ComfyUI **entièrement**: `custom_nodes` n'est lu qu'au lancement du
+serveur. Le nœud apparaît sous **Backdrop · format de sortie**.
 
 ## Les formats
 
-| Choix | Base | Cible | Pour quoi |
-|---|---|---|---|
-| **master 3:4** | 864 × 1152 | **1440 × 1920** | le seul qui donne 4:5, 3:4 **et** 9:16 sans agrandir |
-| 9:16 | 720 × 1280 | 1080 × 1920 | Reels, Stories, Telegram, Fanvue |
-| 3:4 | 864 × 1152 | 1080 × 1440 | fil Instagram, hauteur maximale |
-| 4:5 | 896 × 1120 | 1080 × 1350 | fil Instagram, le classique |
-| 1:1 | 1024 × 1024 | 1080 × 1080 | carré |
+| Choix | Taille | Pour quoi |
+|---|---|---|
+| **master 3:4** | 1440 × 1920 | le seul qui donne 4:5, 3:4 **et** 9:16 sans agrandir |
+| 9:16 | 1080 × 1920 | Reels, Stories, Telegram, Fanvue |
+| 3:4 | 1080 × 1440 | fil Instagram, hauteur maximale |
+| 4:5 | 1088 × 1360 | fil Instagram, le classique |
+| 1:1 | 1080 × 1080 | carré |
+| base 3:4 | 864 × 1152 | première passe, avant un hires vers 1440 × 1920 |
+| base 9:16 | 720 × 1280 | première passe, avant un hires vers 1080 × 1920 |
+
+Les deux dernières entrées servent aux workflows en deux temps: générer à la
+taille réduite, puis agrandir jusqu'à la cible avec un nœud d'upscale. Un
+modèle compose mal très au-dessus de sa résolution d'entraînement.
 
 ## Pourquoi le master 3:4
 
@@ -59,10 +47,15 @@ Backdrop recadre, il n'invente rien. Depuis un 1440 × 1920:
 - **4:5** perd 6 % de hauteur;
 - **3:4** ne perd rien.
 
-Depuis un 720 × 1280 — le format généré jusqu'ici — le 4:5 perd **30 % de
-hauteur** et tout est agrandi d'un facteur 1,5: des pixels interpolés, qu'
-Instagram recompresse ensuite.
+Depuis un 720 × 1280, le 4:5 perd **30 % de hauteur** et tout est agrandi de
+moitié: des pixels interpolés, qu'Instagram recompresse ensuite.
 
-Si ×1,67 est trop pour ton modèle en une passe, deux options: enchaîner deux
-hires plus doux, ou renoncer au master et générer deux fois — en 9:16 pour le
-vertical, en 3:4 pour le fil.
+## Deux détails qui comptent
+
+**4:5 fait 1088 × 1360, pas 1080 × 1350.** L'espace latent travaille au
+huitième de la résolution: 1350 n'est pas un multiple de 8 et serait arrondi à
+1344, ce qui ne donne plus exactement 4:5. Backdrop redescend ensuite à
+1080 × 1350.
+
+**Le latent produit a quatre canaux**, comme celui d'Empty Latent Image: SD 1.5
+et SDXL. Pour Flux ou SD3, qui en attendent seize, garder `EmptySD3LatentImage`.
