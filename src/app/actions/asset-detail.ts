@@ -148,3 +148,52 @@ export async function variantCropOffsetAction(
 
   return variant ?? null;
 }
+
+/**
+ * La Variant d'un Asset dans un cadrage donné, quitte à la fabriquer.
+ *
+ * Chaque canal veut son propre cadre: Instagram ramène tout au plus haut de
+ * son fil, Telegram et Fanvue affichent ce qu'on leur envoie. Envoyer la même
+ * image partout revient à laisser Instagram couper au hasard. L'écran de
+ * confirmation demande donc, canal par canal, « cette photo, dans ce cadre,
+ * à cette hauteur » — et c'est ici que ça se résout.
+ *
+ * Rend `null` sans attendre si la dérivation est en route: l'appelant
+ * rappellera. Une activité longue tenue ouverte derrière une Server Action
+ * bloquerait une connexion pour rien.
+ */
+export async function resolveVariantAction(
+  assetId: string,
+  ratio: string,
+  cropOffset?: number,
+): Promise<{ variantId: string } | null> {
+  const ctx = await requireOrgContext();
+
+  const asset = await prisma.asset.findFirst({
+    where: { id: assetId, persona: { organizationId: ctx.organizationId } },
+    select: { id: true },
+  });
+  if (!asset) return null;
+
+  const existing = await prisma.variant.findFirst({
+    where: { assetId, ratio },
+    select: { id: true, cropOffset: true },
+  });
+
+  // Le cadrage demandé est déjà celui du fichier: rien à recalculer.
+  const wanted = cropOffset ?? 50;
+  if (existing && (existing.cropOffset ?? 50) === wanted) {
+    return { variantId: existing.id };
+  }
+
+  try {
+    await startIngestWorkflow({ assetId, ratio, cropOffset });
+  } catch (error) {
+    // « already started » veut dire qu'une dérivation identique est en cours:
+    // c'est l'appel précédent du même écran, pas une erreur.
+    const message = (error as Error).message ?? "";
+    if (!message.includes("already started")) throw error;
+  }
+
+  return null;
+}

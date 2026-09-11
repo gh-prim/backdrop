@@ -94,6 +94,15 @@ export type CreatePublicationInput = {
   caption: string;
   scheduledAt: Date;
   variantIds: string[];
+  /**
+   * Variantes propres à un canal, indexées par identifiant de canal.
+   *
+   * Deux plateformes n'ont pas le même cadre: Instagram ramène tout au plus
+   * haut de son fil, Telegram et Fanvue affichent ce qu'on leur envoie. Un
+   * seul jeu de variantes pour tous laissait donc Instagram recouper au
+   * hasard. Absent: le canal prend `variantIds`.
+   */
+  channelVariantIds?: Record<string, string[]>;
   audioId?: string | null;
   audioVolume?: number | null;
   videoVolume?: number | null;
@@ -216,7 +225,8 @@ export async function createPublication(
 
       // Le trigger de rating s'exécute à l'insertion de chaque item: une
       // violation annule toute la transaction, tous canaux confondus.
-      for (const [position, variantId] of input.variantIds.entries()) {
+      const variantIds = input.channelVariantIds?.[channel.id] ?? input.variantIds;
+      for (const [position, variantId] of variantIds.entries()) {
         await tx.publicationItem.create({
           data: { publicationId: row.id, variantId, position },
         });

@@ -36,6 +36,14 @@ describe("champs du composeur", () => {
     }
   });
 
+  it("réémet aussi le cadrage par canal", () => {
+    // L'écran de confirmation est une étape comme une autre: la quitter le
+    // démonte. Sans ces champs dans le bloc permanent, chaque canal
+    // retomberait silencieusement sur la sélection de base — c'est-à-dire
+    // exactement le recadrage au hasard qu'on cherche à supprimer.
+    expect(alwaysMounted()).toContain("name={`channelVariantIds:${channelId}`}");
+  });
+
   it("ne laisse aucun champ nommé dans une étape", () => {
     const debutEtapes = SOURCE.indexOf("{currentStep.key ===");
     const etapes = SOURCE.slice(debutEtapes);

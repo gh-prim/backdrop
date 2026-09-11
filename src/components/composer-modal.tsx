@@ -40,7 +40,10 @@ export function ComposerModal({ children }: { children: React.ReactNode }) {
         // `sm:max-w-none` et non `max-w-none`: la classe de base du composant
         // porte `sm:max-w-sm`, et une variante de media query l'emporte sur une
         // classe nue quel que soit l'ordre d'écriture.
-        className="flex max-h-[86svh] w-[min(94vw,60rem)] max-w-none flex-col gap-4 overflow-hidden sm:max-w-none"
+        // L'écran de confirmation aligne les cadres de chaque canal côte à
+        // côte: à 60rem, trois canaux et un carrousel passaient à la ligne au
+        // point de ne plus se comparer d'un coup d'œil.
+        className="flex max-h-[86svh] w-[min(94vw,76rem)] max-w-none flex-col gap-4 overflow-hidden sm:max-w-none"
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>New publication</DialogTitle>

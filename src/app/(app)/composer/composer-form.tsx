@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { schedulePublicationAction, type ActionResult } from "@/app/actions/publications";
@@ -22,6 +22,7 @@ import { TelegramTargetPicker } from "./telegram-target";
 import { FanvuePanel } from "./fanvue-panel";
 import { ChannelFraming } from "./channel-framing";
 import { CropControl } from "./crop-control";
+import { ReviewStep, type ReviewMedia } from "./review-step";
 import { useComposerClose } from "./composer-close";
 
 type Rating = "SFW" | "SUGGESTIVE" | "NSFW";
@@ -289,6 +290,53 @@ export function ComposerForm({
     Record<string, { offset: number; version: number }>
   >({});
 
+  /**
+   * Les variantes retenues canal par canal, posées par l'écran de confirmation.
+   *
+   * `null` tant qu'un cadre n'est pas rendu: envoyer à ce moment publierait
+   * l'ancien fichier sur un canal et le nouveau sur un autre.
+   */
+  const [channelPlan, setChannelPlan] = useState<Record<string, string[]> | null>(null);
+
+  /** Mémoïsé: l'écran de confirmation le garde en dépendance d'effet. */
+  const handleResolved = useCallback(
+    (plan: Record<string, string[]> | null) => setChannelPlan(plan),
+    [],
+  );
+
+  /** Ce que l'écran de confirmation doit cadrer, dans l'ordre de la sélection. */
+  const reviewMedia = useMemo<ReviewMedia[]>(
+    () =>
+      selected
+        .map((id) => variants.find((variant) => variant.id === id))
+        .filter((variant): variant is VariantOption => Boolean(variant))
+        .map((variant) => ({
+          variantId: variant.id,
+          assetId: variant.assetId,
+          ratio: variant.ratio,
+          rating: variant.rating,
+          cropOffset: recropped[variant.id]?.offset ?? variant.cropOffset,
+        })),
+    [selected, variants, recropped],
+  );
+
+  /**
+   * Le teaser, traduit dans le cadrage retenu pour Fanvue.
+   *
+   * L'opérateur le choisit parmi les médias du post, avant l'écran de
+   * confirmation — donc parmi les variantes de base. Si Fanvue reçoit ses
+   * propres cadres, cet identifiant ne désigne plus rien qui soit dans le
+   * post: Fanvue n'accepte comme aperçu qu'un média du post lui-même. On suit
+   * donc la **position**, qui elle ne bouge pas.
+   */
+  const fanvuePreviewToSend = useMemo(() => {
+    if (!fanvuePreview) return null;
+    const forFanvue = fanvueChannel ? channelPlan?.[fanvueChannel.id] : undefined;
+    if (!forFanvue) return fanvuePreview;
+    const position = selected.indexOf(fanvuePreview);
+    return position >= 0 ? (forFanvue[position] ?? fanvuePreview) : fanvuePreview;
+  }, [fanvuePreview, fanvueChannel, channelPlan, selected]);
+
   function rememberRecrop(variantId: string, offset: number) {
     setRecropped((previous) => ({
       ...previous,
@@ -414,6 +462,9 @@ export function ComposerForm({
         label: PLATFORM_LABEL[channel.platform] ?? channel.platform,
         channel,
       })),
+      // Dernière, et après les réglages par canal: on ne peut montrer ce qui
+      // va partir qu'une fois qu'on sait où ça part et comment.
+      { key: "review", label: "Review", channel: null as ChannelOption | null },
     ],
     [chosenChannels],
   );
@@ -434,7 +485,11 @@ export function ComposerForm({
             ? selected.length > 0
             : currentStep.key === "caption"
               ? !hashtagsOverflow
-              : true;
+              // Tant qu'un cadre n'est pas rendu, envoyer publierait l'ancien
+              // fichier sur un canal et le nouveau sur un autre.
+              : currentStep.key === "review"
+                ? channelPlan !== null
+                : true;
 
   const isLast = stepIndex === steps.length - 1;
 
@@ -509,13 +564,26 @@ export function ComposerForm({
           <input
             type="hidden"
             name="fanvuePreviewVariantId"
-            value={fanvuePreview ?? ""}
+            value={fanvuePreviewToSend ?? ""}
           />
         </>
       )}
       {selected.map((id) => (
         <input key={id} type="hidden" name="variantIds" value={id} />
       ))}
+      {/* Hors des étapes, comme tous les champs cachés: une étape démontée
+          emporterait ses champs, et le serveur recevrait un post sans son
+          cadrage. C'est exactement le bug qu'avait eu la légende. */}
+      {Object.entries(channelPlan ?? {}).flatMap(([channelId, variantIds]) =>
+        variantIds.map((variantId, position) => (
+          <input
+            key={`${channelId}:${position}`}
+            type="hidden"
+            name={`channelVariantIds:${channelId}`}
+            value={variantId}
+          />
+        )),
+      )}
 
       <Stepper steps={steps} step={stepIndex} onJump={goToStep} maxReached={stepIndex} />
 
@@ -914,6 +982,18 @@ export function ComposerForm({
             </div>
           )}
 
+          {currentStep.key === "review" && (
+            <ReviewStep
+              channels={chosenChannels.map((channel) => ({
+                id: channel.id,
+                platform: channel.platform,
+              }))}
+              media={reviewMedia}
+              kind={kind}
+              onResolved={handleResolved}
+            />
+          )}
+
           {currentStep.key === "caption" && (
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -1116,7 +1196,15 @@ export function ComposerForm({
             value={publishNow ? "1" : undefined}
             className="ml-auto"
             disabled={
-              !armed || pending || selected.length === 0 || channelIds.length === 0
+              !armed ||
+              pending ||
+              selected.length === 0 ||
+              channelIds.length === 0 ||
+              // Un cadre encore en cours de rendu: envoyer maintenant ferait
+              // partir l'ancien fichier sur ce canal-là, et le nouveau
+              // ailleurs. L'écran de confirmation ne serait plus une
+              // confirmation.
+              channelPlan === null
             }
           >
             {pending

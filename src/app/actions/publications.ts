@@ -29,6 +29,25 @@ export type ActionResult =
   | { ok: true; message?: string; publicationIds?: string[] }
   | { ok: false; error: string };
 
+/**
+ * Les variantes par canal, telles que l'écran de confirmation les a posées.
+ *
+ * Un champ par canal, nommé `channelVariantIds:{id}`: `FormData` n'a pas de
+ * structure, et inventer un encodage JSON dans un champ caché rendrait
+ * illisible ce qui part du navigateur.
+ */
+function channelVariantIdsFrom(
+  formData: FormData,
+): Record<string, string[]> | undefined {
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("channelVariantIds:")) continue;
+    const channelId = key.slice("channelVariantIds:".length);
+    (out[channelId] ??= []).push(String(value));
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 const createSchema = z.object({
   channelAccountIds: z.array(z.string().min(1)).min(1, "At least one channel."),
   kind: z.enum(PubKind),
@@ -41,6 +60,8 @@ const createSchema = z.object({
     .transform((value) => new Date(value))
     .refine((date) => !Number.isNaN(date.getTime()), "Invalid deadline."),
   variantIds: z.array(z.string().min(1)).min(1, "At least one media."),
+  // Un jeu de variantes par canal, quand l'écran de confirmation en a choisi.
+  channelVariantIds: z.record(z.string(), z.array(z.string().min(1))).optional(),
   telegramChatId: z.string().optional(),
   telegramTargetLabel: z.string().optional(),
   // Telegram plafonne le prix d'un message payant; la borne exacte vient de
@@ -76,6 +97,7 @@ export async function schedulePublicationAction(
     caption: String(formData.get("caption") ?? ""),
     scheduledAt: publishNow ? new Date().toISOString() : formData.get("scheduledAt"),
     variantIds: formData.getAll("variantIds").map(String),
+    channelVariantIds: channelVariantIdsFrom(formData),
     telegramChatId: String(formData.get("telegramChatId") ?? "").trim() || undefined,
     telegramTargetLabel:
       String(formData.get("telegramTargetLabel") ?? "").trim() || undefined,
@@ -130,6 +152,18 @@ export async function schedulePublicationAction(
   }
   if (parsed.data.kind === "CAROUSEL" && parsed.data.variantIds.length > 10) {
     return { ok: false, error: "A carousel takes 10 items at most." };
+  }
+
+  // Un cadrage par canal reste le **même** post: autant de médias, dans le
+  // même ordre. Une liste plus courte publierait un carrousel amputé sur un
+  // seul canal, ce qui ne se verrait qu'une fois en ligne.
+  for (const [channelId, ids] of Object.entries(parsed.data.channelVariantIds ?? {})) {
+    if (ids.length !== parsed.data.variantIds.length) {
+      return {
+        ok: false,
+        error: `Channel ${channelId} got ${ids.length} media instead of ${parsed.data.variantIds.length}.`,
+      };
+    }
   }
 
   let created: { id: string; platform: "INSTAGRAM" | "TELEGRAM" | "FANVUE" }[];
