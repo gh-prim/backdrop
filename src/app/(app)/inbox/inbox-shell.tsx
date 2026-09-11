@@ -9,6 +9,10 @@ import { PlatformLogo } from "@/components/platform-logo";
 import { unreadLabel } from "@/lib/unread-shared";
 import { cn } from "cn";
 
+/** Au-delà, ce n'est plus un envoi lent: c'est un worker à l'arrêt. */
+const PENDING_EVERY_MS = 1_200;
+const PENDING_POLLS = 40;
+
 type Conversation = {
   id: string;
   title: string;
@@ -68,6 +72,33 @@ export function InboxShell({
     null,
   );
   const replyTo = reply && reply.conversationId === thread?.id ? reply.message : null;
+
+  /**
+   * Suit un envoi jusqu'à ce qu'il soit confirmé.
+   *
+   * `router.refresh()` au retour de l'action arrive **avant** le worker: le
+   * message restait donc affiché « sending… » indéfiniment alors qu'il était
+   * parti depuis longtemps. On redemande la page tant qu'une ligne est en
+   * attente, et l'on s'arrête dès qu'il n'y en a plus.
+   *
+   * Borné dans le temps: si le worker est à l'arrêt, mieux vaut un écran figé
+   * qu'un onglet qui interroge le serveur jusqu'au soir. L'arrivée des
+   * messages entrants, elle, ne passera pas par là mais par le flux
+   * d'événements.
+   */
+  const pending = thread?.messages.some((message) => message.status === "PENDING");
+  useEffect(() => {
+    if (!pending) return;
+
+    let left = PENDING_POLLS;
+    const timer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) clearInterval(timer);
+      else router.refresh();
+    }, PENDING_EVERY_MS);
+
+    return () => clearInterval(timer);
+  }, [pending, router]);
 
   // Un fil s'ouvre sur son dernier message, comme partout ailleurs.
   useEffect(() => {

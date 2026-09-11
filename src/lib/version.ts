@@ -13,4 +13,4 @@
  * Tant que la phase 1 n'est pas close, on reste en 0.x — le majeur passera à
  * 1 quand l'outil sera tenu pour stable, pas avant.
  */
-export const APP_VERSION = "0.6.0";
+export const APP_VERSION = "0.6.1";

@@ -56,3 +56,21 @@ describe("pastille de non-lus", () => {
     expect(unreadLabel(4000)).toBe("10+");
   });
 });
+
+describe("confirmation d'un envoi", () => {
+  const SHELL = readFileSync("src/app/(app)/inbox/inbox-shell.tsx", "utf8");
+
+  it("l'écran redemande la page tant qu'un message est en attente", () => {
+    // `router.refresh()` au retour de l'action arrive avant le worker: sans
+    // ce suivi, un message parti restait affiché « sending… » pour toujours.
+    expect(SHELL).toContain('message.status === "PENDING"');
+    expect(SHELL).toMatch(/setInterval\([\s\S]{0,200}router\.refresh\(\)/);
+  });
+
+  it("et s'arrête au bout d'un temps borné", () => {
+    // Un worker à l'arrêt ne doit pas faire interroger le serveur jusqu'au
+    // soir par un onglet resté ouvert.
+    expect(SHELL).toMatch(/clearInterval/);
+    expect(SHELL).toContain("PENDING_POLLS");
+  });
+});
