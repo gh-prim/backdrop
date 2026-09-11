@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CloudUpload, Loader2, Search, Send, X } from "lucide-react";
+import { CalendarPlus, CloudUpload, Loader2, Search, Send, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -267,6 +267,21 @@ export function AssetGrid({
                     }
                   />
                 </label>
+
+                {/* Programmer part souvent d'une image qu'on regarde: le
+                    composeur s'ouvre avec elle déjà choisie, sans repasser par
+                    la sélection de médias. */}
+                <Link
+                  href={`/composer?asset=${asset.id}`}
+                  aria-label={`Schedule ${asset.description ?? "this media"}`}
+                  title="Schedule this media"
+                  className={cn(
+                    "absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-md bg-background/85 backdrop-blur-sm transition-opacity",
+                    "opacity-0 group-hover/asset:opacity-100 focus-visible:opacity-100",
+                  )}
+                >
+                  <CalendarPlus className="size-3.5" />
+                </Link>
 
                 <Link href={`/library/${asset.id}`} className="block">
                   {cover ? (

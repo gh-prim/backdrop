@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, CalendarPlus } from "lucide-react";
 import { requireOrgContext } from "@/lib/session";
 import { getAlbumDetail } from "@/lib/albums";
 import { Badge } from "@/components/ui/badge";
@@ -63,10 +63,10 @@ export default async function AlbumPage({
           size="sm"
           className="ml-auto"
           nativeButton={false}
-          render={<Link href="/composer" />}
+          render={<Link href={`/composer?album=${album.id}`} />}
         >
-          <Plus />
-          New publication
+          <CalendarPlus />
+          Schedule this album
         </Button>
       </div>
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Images, Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, Images, Pencil, Trash2 } from "lucide-react";
 import {
   deleteAlbumAction,
   renameAlbumAction,
@@ -107,6 +107,19 @@ function AlbumTile({
         </div>
 
         <div className="flex opacity-0 transition-opacity group-hover/album:opacity-100 focus-within:opacity-100">
+          {/* L'album entier part au composeur, dans le premier cadrage que
+              tous ses médias possèdent. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Schedule ${album.name}`}
+            title="Schedule this album"
+            nativeButton={false}
+            render={<Link href={`/composer?album=${album.id}`} />}
+          >
+            <CalendarPlus />
+          </Button>
           <Button
             type="button"
             variant="ghost"

@@ -16,6 +16,7 @@ const SERVER_ONLY_MODULES = [
   "@/lib/db",
   "@/lib/channels",
   "@/lib/config-backup",
+  "@/lib/composer-preselect",
   "@/lib/invitations",
   "@/lib/assets",
   "@/lib/publications",

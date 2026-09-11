@@ -9,8 +9,8 @@ import { ComposerPanel } from "../../composer/composer-panel";
 export default async function ComposerModalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ at?: string }>;
+  searchParams: Promise<{ at?: string; asset?: string; album?: string; ratio?: string }>;
 }) {
-  const { at } = await searchParams;
-  return <ComposerPanel at={at} />;
+  const { at, asset, album, ratio } = await searchParams;
+  return <ComposerPanel at={at} assetId={asset} albumId={album} ratio={ratio} />;
 }

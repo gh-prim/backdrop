@@ -90,6 +90,9 @@ export function ComposerForm({
   channels,
   variants,
   initialScheduledAt,
+  initialVariantIds = [],
+  initialSelectionLabel = null,
+  initialSelectionMissing = 0,
 }: {
   personaId: string;
   personaName: string;
@@ -97,6 +100,13 @@ export function ComposerForm({
   variants: VariantOption[];
   /** Créneau choisi dans le calendrier, en ISO. */
   initialScheduledAt?: string;
+  /**
+   * Médias déjà choisis à l'ouverture: on programme souvent depuis une image
+   * qu'on a sous les yeux, pas depuis un formulaire vide.
+   */
+  initialVariantIds?: string[];
+  initialSelectionLabel?: string | null;
+  initialSelectionMissing?: number;
 }) {
   const [step, setStep] = useState(0);
 
@@ -119,8 +129,10 @@ export function ComposerForm({
   const [publishNow, setPublishNow] = useState(false);
   const [name, setName] = useState("");
   const [channelIds, setChannelIds] = useState<string[]>([]);
-  const [kind, setKind] = useState("SINGLE");
-  const [selected, setSelected] = useState<string[]>([]);
+  // Plusieurs médias d'emblée: c'est un carrousel, et laisser « Single post »
+  // n'enverrait que le premier sans le dire.
+  const [kind, setKind] = useState(initialVariantIds.length > 1 ? "CAROUSEL" : "SINGLE");
+  const [selected, setSelected] = useState<string[]>(initialVariantIds);
   const [ratioFilter, setRatioFilter] = useState("all");
   /** Choisir les médias un par un, ou envoyer un album déjà constitué. */
   const [mediaSource, setMediaSource] = useState<"media" | "album">("media");
@@ -598,6 +610,14 @@ export function ComposerForm({
                   {kind === "CAROUSEL" && " — up to 10, in the order you pick"}
                 </span>
               </div>
+
+              {initialSelectionLabel && selected.length > 0 && (
+                <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  Opened from the library: {initialSelectionLabel}.
+                  {initialSelectionMissing > 0 &&
+                    ` ${initialSelectionMissing} media left out: no variant in that ratio.`}
+                </p>
+              )}
 
               {albumNote && (
                 <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
