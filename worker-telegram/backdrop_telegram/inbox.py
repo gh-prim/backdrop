@@ -72,12 +72,13 @@ async def _ingest(client: Any, message: Any) -> None:
         # Sur un sortant, l'expéditeur est la persona: le contact du fil reste
         # celui d'en face, déjà enregistré à la première réception.
         if not outgoing and sender_id is not None:
+            identity = await _identity_of(client, sender_id)
             contact_id = await inbox_store.upsert_contact(
                 conn,
                 persona_id=persona_id,
                 external_id=str(sender_id),
-                display_name=None,
-                username=None,
+                display_name=identity["displayName"],
+                username=identity["username"],
             )
 
         conversation_id = await inbox_store.upsert_conversation(
@@ -85,7 +86,7 @@ async def _ingest(client: Any, message: Any) -> None:
             channel_account=channel_account,
             external_id=chat_id,
             contact_id=contact_id,
-            title=None,
+            title=await _chat_title(client, message.chat_id),
         )
 
         message_id = await inbox_store.record_message(
@@ -263,6 +264,51 @@ async def on_reactions(client: Any, update: Any) -> None:
             external_id=str(message_id),
             reactions=reactions,
         )
+
+
+async def _identity_of(client: Any, user_id: int) -> dict[str, Optional[str]]:
+    """
+    Le nom et le pseudo de quelqu'un.
+
+    L'update d'un message ne les porte pas: elle ne donne qu'un identifiant
+    numérique. Sans cet appel, l'inbox afficherait une liste de « Unnamed
+    chat », c'est-à-dire rien d'utilisable.
+
+    TDLib répond depuis sa base locale la plupart du temps — l'appel est
+    rarement un aller-retour réseau. Et un échec ne doit pas faire perdre le
+    message: on écrit alors sans nom, quitte à le compléter au suivant.
+    """
+    try:
+        user = await client.raw.api.get_user(user_id=int(user_id))
+    except Exception as error:  # noqa: BLE001 — un nom manquant n'est pas une panne
+        logger.warning("identité inconnue pour user_id=%s: %s", user_id, error)
+        return {"displayName": None, "username": None}
+
+    parts = [getattr(user, "first_name", "") or "", getattr(user, "last_name", "") or ""]
+    display = " ".join(part for part in parts if part).strip() or None
+
+    usernames = getattr(user, "usernames", None)
+    username = getattr(usernames, "editable_username", None) if usernames else None
+    if not username and usernames:
+        actives = getattr(usernames, "active_usernames", None) or []
+        username = actives[0] if actives else None
+
+    return {"displayName": display, "username": username}
+
+
+async def _chat_title(client: Any, chat_id: Any) -> Optional[str]:
+    """
+    Le titre du fil.
+
+    Pour un groupe c'est son nom; pour une conversation privée, TDLib rend le
+    nom de la personne, ce qui est exactement ce qu'on veut afficher.
+    """
+    try:
+        chat = await client.raw.api.get_chat(chat_id=int(chat_id))
+    except Exception as error:  # noqa: BLE001
+        logger.warning("titre inconnu pour chat_id=%s: %s", chat_id, error)
+        return None
+    return getattr(chat, "title", None) or None
 
 
 # --- lecture des objets TDLib -------------------------------------------------

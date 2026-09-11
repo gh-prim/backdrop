@@ -226,3 +226,65 @@ def test_le_plafond_de_telechargement_existe_et_reste_raisonnable():
     # Le serveur a saturé ses 30 Go le 2026-09-11. Une inbox sans plafond
     # recommencerait, en silence.
     assert 0 < inbox_store.MAX_DOWNLOAD_BYTES <= 50 * 1024 * 1024
+
+
+# --- identité d'un interlocuteur ----------------------------------------------
+
+
+class FakeApi:
+    def __init__(self, user=None, chat=None, fail=False):
+        self._user = user
+        self._chat = chat
+        self._fail = fail
+
+    async def get_user(self, user_id):
+        if self._fail:
+            raise RuntimeError("réseau")
+        return self._user
+
+    async def get_chat(self, chat_id):
+        if self._fail:
+            raise RuntimeError("réseau")
+        return self._chat
+
+
+def fake_client(**kwargs):
+    return SimpleNamespace(persona_id="p1", raw=SimpleNamespace(api=FakeApi(**kwargs)))
+
+
+def test_le_nom_affiche_assemble_prenom_et_nom():
+    user = SimpleNamespace(
+        first_name="Jean",
+        last_name="Dupont",
+        usernames=SimpleNamespace(editable_username="jdupont", active_usernames=[]),
+    )
+    identity = asyncio.run(inbox._identity_of(fake_client(user=user), 777))
+    assert identity == {"displayName": "Jean Dupont", "username": "jdupont"}
+
+
+def test_un_nom_de_famille_absent_ne_laisse_pas_d_espace():
+    user = SimpleNamespace(first_name="Carolina", last_name="", usernames=None)
+    identity = asyncio.run(inbox._identity_of(fake_client(user=user), 777))
+    assert identity["displayName"] == "Carolina"
+
+
+def test_a_defaut_de_pseudo_modifiable_on_prend_le_premier_actif():
+    user = SimpleNamespace(
+        first_name="X",
+        last_name="",
+        usernames=SimpleNamespace(editable_username=None, active_usernames=["public"]),
+    )
+    assert asyncio.run(inbox._identity_of(fake_client(user=user), 7))["username"] == "public"
+
+
+def test_une_identite_introuvable_ne_fait_pas_perdre_le_message():
+    # Le nom est un confort; le message, non. Un échec ici doit laisser passer
+    # l'ingestion, quitte à compléter au message suivant.
+    identity = asyncio.run(inbox._identity_of(fake_client(fail=True), 777))
+    assert identity == {"displayName": None, "username": None}
+    assert asyncio.run(inbox._chat_title(fake_client(fail=True), 42)) is None
+
+
+def test_le_titre_du_fil_vient_de_telegram():
+    chat = SimpleNamespace(title="Carolina ❤")
+    assert asyncio.run(inbox._chat_title(fake_client(chat=chat), 42)) == "Carolina ❤"
