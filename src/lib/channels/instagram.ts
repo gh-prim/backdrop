@@ -29,6 +29,15 @@ export const GRAPH_VERSION = envOr("META_GRAPH_VERSION", "v25.0");
  */
 const GRAPH_BASE = envOr("META_GRAPH_BASE", "https://graph.facebook.com");
 
+/**
+ * Cadrages du fil: de 1.91:1 (paysage) à 4:5 (portrait). Tout ce qui est plus
+ * haut est recadré pour entrer, donc amputé.
+ */
+export const INSTAGRAM_FEED_RATIOS = ["1:1", "4:5"] as const;
+
+/** Le 9:16 appartient aux Reels et aux Stories, pas au fil. */
+export const INSTAGRAM_REEL_RATIOS = ["9:16"] as const;
+
 export type InstagramCredentials = {
   /** ig_user_id, l'identifiant du compte professionnel. */
   igUserId: string;
@@ -187,7 +196,10 @@ export class InstagramAdapter implements ChannelAdapter {
       kinds: ["SINGLE", "CAROUSEL", "REEL"],
       maxItems: 10,
       maxCaptionLength: 2200,
-      ratios: ["1:1", "4:5", "9:16"],
+      // Le fil et les Reels n'acceptent pas les mêmes cadrages, et la nuance
+      // coûte cher: un 9:16 publié en post est **rogné en haut et en bas** par
+      // Instagram, sans avertissement ni erreur d'API.
+      ratios: [...INSTAGRAM_FEED_RATIOS, ...INSTAGRAM_REEL_RATIOS],
       requiresPublicUrl: true,
       nativeScheduling: false,
     };

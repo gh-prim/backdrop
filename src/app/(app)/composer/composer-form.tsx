@@ -228,6 +228,21 @@ export function ComposerForm({
 
   const blockedCount = variants.filter(isBlocked).length;
 
+  /**
+   * Médias choisis qu'Instagram va rogner.
+   *
+   * Le fil n'accepte pas plus haut que 4:5: un 9:16 y est recadré en haut et
+   * en bas, sans erreur d'API ni avertissement de leur côté. Le 9:16 n'a sa
+   * place que dans un Reel.
+   */
+  const croppedOnInstagram = useMemo(() => {
+    if (!instagramChannel || kind === "REEL") return [];
+    return selected
+      .map((id) => variants.find((variant) => variant.id === id))
+      .filter((variant): variant is VariantOption => Boolean(variant))
+      .filter((variant) => variant.ratio === "9:16");
+  }, [instagramChannel, kind, selected, variants]);
+
   /** Ratios réellement présents: proposer 1:1 quand rien ne l'est n'aide pas. */
   const availableRatios = useMemo(
     () => [...new Set(variants.map((variant) => variant.ratio))].sort(),
@@ -660,6 +675,17 @@ export function ComposerForm({
                     </span>
                   </label>
                 )}
+
+              {croppedOnInstagram.length > 0 && (
+                <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    {croppedOnInstagram.length} media in 9:16: Instagram crops
+                    anything taller than 4:5 in the feed, top and bottom. Pick
+                    the 4:5 variant, or send it as a Reel.
+                  </span>
+                </p>
+              )}
 
               {blockedCount > 0 && (
                 // La couche pédagogique: on nomme le canal qui interdit, pas
