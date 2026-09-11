@@ -524,3 +524,27 @@ export async function startTelegramPublishWorkflow(
     if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
   }
 }
+
+/**
+ * Envoi d'un message dans un fil (inbox Telegram).
+ *
+ * L'identifiant de workflow est la clé d'idempotence du message, pas son
+ * identifiant de ligne: relancer un envoi après un incident ne doit pas
+ * écrire deux fois chez le destinataire. Un « already started » n'est donc
+ * pas une erreur — c'est le garde-fou qui fonctionne.
+ */
+export async function startSendTelegramMessage(input: {
+  messageId: string;
+  idempotencyKey: string;
+}): Promise<void> {
+  const client = await temporalClient();
+  try {
+    await client.workflow.start("sendTelegramMessage", {
+      workflowId: `tg-dm:${input.idempotencyKey}`,
+      taskQueue: TASK_QUEUE.telegram,
+      args: [{ messageId: input.messageId }],
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  }
+}

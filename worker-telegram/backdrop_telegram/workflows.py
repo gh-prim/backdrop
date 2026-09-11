@@ -339,3 +339,24 @@ def _parse_iso(value: str):
 
     parsed = datetime.fromisoformat(value)
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+@workflow.defn(name="sendTelegramMessage")
+class SendTelegramMessage:
+    """
+    Envoi d'un message de l'inbox.
+
+    Court, et volontairement peu réessayé: un message qui part deux fois chez
+    un destinataire est pire qu'un message qui ne part pas. L'activité vérifie
+    tout de même le statut en base avant d'envoyer, ce qui rend une reprise
+    inoffensive — la ceinture, puis les bretelles.
+    """
+
+    @workflow.run
+    async def run(self, input: dict[str, Any]) -> dict[str, Any]:
+        return await workflow.execute_activity(
+            "sendTelegramMessage",
+            input,
+            start_to_close_timeout=timedelta(seconds=60),
+            retry_policy=RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=2)),
+        )

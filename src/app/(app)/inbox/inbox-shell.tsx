@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Paperclip } from "lucide-react";
+import { CornerUpLeft, Paperclip, Send, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { sendMessageAction, markReadAction } from "@/app/actions/inbox";
 import { PlatformLogo } from "@/components/platform-logo";
 import { unreadLabel } from "@/lib/unread-shared";
 import { cn } from "cn";
@@ -55,6 +58,30 @@ export function InboxShell({
   thread: Thread | null;
 }) {
   const router = useRouter();
+  const bottom = useRef<HTMLDivElement>(null);
+
+  // La cible d'une réponse retient le fil d'où elle vient. Changer de
+  // conversation l'abandonne donc **au rendu**, sans effet de remise à zéro:
+  // répondre au message d'un autre fil n'a aucun sens, et garder le bandeau
+  // afficherait une citation qui ne correspond plus à ce qu'on regarde.
+  const [reply, setReply] = useState<{ conversationId: string; message: Message } | null>(
+    null,
+  );
+  const replyTo = reply && reply.conversationId === thread?.id ? reply.message : null;
+
+  // Un fil s'ouvre sur son dernier message, comme partout ailleurs.
+  useEffect(() => {
+    bottom.current?.scrollIntoView();
+  }, [thread?.id, thread?.messages.length]);
+
+  // Ouvrir un fil, c'est le lire. Le compteur retombe donc à l'ouverture,
+  // plutôt qu'à un clic supplémentaire que personne ne ferait.
+  const threadId = thread?.id;
+  const unread = threadId ? unreadOf(conversations, threadId) : 0;
+  useEffect(() => {
+    if (!threadId || unread === 0) return;
+    void markReadAction(threadId).then(() => router.refresh());
+  }, [threadId, unread, router]);
 
   return (
     // Une seule séparation, verticale, entre les deux colonnes. Encadrer
@@ -125,9 +152,22 @@ export function InboxShell({
 
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
               {thread.messages.map((message) => (
-                <Bubble key={message.id} message={message} />
+                <Bubble
+                  key={message.id}
+                  message={message}
+                  onReply={() =>
+                    setReply({ conversationId: thread.id, message })
+                  }
+                />
               ))}
+              <div ref={bottom} />
             </div>
+
+            <Composer
+              conversationId={thread.id}
+              replyTo={replyTo}
+              onClearReply={() => setReply(null)}
+            />
           </>
         )}
       </section>
@@ -135,11 +175,112 @@ export function InboxShell({
   );
 }
 
-function Bubble({ message }: { message: Message }) {
+/**
+ * Le champ de saisie.
+ *
+ * Entrée envoie, Maj+Entrée passe à la ligne: c'est la convention de toutes
+ * les messageries, et l'inverser ferait envoyer des brouillons. Le champ se
+ * vide au clic sans attendre la confirmation — la ligne est déjà écrite côté
+ * serveur, l'écran la montre en « sending… ».
+ */
+function Composer({
+  conversationId,
+  replyTo,
+  onClearReply,
+}: {
+  conversationId: string;
+  replyTo: Message | null;
+  onClearReply: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function send() {
+    const trimmed = text.trim();
+    if (!trimmed || pending) return;
+
+    startTransition(async () => {
+      setError(null);
+      const result = await sendMessageAction(conversationId, trimmed, replyTo?.id);
+      if (result.ok) {
+        setText("");
+        onClearReply();
+        router.refresh();
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  return (
+    <div className="shrink-0 space-y-1.5 px-4 py-3">
+      {replyTo && (
+        <div className="flex items-center gap-2 rounded border-l-2 border-primary/50 bg-muted/50 px-2 py-1">
+          <CornerUpLeft className="size-3 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+            {replyTo.text || "media"}
+          </span>
+          <button
+            type="button"
+            onClick={onClearReply}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Cancel reply"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-end gap-2">
+        <textarea
+          rows={1}
+          value={text}
+          disabled={pending}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              send();
+            }
+          }}
+          placeholder={replyTo ? "Reply…" : "Write a message…"}
+          className="max-h-32 flex-1 resize-none rounded-md bg-muted px-3 py-2 text-xs outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring"
+        />
+        <Button
+          type="button"
+          size="icon-sm"
+          onClick={send}
+          disabled={pending || text.trim().length === 0}
+          aria-label="Send"
+        >
+          <Send className="size-3.5" />
+        </Button>
+      </div>
+
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/** Le compteur d'un fil, tel que la liste le connaît. */
+function unreadOf(conversations: Conversation[], id: string): number {
+  return conversations.find((conversation) => conversation.id === id)?.unreadCount ?? 0;
+}
+
+function Bubble({
+  message,
+  onReply,
+}: {
+  message: Message;
+  onReply: () => void;
+}) {
   const outgoing = message.direction === "OUT";
 
   return (
-    <div className={cn("flex", outgoing ? "justify-end" : "justify-start")}>
+    <div className={cn("group flex items-center gap-1.5", outgoing ? "justify-end" : "justify-start")}>
+      {outgoing && <ReplyButton onReply={onReply} />}
       <div className="max-w-[70%] space-y-1">
         {message.replyTo && (
           // Le message auquel on répond, montré en entier mais discret: sans
@@ -204,6 +345,26 @@ function Bubble({ message }: { message: Message }) {
           ))}
         </div>
       </div>
+      {!outgoing && <ReplyButton onReply={onReply} />}
     </div>
+  );
+}
+
+/**
+ * Répondre à **ce** message.
+ *
+ * Visible au survol seulement: un bouton par message, affiché en permanence,
+ * transformerait le fil en grille de contrôles.
+ */
+function ReplyButton({ onReply }: { onReply: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReply}
+      className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+      aria-label="Reply to this message"
+    >
+      <CornerUpLeft className="size-3.5" />
+    </button>
   );
 }

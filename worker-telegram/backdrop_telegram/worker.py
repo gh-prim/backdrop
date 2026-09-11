@@ -31,6 +31,7 @@ from backdrop_telegram import (
     config,
     db,
     disconnect_activities,
+    dm_activities,
     inbox,
     login_activities,
     publish_activities,
@@ -39,6 +40,7 @@ from backdrop_telegram import (
 from backdrop_telegram.tdlib import gateway, pool
 from backdrop_telegram.workflows import (
     PublishTelegram,
+    SendTelegramMessage,
     TelegramDisconnect,
     TelegramLogin,
     TelegramTargets,
@@ -111,7 +113,13 @@ async def main() -> None:
     worker = Worker(
         client,
         task_queue=config.TASK_QUEUE,
-        workflows=[TelegramLogin, TelegramDisconnect, TelegramTargets, PublishTelegram],
+        workflows=[
+            TelegramLogin,
+            TelegramDisconnect,
+            TelegramTargets,
+            PublishTelegram,
+            SendTelegramMessage,
+        ],
         activities=[
             login_activities.request_login_code,
             login_activities.submit_login_code,
@@ -124,6 +132,7 @@ async def main() -> None:
             publish_activities.mark_telegram_published,
             publish_activities.mark_telegram_dry_run,
             publish_activities.mark_telegram_failed,
+            dm_activities.send_telegram_message,
         ],
         max_concurrent_activities=8,
     )
