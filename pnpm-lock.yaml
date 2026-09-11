@@ -56,6 +56,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      pg:
+        specifier: ^8.23.0
+        version: 8.23.0
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -8684,15 +8687,13 @@ snapshots:
   pg-cloudflare@1.4.0:
     optional: true
 
-  pg-connection-string@2.14.0:
-    optional: true
+  pg-connection-string@2.14.0: {}
 
   pg-int8@1.0.1: {}
 
   pg-pool@3.14.0(pg@8.23.0):
     dependencies:
       pg: 8.23.0
-    optional: true
 
   pg-protocol@1.16.0: {}
 
@@ -8713,12 +8714,10 @@ snapshots:
       pgpass: 1.0.5
     optionalDependencies:
       pg-cloudflare: 1.4.0
-    optional: true
 
   pgpass@1.0.5:
     dependencies:
       split2: 4.2.0
-    optional: true
 
   picocolors@1.1.1: {}
 
@@ -9247,8 +9246,7 @@ snapshots:
       memory-pager: 1.5.0
     optional: true
 
-  split2@4.2.0:
-    optional: true
+  split2@4.2.0: {}
 
   stable-hash@0.0.5: {}
 

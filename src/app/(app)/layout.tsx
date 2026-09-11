@@ -7,6 +7,7 @@ import { unreadLabel } from "@/lib/unread-shared";
 import { PersonaSwitcher } from "@/components/persona-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { TaskMenu } from "@/components/task-menu";
+import { InboxLive } from "@/components/inbox-live";
 import { APP_VERSION } from "@/lib/version";
 import { AppMain } from "@/components/app-main";
 
@@ -79,6 +80,10 @@ export default async function AppLayout({
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
+            {/* Monté dans la barre, donc sur tous les écrans: un message reçu
+                pendant qu'on prépare une publication doit faire apparaître la
+                pastille tout de suite, pas à la prochaine visite de l'inbox. */}
+            <InboxLive />
             <TaskMenu />
             <UserMenu name={ctx.userName} email={ctx.userEmail} role={ctx.role} />
           </div>

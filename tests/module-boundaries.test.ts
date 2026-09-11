@@ -21,6 +21,7 @@ const SERVER_ONLY_MODULES = [
   "@/lib/assets",
   "@/lib/publications",
   "@/lib/inbox",
+  "@/lib/inbox-events",
   "@/lib/persona-scope",
   "@/lib/session",
   "@/temporal/client",
