@@ -77,6 +77,14 @@ docker compose up -d
 say "Nettoyage des images remplacées"
 docker image prune -f
 
+# Le cache de construction est le vrai glouton — plusieurs Go après quelques
+# déploiements. On le borne au lieu de le vider: à sec, chaque mise à jour
+# reconstruirait tout depuis zéro. Le nom de l'option a changé selon les
+# versions de buildkit, d'où les deux essais.
+docker builder prune -f --max-used-space 5GB >/dev/null 2>&1 \
+  || docker builder prune -f --keep-storage 5GB >/dev/null 2>&1 \
+  || true
+
 say "Migrations appliquées"
 docker compose logs migrate --tail 5
 
