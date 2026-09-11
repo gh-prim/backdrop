@@ -95,19 +95,18 @@ describe("garde-fous du disque", () => {
     expect(capped).toHaveLength(services.length);
   });
 
-  it("le cache de construction est borné avant le build, pas seulement après", () => {
-    // Le purger une fois le build terminé arrive trop tard quand c'est lui
-    // qui a rempli le disque.
-    const cache = UPDATE.indexOf("Cache de construction");
-    const build = UPDATE.indexOf("docker compose build");
-    expect(cache).toBeGreaterThan(-1);
-    expect(cache).toBeLessThan(build);
+  it("déploie en tirant les images, pas en les construisant", () => {
+    // Le serveur a 3 Go de mémoire: un `next build` et deux installations
+    // pnpm y prenaient une vingtaine de minutes à échanger de la mémoire.
+    expect(UPDATE).toContain("docker compose pull");
+    expect(UPDATE).toContain("--build");
   });
 
-  it("purge entièrement le cache quand la place manque", () => {
-    // Un cache interrompu se déclare « 0 B récupérable » tant qu'on ne le
-    // purge pas entièrement.
-    expect(UPDATE).toContain("docker builder prune -af");
+  it("échoue si les images ne sont pas disponibles", () => {
+    // Sans cela on redéploierait l'image précédente en croyant avoir déployé
+    // la nouvelle — exactement ce que la vérification de version existe pour
+    // empêcher.
+    expect(UPDATE).toMatch(/Images indisponibles[\s\S]{0,300}exit 1/);
   });
 });
 
@@ -138,5 +137,30 @@ describe("images Docker", () => {
     // service migrate deviendrait un worker, silencieusement.
     const targets = [...COMPOSE.matchAll(/dockerfile: Dockerfile\.worker\n\s*target: (\w+)/g)];
     expect(targets.map((m) => m[1]).sort()).toEqual(["migrate", "migrate", "worker"]);
+  });
+});
+
+describe("construction sur GitHub", () => {
+  const WORKFLOW = readFileSync(".github/workflows/images.yml", "utf8");
+  const COMPOSE = readFileSync("docker-compose.yml", "utf8");
+
+  it("construit toutes les images dont le compose a besoin", () => {
+    // Une image oubliée ici, et le serveur tirerait indéfiniment une version
+    // qui ne sort jamais.
+    const needed = [...COMPOSE.matchAll(/image: ghcr\.io\/gh-prim\/backdrop\/([\w-]+):/g)];
+    const built = [...WORKFLOW.matchAll(/- name: ([\w-]+)\n\s+context:/g)].map((m) => m[1]);
+    for (const [, name] of needed) {
+      expect(built, `image ${name} absente du workflow`).toContain(name);
+    }
+  });
+
+  it("étiquette aussi par commit, pour pouvoir revenir en arrière", () => {
+    // `latest` seul interdirait tout retour sans reconstruction.
+    expect(WORKFLOW).toContain("${{ github.sha }}");
+    expect(COMPOSE).toContain("${IMAGE_TAG:-latest}");
+  });
+
+  it("une image qui échoue n'annule pas les autres", () => {
+    expect(WORKFLOW).toContain("fail-fast: false");
   });
 });

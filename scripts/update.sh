@@ -30,57 +30,25 @@ else
   pull() { git -C "$REPO" pull --ff-only; }
 fi
 
-# Chaque mise à jour laisse les images précédentes de web et des workers sans
-# tag, et elles ne disparaissent pas seules: c'est ce qui a rempli le disque.
-# Une construction qui manque de place échoue au milieu de l'extraction d'une
-# couche, avec un message qui ne dit pas quoi faire — autant refuser avant.
-FREE_GB_MIN=4
-docker_free_gb() {
-  local root
-  root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || echo /var/lib/docker)"
-  df -BG --output=avail "$root" 2>/dev/null | tail -1 | tr -dc '0-9'
-}
-
-say "Place disponible"
-FREE_GB="$(docker_free_gb)"
-if [ -n "$FREE_GB" ]; then
-  echo "${FREE_GB} Go libres pour Docker."
-  if [ "$FREE_GB" -lt "$FREE_GB_MIN" ]; then
-    cat >&2 <<MSG
-
-Moins de ${FREE_GB_MIN} Go libres: la construction échouerait en cours
-d'extraction. À récupérer, du plus sûr au plus radical:
-
-  docker builder prune -f          # cache de construction
-  docker image prune -f            # images sans tag, déjà remplacées
-  docker system df                 # voir ce qui reste, et par quoi
-
-MSG
-    exit 1
-  fi
-fi
-
 say "Récupération du code"
 pull
 
-# Borné **avant** la construction, pas seulement après. Le cache monte à une
-# dizaine de gigaoctets pendant un build; le purger une fois celui-ci terminé
-# arrive trop tard quand c'est lui qui a rempli le disque. Et un cache
-# interrompu se déclare « 0 B récupérable » tant qu'on ne le purge pas
-# entièrement: d'où `-a`, qui coûte une reconstruction complète mais reste
-# moins cher qu'un déploiement qui échoue à mi-course.
-say "Cache de construction"
-if [ "$FREE_GB" != "" ] && [ "$FREE_GB" -lt 12 ]; then
-  echo "Moins de 12 Go libres: purge complète du cache avant de construire."
-  docker builder prune -af >/dev/null 2>&1 || true
+# Les images viennent du registre, construites par GitHub Actions. Le serveur
+# a 3 Go de mémoire: un `next build` et deux installations pnpm y prenaient
+# une vingtaine de minutes à faire s'échanger de la mémoire. `--build` reste
+# disponible pour un dépannage hors ligne.
+if [ "${1:-}" = "--build" ]; then
+  say "Construction locale des images"
+  docker compose build
 else
-  docker builder prune -f --max-used-space 5GB >/dev/null 2>&1 \
-    || docker builder prune -f --keep-storage 5GB >/dev/null 2>&1 \
-    || true
+  say "Récupération des images"
+  if ! docker compose pull --quiet; then
+    echo "Images indisponibles. Le workflow GitHub est-il terminé ?" >&2
+    echo "  https://github.com/gh-prim/backdrop/actions" >&2
+    echo "Sinon, construire sur place: ./scripts/update.sh --build" >&2
+    exit 1
+  fi
 fi
-
-say "Construction des images"
-docker compose build
 
 # `up -d` recrée ce qui a changé et laisse le reste en place. Les migrations
 # passent d'abord: web et workers attendent que le conteneur `migrate` soit

@@ -10,6 +10,17 @@
 # journal d'un conteneur allumé en permanence grandit jusqu'à remplir le
 # disque, et il ne figure dans aucune des colonnes de `docker system df`. On
 # le découvre donc par une construction qui échoue, jamais par une mesure.
+# Les images construites par GitHub Actions (.github/workflows/images.yml).
+#
+# `image:` **et** `build:` coexistent volontairement: sur le serveur,
+# `docker compose pull` récupère l'image du registre — une construction locale
+# y prenait une vingtaine de minutes sur 3 Go de mémoire. En développement,
+# `docker compose build` reste disponible et produit le même nom.
+#
+# `IMAGE_TAG` permet de revenir à un commit précis sans rien reconstruire:
+#   IMAGE_TAG=<sha> docker compose up -d
+x-registry: &registry ghcr.io/gh-prim/backdrop
+
 x-logs: &logs
   logging:
     driver: json-file
@@ -117,6 +128,7 @@ services:
   # Migrations du schéma applicatif. S'exécute une fois, puis sort.
   migrate:
     <<: *logs
+    image: ghcr.io/gh-prim/backdrop/migrate:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -134,6 +146,7 @@ services:
   # le seul point d'entrée du premier compte (9.8).
   seed:
     <<: *logs
+    image: ghcr.io/gh-prim/backdrop/migrate:${IMAGE_TAG:-latest}
     profiles: ["tools"]
     build:
       context: .
@@ -155,9 +168,11 @@ services:
 
   web:
     <<: *logs
+    image: ghcr.io/gh-prim/backdrop/web:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.web
+      target: runtime
     restart: unless-stopped
     depends_on:
       postgres:
@@ -226,6 +241,7 @@ services:
 
   worker-node:
     <<: *logs
+    image: ghcr.io/gh-prim/backdrop/worker-node:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -271,6 +287,7 @@ services:
   # registre des logins en attente n'est atteignable que sous cette condition.
   worker-telegram:
     <<: *logs
+    image: ghcr.io/gh-prim/backdrop/worker-telegram:${IMAGE_TAG:-latest}
     build:
       context: ./worker-telegram
       dockerfile: Dockerfile
