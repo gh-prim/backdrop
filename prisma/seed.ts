@@ -73,19 +73,11 @@ async function main() {
     });
   }
 
-  const personas = [
-    { name: "Carolina Violet", handle: "carolina.violet", timezone: "Europe/Paris" },
-  ];
-  for (const persona of personas) {
-    const existing = await prisma.persona.findFirst({
-      where: { organizationId: organization.id, handle: persona.handle },
-    });
-    if (!existing) {
-      await prisma.persona.create({
-        data: { ...persona, organizationId: organization.id, bible: {} },
-      });
-    }
-  }
+  // Aucune persona par défaut: une persona porte un nom, un fuseau et une
+  // bible éditoriale qui n'appartiennent qu'à l'installation. En inventer une
+  // ici reviendrait à livrer le compte de quelqu'un d'autre.
+  //
+  // Elles se créent depuis Réglages → Personas, par un owner.
 
   console.log(`organization: ${organization.name} (${organization.slug})`);
   console.log(`owner: ${OWNER_EMAIL}`);
