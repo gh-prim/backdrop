@@ -4,6 +4,7 @@ import { getSelectedPersonaId, listPersonas } from "@/lib/persona-scope";
 import { PersonaSwitcher } from "@/components/persona-switcher";
 import { UserMenu } from "@/components/user-menu";
 import { TaskMenu } from "@/components/task-menu";
+import { APP_VERSION } from "@/lib/version";
 
 /**
  * Le composeur n'y figure pas: c'est une action, pas une destination. On
@@ -67,6 +68,15 @@ export default async function AppLayout({
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">{children}</main>
+
+      {/* La version, en bas à gauche et discrète. Elle ne sert qu'à une chose:
+          distinguer « déployé » de « supposé déployé », sans ouvrir un
+          terminal. Fixe plutôt que flottante — une pastille qui suit le
+          défilement encombrerait tous les écrans pour une information qu'on
+          consulte une fois par déploiement. */}
+      <footer className="mx-auto w-full max-w-7xl px-6 pb-4">
+        <span className="text-[10px] text-muted-foreground/60">v{APP_VERSION}</span>
+      </footer>
 
       {/* Le composeur s'ouvre ici, par-dessus la page courante. Vide partout
           ailleurs (voir @modal/default.tsx). */}

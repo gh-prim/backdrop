@@ -88,6 +88,28 @@ docker builder prune -f --max-used-space 5GB >/dev/null 2>&1 \
 say "Migrations appliquées"
 docker compose logs migrate --tail 5
 
+# Le 2026-09-11, une construction a échoué par manque de place **après** que
+# `git pull` eut avancé le dépôt: le fichier était à jour sur le serveur,
+# l'image non, et le script annonçait « À jour ». On ne se fie donc plus au
+# dépôt mais à ce que l'application sert elle-même.
+say "Version servie"
+ATTENDUE="$(grep -m1 '"version"' package.json | cut -d'"' -f4)"
+SERVIE=""
+for _ in $(seq 1 30); do
+  SERVIE="$(docker compose exec -T web wget -qO- http://127.0.0.1:3000/api/version 2>/dev/null \
+    | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+  [ -n "$SERVIE" ] && break
+  sleep 2
+done
+
+if [ "$SERVIE" != "$ATTENDUE" ]; then
+  printf '\n\033[1;31mDéploiement incomplet: le dépôt est en %s, l'"'"'application sert %s.\033[0m\n' \
+    "$ATTENDUE" "${SERVIE:-rien}" >&2
+  echo "Relancer, et lire les erreurs de construction plutôt que cette ligne." >&2
+  exit 1
+fi
+echo "v${SERVIE} — conforme au dépôt."
+
 say "État"
 docker compose ps --format 'table {{.Service}}\t{{.Status}}\t{{.Ports}}'
 
