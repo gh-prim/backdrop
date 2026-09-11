@@ -15,9 +15,6 @@ const ALL_RATIOS = ["4:5", "3:4", "9:16", "1:1"];
  * ffmpeg recadre au centre par défaut — ce qui coupe autant en haut qu'en bas
  * et décapite un sujet placé dans le tiers haut. Le curseur déplace la fenêtre
  * du haut vers le bas, et la re-dérivation remplace le fichier.
- *
- * Seules les variantes plus étroites que l'original ont quelque chose à
- * déplacer: sur un cadrage identique à la source, il n'y a rien à couper.
  */
 function CropOffset({
   assetId,
@@ -37,7 +34,7 @@ function CropOffset({
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground">haut</span>
+        <span className="text-[10px] text-muted-foreground">top</span>
         <input
           type="range"
           min={0}
@@ -49,7 +46,7 @@ function CropOffset({
           className="h-1 flex-1"
           aria-label={`Vertical crop for ${variant.ratio}`}
         />
-        <span className="text-[10px] text-muted-foreground">bas</span>
+        <span className="text-[10px] text-muted-foreground">bottom</span>
       </div>
 
       {changed && (

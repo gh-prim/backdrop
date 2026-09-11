@@ -118,6 +118,8 @@ export async function deriveVariantAction(
     message:
       cropOffset === undefined
         ? `${ratio} derivation started.`
-        : `${ratio} re-cropped at ${cropOffset}%. It replaces the current file.`,
+        // La dérivation est asynchrone: annoncer « recadré » serait mentir
+        // d'une poignée de secondes.
+        : `Re-cropping ${ratio} at ${cropOffset}%. It replaces the current file.`,
   };
 }
